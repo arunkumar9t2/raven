@@ -1,5 +1,5 @@
 import type { RenderElement, Timer, TurnCompleteInput } from 'claude-code'
-
+import { DIFF_PANEL_WARNING } from '../names'
 import { addressedIdsOf, reviewTextOf } from '../review/comments'
 import { resolvePromptOf } from '../review/resolve'
 import { createReview } from '../review/review'
@@ -7,6 +7,7 @@ import { createDiffView } from '../views/diff-view'
 import { createDocView, type Doc } from '../views/doc-view'
 import { createTasksView } from '../views/tasks-view'
 import { createTreeView } from '../views/tree-view'
+import { coversRavenDock } from './checkpointing'
 import { type Directive, directiveOf } from './directive'
 import type { Host } from './host'
 import { type Action, actionsOf, type ToolEvent } from './triggers'
@@ -56,8 +57,27 @@ export function createRaven(host: Host, now: () => number): Raven {
   let refreshTimer: Timer | null = null
   let hasAutoOpened = false
   let hasOpenedTasks = false
+  let hasWarnedDiffPanel = false
   // Guards the fork below from re-entering itself and caps it at one per sent batch.
   let isResolving = false
+
+  /**
+   * Once per module instance: warns when the built-in diff panel will cover Raven's dock. Never
+   * throws, so a failed check never blocks the command or edit that triggered it.
+   */
+  async function warnDiffPanelOnce(): Promise<void> {
+    if (hasWarnedDiffPanel) return
+    hasWarnedDiffPanel = true
+    try {
+      const [globalConfig, checkpointing] = await Promise.all([
+        host.readGlobalConfig(),
+        host.isCheckpointing(),
+      ])
+      if (coversRavenDock(globalConfig, checkpointing)) host.toast(DIFF_PANEL_WARNING)
+    } catch (error) {
+      host.debug(`raven: diff panel check failed: ${String(error)}`)
+    }
+  }
 
   const takeReviewText = () => reviewTextOf(review.take())
 
@@ -137,7 +157,11 @@ export function createRaven(host: Host, now: () => number): Raven {
 
   /** The keyboard is the person's: an element can take it only once its pane asked for focus. */
   async function focusIn(view: View, key: string) {
-    if (await show(view, true)) await host.focus(view.pane.id, key).catch(() => {})
+    if (await show(view, true)) {
+      await host
+        .focus(view.pane.id, key)
+        .catch(error => host.debug(`raven: focus failed: ${String(error)}`))
+    }
   }
 
   function scheduleRefresh() {
@@ -205,6 +229,7 @@ export function createRaven(host: Host, now: () => number): Raven {
         if (open.has(diff.pane.id) || open.has(tree.pane.id)) scheduleRefresh()
         return undefined
       case 'main-loop-edit':
+        void warnDiffPanelOnce()
         if (!hasAutoOpened) {
           hasAutoOpened = true
           await showDiff()
@@ -243,6 +268,7 @@ export function createRaven(host: Host, now: () => number): Raven {
   const argumentHint = `[${[...views.map(view => view.subcommand), SEND].join('|')}]`
 
   async function command(args: string): Promise<string> {
+    await warnDiffPanelOnce()
     const word = args.trim() || diff.subcommand
     const view = views.find(each => each.subcommand === word)
     if (view) return toggle(view)
@@ -276,7 +302,7 @@ export function createRaven(host: Host, now: () => number): Raven {
       // its model starts empty until a refresh.
       if (!open.has(paneId)) {
         open.add(paneId)
-        void view.refresh?.().catch(() => undefined)
+        void view.refresh?.().catch(error => host.debug(`raven: refresh failed: ${String(error)}`))
       }
       return view.render(kit)
     },

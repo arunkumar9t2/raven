@@ -33,3 +33,7 @@ export const commentsStoreKeyOf = (repository: string) => `comments:${repository
 
 /** The store key of one repository's diff base choice (HEAD, session start, or branch point). */
 export const sourceStoreKeyOf = (repository: string) => `source:${repository}`
+
+/** Warns that the built-in diff panel, left open, will cover Raven's dock. */
+export const DIFF_PANEL_WARNING =
+  'Close the built-in diff panel (✕) once so Raven can dock beside the transcript'

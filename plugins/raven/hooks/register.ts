@@ -1,4 +1,5 @@
 import type { On } from 'claude-code'
+import { isCheckpointing } from './core/checkpointing'
 import { DIRECTIVE_OPS, withoutDirectives } from './core/directive'
 import type { Host } from './core/host'
 import { isRecord } from './core/is-record'
@@ -42,9 +43,11 @@ const TOOL_INPUT_SCHEMA = {
  */
 export function register(on: On) {
   let raven: Raven | null = null
+  // Set alongside `raven`, so `afterTool`'s catch below can log without threading `host` through.
+  let host: Host | null = null
 
   on('session.start', async ($, e, next) => {
-    const host: Host = {
+    const bound: Host = {
       run: (argv, stdin) => $.process.run(argv, stdin === undefined ? undefined : { stdin }),
       readFile: async path => {
         const text = await $.fs.read(path)
@@ -75,9 +78,25 @@ export function register(on: On) {
       },
       toast: text => $.ui.toast(text),
       messages: () => $.session.messages(),
+      debug: text => $.ui.log(text, { to: 'debug' }),
+      readGlobalConfig: async () => {
+        const home = await $.env.get('HOME')
+        if (home === undefined) return null
+        try {
+          const text = await $.fs.read(`${home}/.claude.json`)
+          return JSON.parse(typeof text === 'string' ? text : '')
+        } catch {
+          return null
+        }
+      },
+      isCheckpointing: async () =>
+        isCheckpointing(
+          await $.settings.read(),
+          await $.env.get('CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING'),
+        ),
     }
 
-    const created = createRaven(host, () => Date.now())
+    const created = createRaven(bound, () => Date.now())
     await $.command.register({
       name: COMMAND,
       description: COMMAND_DESCRIPTION,
@@ -88,6 +107,7 @@ export function register(on: On) {
       description: TOOL_DESCRIPTION,
       inputSchema: TOOL_INPUT_SCHEMA,
     })
+    host = bound
     raven = created
 
     return next(e)
@@ -157,7 +177,10 @@ export function register(on: On) {
       result: isLanded ? result.result : undefined,
     }
 
-    const ack = await raven.afterTool(event).catch(() => undefined)
+    const ack = await raven.afterTool(event).catch(error => {
+      host?.debug(`raven: afterTool failed: ${String(error)}`)
+      return undefined
+    })
     if (ack === undefined || !isLanded || !isRecord(result.result)) return result
     // The model reads Bash's result from its `stdout`, so the ack replaces the CLI's lines there;
     // anything else the command printed stays.
