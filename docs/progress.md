@@ -5,10 +5,11 @@ Working title **Raven** (rename pending). Live-preview side pane for Claude Code
 
 ## Resume here
 
-M6 in progress: `docs/superpowers/plans/2026-09-29-raven-m6.md` (gitignored; the plan's
-"Execution order" section is authoritative). Current task: **15, 17**, then 16, final review. Done: 1–14 + two simplify passes.
+M6 is done: every task in `docs/superpowers/plans/2026-09-29-raven-m6.md`, three simplify passes, a whole-milestone correctness review (six fixes), and a live end-to-end run with the default model. Nothing is in flight.
 
 ## Milestones
+
+- [x] M6 review tool: pinned scrolling, keyboard, line comments resolved after Claude's reply, stage/revert, source picker (HEAD / session / branch point / turn), Files and Tasks views, images and doc links, native show tool, status band, settings, surface fallbacks
 
 - [x] M0 smoke mod: /raven opens docked pane (Markdown, Code diff, Button, Input); bin/ on PATH; Bash stdout intercept; prompt.submit context; validate + plugin test
 - [x] M1 diff view: file list + per-hunk Code diff in one pane, refresh on Edit/Write/Bash
