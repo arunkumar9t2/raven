@@ -1,6 +1,6 @@
 import type { SessionMessage } from 'claude-code'
 import { isRecord } from '../core/is-record'
-import { clampHunk, type Hunk } from '../git/hunks'
+import { clampHunk, type Hunk, hunkFrom } from '../git/hunks'
 
 /** One edited file: its path and the hunks left by the turn's tool uses, in call order. */
 export type TurnFile = { path: string; hunks: Hunk[] }
@@ -25,7 +25,12 @@ function addedHunkOf(content: string): Hunk {
   // A trailing '\n' would otherwise split into a spurious empty final line.
   const lines = content.endsWith('\n') ? content.slice(0, -1).split('\n') : content.split('\n')
   const header = `@@ -0,0 +1,${lines.length} @@`
-  return clampHunk({ header, text: `${header}\n${lines.map(line => `+${line}`).join('\n')}\n` })
+  return clampHunk(
+    hunkFrom(
+      header,
+      lines.map(line => `+${line}`),
+    ),
+  )
 }
 
 function editOf(use: SessionMessage['toolUses'][number]): TurnFile | null {
@@ -132,5 +137,5 @@ export function hunkOfChange(before: string, after: string): Hunk {
     ...suffixLines.map(line => ` ${line}`),
   ]
 
-  return clampHunk({ header, text: `${header}\n${body.join('\n')}\n` })
+  return clampHunk(hunkFrom(header, body))
 }

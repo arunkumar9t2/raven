@@ -31,6 +31,16 @@ export function createReview(host: Host, now: () => number): Review {
   let comments: Comments = []
   let scope: string | null = null
 
+  /** Moves every comment with status `from` to `to`; `ids` given narrows it to those ids. */
+  const moveStatus = (from: Comment['status'], to: Comment['status'], ids?: readonly string[]) => {
+    const idSet = ids ? new Set(ids) : null
+    comments = comments.map(comment =>
+      comment.status === from && (!idSet || idSet.has(comment.id))
+        ? { ...comment, status: to }
+        : comment,
+    )
+  }
+
   const save = () => {
     if (scope !== null) void host.storeSet(commentsStoreKeyOf(scope), comments).catch(() => {})
     host.redraw()
@@ -55,9 +65,7 @@ export function createReview(host: Host, now: () => number): Review {
     take: () => {
       const taken = comments.filter(comment => comment.status === 'pending')
       if (taken.length > 0) {
-        comments = comments.map(comment =>
-          comment.status === 'pending' ? { ...comment, status: 'sent' } : comment,
-        )
+        moveStatus('pending', 'sent')
         save()
       }
       return taken
@@ -65,17 +73,12 @@ export function createReview(host: Host, now: () => number): Review {
     pending: () => comments.filter(comment => comment.status === 'pending'),
     sent: () => comments.filter(comment => comment.status === 'sent'),
     markAddressed: ids => {
-      const addressed = new Set(ids)
-      comments = comments.map(comment => {
-        if (comment.status !== 'sent') return comment
-        return { ...comment, status: addressed.has(comment.id) ? 'addressed' : 'open' }
-      })
+      moveStatus('sent', 'addressed', ids)
+      moveStatus('sent', 'open')
       save()
     },
     resend: () => {
-      comments = comments.map(comment =>
-        comment.status === 'open' ? { ...comment, status: 'pending' } : comment,
-      )
+      moveStatus('open', 'pending')
       save()
     },
     clear: () => {

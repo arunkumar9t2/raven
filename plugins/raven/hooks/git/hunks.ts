@@ -1,6 +1,45 @@
 import { ELEMENT_TEXT_LIMIT } from '../core/view'
 export type Hunk = { header: string; text: string }
 
+const HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
+
+/** A hunk header's four numbers and trailing suffix ('@@ …' section text); null if malformed. */
+export function parseHeader(header: string): {
+  oldStart: number
+  oldCount: number
+  newStart: number
+  newCount: number
+  suffix: string
+} | null {
+  const match = HEADER_RE.exec(header)
+  if (!match) return null
+  return {
+    oldStart: Number(match[1]),
+    oldCount: match[2] === undefined ? 1 : Number(match[2]),
+    newStart: Number(match[3]),
+    newCount: match[4] === undefined ? 1 : Number(match[4]),
+    suffix: match[5] ?? '',
+  }
+}
+
+const bodyLinesCache = new WeakMap<Hunk, readonly string[]>()
+
+/** A hunk's body lines (header dropped, trailing '\n''s empty tail dropped), memoized per hunk. */
+export function bodyLinesOf(hunk: Hunk): readonly string[] {
+  const cached = bodyLinesCache.get(hunk)
+  if (cached) return cached
+  const lines = hunk.text.split('\n')
+  lines.pop()
+  lines.shift()
+  bodyLinesCache.set(hunk, lines)
+  return lines
+}
+
+/** Builds a hunk from its header line and body lines. */
+export function hunkFrom(header: string, body: readonly string[]): Hunk {
+  return { header, text: `${[header, ...body].join('\n')}\n` }
+}
+
 /**
  * Splits one file's unified diff into hunks, dropping the `diff --git`/index/---/+++ preamble.
  * Each hunk's `text` starts at its `@@ … @@` header and runs to just before the next header (or
