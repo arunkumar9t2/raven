@@ -1,4 +1,5 @@
 import { DIRECTIVE_PREFIX } from '../names'
+import { isRecord } from './is-record'
 
 /** What the CLI asks of the pane; see docs/spec.md "Directive contract". */
 export type Directive =
@@ -6,9 +7,6 @@ export type Directive =
   | { op: 'note'; markdown: string; title?: string }
   | { op: 'diff'; path?: string }
   | { op: 'comments' }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
 
 const optionalString = (value: unknown) => value === undefined || typeof value === 'string'
 

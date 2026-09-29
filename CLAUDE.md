@@ -53,7 +53,7 @@ use `/raven` rather than prompting the model.
 - `register.ts` stays thin. Views never touch `$`; they take a `Host`, so pure logic is unit-testable
   with bun.
 - A new pane is a `View` in `hooks/views/` plus one entry in `core/raven.ts`; a new reaction to a tool
-  call is one `Trigger` in `core/triggers.ts`; a new CLI op is one directive variant on both sides.
-- Every name derived from "raven" comes from `hooks/names.ts` / `cli/src/names.ts`.
+  call is one `Trigger` in `core/triggers.ts`; a new CLI op is one directive variant in `hooks/core/directive.ts` (the CLI imports its type).
+- Every name derived from "raven" comes from `hooks/names.ts`; the CLI imports it at build time.
 - `Code` caps `source` at 10 000 chars; render per hunk.
 - Raven state never lands in the working tree (it would show in its own diff): use `$.store`.

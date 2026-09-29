@@ -1,5 +1,5 @@
 import type { Host } from '../core/host'
-import { storeKeyOf } from '../names'
+import { commentsStoreKeyOf } from '../names'
 import { addComment, type Comment, type Comments, commentsFrom, removeComment } from './comments'
 
 /**
@@ -20,7 +20,7 @@ export function createReview(host: Host, now: () => number): Review {
   let scope: string | null = null
 
   const save = () => {
-    if (scope !== null) void host.storeSet(storeKeyOf('comments', scope), comments).catch(() => {})
+    if (scope !== null) void host.storeSet(commentsStoreKeyOf(scope), comments).catch(() => {})
     host.redraw()
   }
 
@@ -29,7 +29,7 @@ export function createReview(host: Host, now: () => number): Review {
     load: async repository => {
       if (scope === repository) return
       scope = repository
-      comments = commentsFrom(await host.storeGet(storeKeyOf('comments', repository)))
+      comments = commentsFrom(await host.storeGet(commentsStoreKeyOf(repository)))
       host.redraw()
     },
     add: input => {

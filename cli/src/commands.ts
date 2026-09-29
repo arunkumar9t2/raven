@@ -1,4 +1,5 @@
 import { isAbsolute, resolve } from 'node:path'
+import type { Directive } from '../../plugins/raven/hooks/core/directive'
 import { directiveLine } from './directive'
 import { NAME, VERSION } from './names'
 
@@ -24,6 +25,13 @@ Commands:
 
 Run "${NAME} --version" to print the version.
 `
+
+/** Prints the directive, then what the reader sees when no mod consumed it. */
+function emit(io: Io, directive: Directive, fallback: string): number {
+  io.stdout(`${directiveLine(directive)}\n`)
+  io.stdout(`Raven pane is not active; ${fallback} ${FALLBACK_HINT}\n`)
+  return 0
+}
 
 function resolvePath(io: Io, path: string): string {
   return isAbsolute(path) ? path : resolve(io.cwd, path)
@@ -58,9 +66,7 @@ async function runShow(args: string[], io: Io): Promise<number> {
     io.stderr(`${NAME} show: ${path} ${kind === 'dir' ? 'is a directory' : 'does not exist'}\n`)
     return 1
   }
-  io.stdout(`${directiveLine({ op: 'show', path, ...(title ? { title } : {}) })}\n`)
-  io.stdout(`Raven pane is not active; ${path} was not shown. ${FALLBACK_HINT}\n`)
-  return 0
+  return emit(io, { op: 'show', path, ...(title ? { title } : {}) }, `${path} was not shown.`)
 }
 
 async function runNote(args: string[], io: Io): Promise<number> {
@@ -71,23 +77,17 @@ async function runNote(args: string[], io: Io): Promise<number> {
     io.stderr(`${NAME} note: empty markdown\n`)
     return 1
   }
-  io.stdout(`${directiveLine({ op: 'note', markdown, ...(title ? { title } : {}) })}\n`)
-  io.stdout(`Raven pane is not active; the note was not shown. ${FALLBACK_HINT}\n`)
-  return 0
+  return emit(io, { op: 'note', markdown, ...(title ? { title } : {}) }, 'the note was not shown.')
 }
 
 async function runDiff(args: string[], io: Io): Promise<number> {
   const raw = args[0]
   const path = raw ? resolvePath(io, raw) : undefined
-  io.stdout(`${directiveLine({ op: 'diff', ...(path ? { path } : {}) })}\n`)
-  io.stdout(`Raven pane is not active; the diff was not shown. ${FALLBACK_HINT}\n`)
-  return 0
+  return emit(io, { op: 'diff', ...(path ? { path } : {}) }, 'the diff was not shown.')
 }
 
 async function runComments(io: Io): Promise<number> {
-  io.stdout(`${directiveLine({ op: 'comments' })}\n`)
-  io.stdout(`Raven pane is not active; there are no pending comments. ${FALLBACK_HINT}\n`)
-  return 0
+  return emit(io, { op: 'comments' }, 'there are no pending comments.')
 }
 
 /** Entry point shared by the real binary and tests; `argv` excludes the interpreter and script. */

@@ -1,6 +1,5 @@
 import type { RenderElement, Timer } from 'claude-code'
 
-import { DIFF_PANE, DOC_PANE } from '../names'
 import { reviewTextOf } from '../review/comments'
 import { createReview } from '../review/review'
 import { createDiffView } from '../views/diff-view'
@@ -12,6 +11,8 @@ import type { Kit, View } from './view'
 
 /** The engine-facing surface of Raven; `register` forwards engine events here and nothing else. */
 export type Raven = {
+  /** The `/raven` argument hint: each view's subcommand, then `send`. */
+  argumentHint: string
   command: (args: string) => Promise<string>
   /** Reacts to a finished tool call; returns replacement result text for the model, if any. */
   afterTool: (event: ToolEvent) => Promise<string | undefined>
@@ -22,10 +23,15 @@ export type Raven = {
 }
 
 const REFRESH_DEBOUNCE_MS = 300
+const SEND = 'send'
+const NARROW_TEXT = 'Widen the terminal to dock the Raven pane'
 
 export function createRaven(host: Host, now: () => number): Raven {
   const review = createReview(host, now)
-  const diff = createDiffView(host, review, () => void sendReview())
+  const diff = createDiffView(host, review, {
+    send: () => void sendReview(),
+    focus: key => void focusIn(diff, key),
+  })
   const doc = createDocView(host)
   const views: readonly View[] = [diff, doc]
 
@@ -40,21 +46,31 @@ export function createRaven(host: Host, now: () => number): Raven {
     return text !== undefined
   }
 
-  async function openPane(view: View): Promise<boolean> {
-    // Opening an open id only retitles it; a fresh open is what brings a background tab forward.
-    if (open.has(view.pane.id) && !(await host.isShown(view.pane.id))) {
-      await host.closePane(view.pane.id)
+  /**
+   * Shows a view's pane, bringing it forward when it is a tab behind another; false when the
+   * terminal is too narrow to dock it.
+   */
+  async function show(view: View, focus?: true): Promise<boolean> {
+    if (open.has(view.pane.id)) {
+      if (!focus && (await host.isShown(view.pane.id))) return true
+      // Reopening an open id only retitles it; a fresh open brings a background tab forward.
+      if (!focus) await host.closePane(view.pane.id)
     }
-    const isPlaced = await host.openPane({ ...view.pane, holdToasts: true })
+    const isPlaced = await host.openPane({ ...view.pane, holdToasts: true, focus })
     // A pane left waiting would seat itself on a later resize; withdraw it instead.
     if (!isPlaced) await host.closePane(view.pane.id)
     else open.add(view.pane.id)
     return isPlaced
   }
 
-  async function closePane(view: View) {
+  async function hide(view: View) {
     await host.closePane(view.pane.id)
     open.delete(view.pane.id)
+  }
+
+  /** The keyboard is the person's: an element can take it only once its pane asked for focus. */
+  async function focusIn(view: View, key: string) {
+    if (await show(view, true)) await host.focus(view.pane.id, key).catch(() => {})
   }
 
   function scheduleRefresh() {
@@ -66,17 +82,16 @@ export function createRaven(host: Host, now: () => number): Raven {
   }
 
   async function showDiff(path?: string) {
+    refreshTimer?.cancel()
+    refreshTimer = null
     await diff.refresh()
-    const toplevel = diff.toplevel()
-    if (path && toplevel && path.startsWith(`${toplevel}/`)) {
-      diff.select(path.slice(toplevel.length + 1))
-    }
-    return openPane(diff)
+    if (path) diff.reveal(path)
+    return show(diff)
   }
 
   async function showDoc(shown: Doc) {
     await doc.show(shown)
-    return openPane(doc)
+    return show(doc)
   }
 
   const shownText = (isShown: boolean, what: string) =>
@@ -103,59 +118,56 @@ export function createRaven(host: Host, now: () => number): Raven {
     }
   }
 
-  async function runAction(action: Action, event: ToolEvent): Promise<string | undefined> {
+  async function runAction(action: Action): Promise<string | undefined> {
     switch (action.kind) {
-      case 'refresh-diff': {
+      case 'refresh-diff':
         if (open.has(diff.pane.id)) scheduleRefresh()
-        const isFirstMainEdit = action.isEdit && event.agentId === undefined && !hasAutoOpened
-        if (isFirstMainEdit) {
+        return undefined
+      case 'main-loop-edit':
+        if (!hasAutoOpened) {
           hasAutoOpened = true
           await showDiff()
         }
         return undefined
-      }
       case 'show-doc':
         await showDoc({ kind: 'file', path: action.path })
+        return undefined
+      case 'reload-doc':
+        await doc.reload(action.path)
         return undefined
       case 'directive':
         return runDirective(action.directive)
     }
   }
 
-  async function command(args: string): Promise<string> {
-    switch (args.trim()) {
-      case '':
-      case 'diff':
-        if (open.has(diff.pane.id)) {
-          await closePane(diff)
-          return 'Raven diff hidden'
-        }
-        return (await showDiff()) ? 'Raven diff shown' : 'Widen the terminal to dock the Raven pane'
-      case 'doc':
-        if (open.has(doc.pane.id)) {
-          await closePane(doc)
-          return 'Raven doc hidden'
-        }
-        return (await openPane(doc))
-          ? 'Raven doc shown'
-          : 'Widen the terminal to dock the Raven pane'
-      case 'send':
-        return (await sendReview()) ? 'Review sent' : 'No review comments to send'
-      default:
-        return 'Usage: /raven [diff|doc|send]'
+  async function toggle(view: View): Promise<string> {
+    const name = `Raven ${view.pane.title.toLowerCase()}`
+    if (open.has(view.pane.id) && (await host.isShown(view.pane.id))) {
+      await hide(view)
+      return `${name} hidden`
     }
+    const isShown = view === diff ? await showDiff() : await show(view)
+    return isShown ? `${name} shown` : NARROW_TEXT
+  }
+
+  const argumentHint = `[${[...views.map(view => view.subcommand), SEND].join('|')}]`
+
+  async function command(args: string): Promise<string> {
+    const word = args.trim() || diff.subcommand
+    const view = views.find(each => each.subcommand === word)
+    if (view) return toggle(view)
+    if (word === SEND) return (await sendReview()) ? 'Review sent' : 'No review comments to send'
+    return `Usage: /raven ${argumentHint}`
   }
 
   return {
+    argumentHint,
     command,
     afterTool: async event => {
       const texts: string[] = []
       for (const action of actionsOf(event)) {
-        const text = await runAction(action, event)
+        const text = await runAction(action)
         if (text !== undefined) texts.push(text)
-      }
-      if (event.isLanded && typeof event.input.file_path === 'string') {
-        await doc.reload(event.input.file_path)
       }
       return texts.length > 0 ? texts.join('\n') : undefined
     },
@@ -166,5 +178,3 @@ export function createRaven(host: Host, now: () => number): Raven {
     },
   }
 }
-
-export const PANE_IDS: readonly string[] = [DIFF_PANE.id, DOC_PANE.id]

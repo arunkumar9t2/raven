@@ -1,13 +1,10 @@
 import type { On } from 'claude-code'
-
 import type { Host } from './core/host'
-import { createRaven, PANE_IDS, type Raven } from './core/raven'
+import { isRecord } from './core/is-record'
+import { createRaven, type Raven } from './core/raven'
 import type { ToolEvent } from './core/triggers'
 import type { Ui } from './core/view'
-import { COMMAND, COMMAND_DESCRIPTION } from './names'
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
+import { COMMAND, COMMAND_DESCRIPTION, PANE_IDS } from './names'
 
 /**
  * Raven's hooks: binds the engine once at `session.start`, then forwards commands, tool calls,
@@ -31,8 +28,6 @@ export function register(on: On) {
       focus: async (paneId, key) => {
         await $.ui.focus({ requestId: paneId, key })
       },
-      status: text => $.ui.status(text),
-      toast: text => $.ui.toast(text),
       storeGet: key => $.store.get(key),
       storeSet: (key, value) => $.store.set(key, value),
       submitPrompt: async text => {
@@ -40,12 +35,13 @@ export function register(on: On) {
       },
     }
 
+    const created = createRaven(host, () => Date.now())
     await $.command.register({
       name: COMMAND,
       description: COMMAND_DESCRIPTION,
-      argumentHint: '[diff|doc|send]',
+      argumentHint: created.argumentHint,
     })
-    raven = createRaven(host, () => Date.now())
+    raven = created
 
     return next(e)
   })
@@ -60,7 +56,6 @@ export function register(on: On) {
     const drawn = raven.render(e.requestId, {
       ui,
       columns: e.props.bodyColumns,
-      rows: e.props.scroll.bodyRows,
     })
     return drawn ?? next(e)
   })

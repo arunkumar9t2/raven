@@ -1,6 +1,6 @@
 /**
- * Every name derived from the product's working title, so a rename is one edit here and one in
- * `cli/src/names.ts`.
+ * Every name derived from the product's working title, so a rename is one edit here; the CLI
+ * imports these at build time.
  */
 export const NAME = 'raven'
 
@@ -9,8 +9,10 @@ export const COMMAND_DESCRIPTION = 'Toggle the Raven preview pane (diff, docs, r
 
 export const DIFF_PANE = { id: NAME, title: 'Diff' } as const
 export const DOC_PANE = { id: `${NAME}-doc`, title: 'Doc' } as const
+export const PANE_IDS: readonly string[] = [DIFF_PANE.id, DOC_PANE.id]
 
 /** The prefix of a directive line the CLI prints; the JSON payload follows it. */
 export const DIRECTIVE_PREFIX = `::${NAME}::`
 
-export const storeKeyOf = (kind: 'comments', scope: string) => `${kind}:${scope}`
+/** The store key of one repository's pending review comments. */
+export const commentsStoreKeyOf = (repository: string) => `comments:${repository}`

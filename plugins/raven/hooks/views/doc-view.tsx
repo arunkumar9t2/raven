@@ -6,6 +6,7 @@ import type { RenderElement } from 'claude-code'
 import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
 import { DOC_PANE } from '../names'
+import { baseName } from './icons'
 
 /** A document the pane can show: a file read from disk, or markdown handed over inline. */
 export type Doc =
@@ -23,7 +24,6 @@ export type DocView = View & {
 const HISTORY_LIMIT = 10
 const CODE_SOURCE_LIMIT = 10_000
 
-const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
 
 const keyOf = (doc: Doc) => (doc.kind === 'file' ? `file:${doc.path}` : `note:${doc.title ?? ''}`)
@@ -98,5 +98,5 @@ export function createDocView(host: Host): DocView {
     )
   }
 
-  return { pane: DOC_PANE, render, show, reload }
+  return { pane: DOC_PANE, subcommand: 'doc', render, show, reload }
 }

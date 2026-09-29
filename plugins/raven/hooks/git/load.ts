@@ -14,8 +14,10 @@ export async function loadChanges(
 ): Promise<{ toplevel: string; files: ChangedFile[] } | null> {
   const top = await run(['git', 'rev-parse', '--show-toplevel'])
   if (top.exitCode !== 0) return null
-  const status = await run(['git', 'status', '--porcelain=v1', '-z', '--untracked-files=all'])
-  const diff = await run(['git', 'diff', 'HEAD', '--numstat', '-z'])
+  const [status, diff] = await Promise.all([
+    run(['git', 'status', '--porcelain=v1', '-z', '--untracked-files=all']),
+    run(['git', 'diff', 'HEAD', '--numstat', '-z']),
+  ])
   const numstat = diff.exitCode === 0 ? numstatOf(diff.stdout) : new Map()
   const files = changedFilesOf(statusEntriesOf(status.stdout), numstat)
   return { toplevel: top.stdout.trim(), files }

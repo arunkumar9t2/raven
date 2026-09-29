@@ -1,3 +1,4 @@
+import { isRecord } from '../core/is-record'
 export type Comment = { id: string; path: string; hunk?: string; text: string; createdAt: number }
 // `hunk` is the '@@ -a,b +c,d @@' header of the hunk it anchors to; absent = whole-file comment.
 export type Comments = readonly Comment[]
@@ -58,9 +59,6 @@ export function reviewTextOf(comments: Comments): string | undefined {
 
   return `${PREAMBLE}\n\n${sections.join('\n\n')}`
 }
-
-const isRecord = (value: unknown): value is Record<string, unknown> =>
-  typeof value === 'object' && value !== null
 
 function commentOf(value: unknown): Comment | null {
   if (!isRecord(value)) return null

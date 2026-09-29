@@ -85,4 +85,4 @@ trigger is one entry, not a change to `register`.
 ## Naming
 
 The product name is a working title. Every name derived from it — command, pane ids, directive
-prefix, store keys, binary — comes from `hooks/names.ts` and `cli/src/names.ts`.
+prefix, store keys, binary — comes from `hooks/names.ts`, which the CLI imports at build time.
