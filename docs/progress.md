@@ -6,7 +6,7 @@ Working title **Raven** (rename pending). Live-preview side pane for Claude Code
 ## Resume here
 
 M6 in progress: `docs/superpowers/plans/2026-09-29-raven-m6.md` (gitignored; the plan's
-"Execution order" section is authoritative). Current task: **1** (harness). Done: —
+"Execution order" section is authoritative). Current task: **3** (pinned header + scrolling; the diff view is already split into views/diff/*). Done: 1, 14.
 
 ## Milestones
 
