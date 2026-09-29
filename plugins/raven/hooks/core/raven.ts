@@ -9,10 +9,12 @@ import { createDiffView } from '../views/diff-view'
 import { createDocView, type Doc } from '../views/doc-view'
 import { createTasksView } from '../views/tasks-view'
 import { createTreeView } from '../views/tree-view'
+import { shouldAutoOpen } from './auto-open'
 import { coversRavenDock } from './checkpointing'
 import { commandGlyphOf, NARROW_TEXT } from './command-glyph'
 import { type Directive, directiveOf } from './directive'
 import type { Host } from './host'
+import type { RavenSettings } from './settings'
 import { type Action, actionsOf, type ToolEvent } from './triggers'
 import type { Kit, View } from './view'
 
@@ -33,6 +35,8 @@ export type Raven = {
   /** Moves a pane's own scroll by `by` rows; true when its view handled the move. */
   scroll: (paneId: string, by: number) => boolean
   paneClosed: (paneId: string) => void
+  /** Records the terminal's width off any `ui.render` Raven sees, for the auto-open gate. */
+  noteViewport: (columns: number | undefined) => void
   /**
    * The `AbovePrompt` band: null while a survey holds it, `maxRows` is too small, nothing is
    * pending, or a Raven pane is already visible (not just open behind another tab).
@@ -53,7 +57,7 @@ const REFUSAL_TEXTS: Record<'no_composer' | 'dialog', string> = {
   dialog: 'a dialog has the keyboard',
 }
 
-export function createRaven(host: Host, now: () => number): Raven {
+export function createRaven(host: Host, settings: RavenSettings, now: () => number): Raven {
   const review = createReview(host, now)
   const diff = createDiffView(host, review, {
     send: () => void sendReview(),
@@ -79,6 +83,9 @@ export function createRaven(host: Host, now: () => number): Raven {
   // flags the band for one the person actually opened here before.
   const shownDocPaths = new Set<string>()
   let hasLoadedReview = false
+  // The last width any `ui.render` reported; undefined until one has, which the auto-open gate
+  // reads as "unknown" and opens anyway rather than staying silent by default.
+  let lastViewportColumns: number | undefined
 
   /**
    * Once per module instance: warns when the built-in diff panel will cover Raven's dock. Never
@@ -286,7 +293,7 @@ export function createRaven(host: Host, now: () => number): Raven {
         void warnDiffPanelOnce()
         if (!hasAutoOpened) {
           hasAutoOpened = true
-          await showDiff()
+          if (shouldAutoOpen(settings, lastViewportColumns)) await showDiff()
         }
         return undefined
       case 'show-doc':
@@ -339,7 +346,7 @@ export function createRaven(host: Host, now: () => number): Raven {
     command,
     afterTool: async event => {
       const texts: string[] = []
-      for (const action of actionsOf(event)) {
+      for (const action of actionsOf(event, settings)) {
         const text = await runAction(action)
         if (text !== undefined) texts.push(text)
       }
@@ -369,6 +376,9 @@ export function createRaven(host: Host, now: () => number): Raven {
     paneClosed: paneId => {
       open.delete(paneId)
       host.redraw()
+    },
+    noteViewport: columns => {
+      if (columns !== undefined) lastViewportColumns = columns
     },
     band: async (kit, hasSurvey) => {
       if (hasSurvey || kit.rows < 1) return null

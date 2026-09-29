@@ -50,6 +50,16 @@ raven diff [<path>]               open the diff, optionally at a file
 raven comments                    print pending review comments
 ```
 
+## Settings
+
+`/config` lists three fields for this plugin:
+
+| Field | Type | Default | Does |
+| --- | --- | --- | --- |
+| `watchedPaths` | string | `''` | Comma-separated path fragments; a landed edit under one (plus the built-in plan paths) opens its `.md` in the Doc view. |
+| `autoOpen` | boolean | `true` | Opens the diff on the main loop's first edit of the session. |
+| `autoOpenColumns` | number | `144` | Skips that auto-open below this terminal width, in columns. |
+
 ## Develop
 
 See `CLAUDE.md`. `bun run check` runs everything; `scripts/cc.sh` drives a real session in tmux.

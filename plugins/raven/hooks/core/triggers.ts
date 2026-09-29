@@ -1,5 +1,6 @@
 import { TASK_TOOLS } from '../review/tasks'
 import { type Directive, directivesIn } from './directive'
+import type { RavenSettings } from './settings'
 
 /** A finished tool call, as the triggers read it. */
 export type ToolEvent = {
@@ -23,17 +24,28 @@ export type Action =
   | { kind: 'directive'; directive: Directive }
   | { kind: 'tasks'; tool: string; input: Readonly<Record<string, unknown>>; result?: unknown }
 
-export type Trigger = (event: ToolEvent) => readonly Action[]
+export type Trigger = (event: ToolEvent, settings: RavenSettings) => readonly Action[]
 
 const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'MultiEdit']
 const SHELL_TOOLS = ['Bash', 'PowerShell']
 
 /** Markdown written under these paths opens in the doc view as it is written. */
-const WATCHED_DOC_PATHS = [
+const WATCHED_DOC_PATTERNS = [
   /\/docs\/superpowers\/(plans|specs)\/[^/]+\.md$/,
   /\/\.superpowers\/.+\.md$/,
   /\/\.claude\/plans\/[^/]+\.md$/,
 ]
+
+/** True when `fragment` occurs in `path` as a `/`-bounded segment, not merely a substring. */
+const containsFragment = (path: string, fragment: string) => {
+  const bounded = fragment.startsWith('/') ? fragment : `/${fragment}`
+  return `/${path}`.includes(bounded)
+}
+
+const isWatchedDocPath = (path: string, watchedPaths: readonly string[]) =>
+  path.endsWith('.md') &&
+  (WATCHED_DOC_PATTERNS.some(pattern => pattern.test(path)) ||
+    watchedPaths.some(fragment => containsFragment(path, fragment)))
 
 /** The file a landed edit wrote, or null for any other call. */
 const editedPathOf = (event: ToolEvent) => {
@@ -54,9 +66,9 @@ const onEdit: Trigger = event => {
 const onShell: Trigger = event =>
   SHELL_TOOLS.includes(event.tool) ? [{ kind: 'refresh-diff' }] : []
 
-const onWatchedDoc: Trigger = event => {
+const onWatchedDoc: Trigger = (event, settings) => {
   const path = editedPathOf(event)
-  return path !== null && WATCHED_DOC_PATHS.some(pattern => pattern.test(path))
+  return path !== null && isWatchedDocPath(path, settings.watchedPaths)
     ? [{ kind: 'show-doc', path }]
     : []
 }
@@ -74,5 +86,5 @@ const onTasks: Trigger = event =>
 /** Every trigger, in the order their actions run. Adding a reaction is one entry here. */
 export const TRIGGERS: readonly Trigger[] = [onEdit, onShell, onWatchedDoc, onDirective, onTasks]
 
-export const actionsOf = (event: ToolEvent, triggers = TRIGGERS) =>
-  triggers.flatMap(trigger => trigger(event))
+export const actionsOf = (event: ToolEvent, settings: RavenSettings, triggers = TRIGGERS) =>
+  triggers.flatMap(trigger => trigger(event, settings))
