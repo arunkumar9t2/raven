@@ -4,7 +4,7 @@ import { isRecord } from './is-record'
 export const DIRECTIVE_OPS = ['show', 'note', 'diff', 'comments'] as const
 type DirectiveOp = (typeof DIRECTIVE_OPS)[number]
 
-/** What the CLI asks of the pane; see docs/spec.md "Directive contract". */
+/** What the CLI asks of the pane; see spec/agentic.md. */
 export type Directive =
   | { op: 'show'; path: string; title?: string }
   | { op: 'note'; markdown: string; title?: string }
