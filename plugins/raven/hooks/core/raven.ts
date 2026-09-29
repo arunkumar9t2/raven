@@ -43,9 +43,16 @@ export function createRaven(host: Host, now: () => number): Raven {
   let refreshTimer: Timer | null = null
   let hasAutoOpened = false
 
+  const takeReviewText = () => reviewTextOf(review.take())
+
+  function cancelRefresh() {
+    refreshTimer?.cancel()
+    refreshTimer = null
+  }
+
   /** Submits the pending review as a visible prompt, so the person sees what Claude was asked. */
   async function sendReview(): Promise<boolean> {
-    const text = reviewTextOf(review.take())
+    const text = takeReviewText()
     if (text !== undefined) await host.submitPrompt(text)
     return text !== undefined
   }
@@ -78,7 +85,7 @@ export function createRaven(host: Host, now: () => number): Raven {
   }
 
   function scheduleRefresh() {
-    refreshTimer?.cancel()
+    cancelRefresh()
     refreshTimer = host.after(REFRESH_DEBOUNCE_MS, () => {
       refreshTimer = null
       void diff.refresh()
@@ -86,8 +93,7 @@ export function createRaven(host: Host, now: () => number): Raven {
   }
 
   async function showDiff(path?: string) {
-    refreshTimer?.cancel()
-    refreshTimer = null
+    cancelRefresh()
     await diff.refresh()
     if (path) diff.reveal(path)
     return show(diff)
@@ -118,7 +124,7 @@ export function createRaven(host: Host, now: () => number): Raven {
       case 'diff':
         return shownText(await showDiff(directive.path), 'the diff')
       case 'comments':
-        return reviewTextOf(review.take()) ?? 'The user has no pending review comments.'
+        return takeReviewText() ?? 'The user has no pending review comments.'
     }
   }
 
@@ -189,7 +195,7 @@ export function createRaven(host: Host, now: () => number): Raven {
         throw new Error(`Invalid input for the Raven show tool: ${JSON.stringify(input)}`)
       return runDirective(await resolveDirective(directive))
     },
-    takePromptContext: () => reviewTextOf(review.take()),
+    takePromptContext: takeReviewText,
     render: (paneId, kit) => views.find(view => view.pane.id === paneId)?.render(kit) ?? null,
     scroll: (paneId, by) => views.find(view => view.pane.id === paneId)?.scroll?.(by) ?? false,
     paneClosed: paneId => {

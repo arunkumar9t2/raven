@@ -1,6 +1,9 @@
 import { DIRECTIVE_PREFIX, FALLBACK_PREFIX } from '../names'
 import { isRecord } from './is-record'
 
+export const DIRECTIVE_OPS = ['show', 'note', 'diff', 'comments'] as const
+type DirectiveOp = (typeof DIRECTIVE_OPS)[number]
+
 /** What the CLI asks of the pane; see docs/spec.md "Directive contract". */
 export type Directive =
   | { op: 'show'; path: string; title?: string }
@@ -15,8 +18,9 @@ export function directiveOf(value: unknown): Directive | null {
   if (!isRecord(value)) return null
   const { op, path, title, markdown } = value
   if (!optionalString(title) || !optionalString(path)) return null
+  if (!DIRECTIVE_OPS.includes(op as DirectiveOp)) return null
 
-  switch (op) {
+  switch (op as DirectiveOp) {
     case 'show':
       return typeof path === 'string' ? (value as Directive) : null
     case 'note':
@@ -24,8 +28,6 @@ export function directiveOf(value: unknown): Directive | null {
     case 'diff':
     case 'comments':
       return value as Directive
-    default:
-      return null
   }
 }
 

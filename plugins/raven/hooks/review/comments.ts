@@ -1,4 +1,5 @@
 import { isRecord } from '../core/is-record'
+import { bodyLinesOf, parseHeader } from '../git/hunks'
 
 /** A single diff line a comment anchors to, inside its `hunk`. */
 export type CommentLine = { number: number; side: 'old' | 'new'; text: string }
@@ -60,14 +61,10 @@ export function reviewTextOf(comments: Comments): string | undefined {
   const sections = paths.map(path => {
     const forPath = comments.filter(comment => comment.path === path)
 
-    const seenHunks: string[] = []
-    for (const comment of forPath) {
-      if (comment.hunk !== undefined && !seenHunks.includes(comment.hunk)) {
-        seenHunks.push(comment.hunk)
-      }
-    }
-    // `Array#sort` always shunts `undefined` elements to the end regardless of comparator, so
-    // file-level (hunk `undefined`) is kept out of the sorted array and prepended by hand.
+    const seenHunks = [
+      ...new Set(forPath.flatMap(comment => (comment.hunk === undefined ? [] : [comment.hunk]))),
+    ]
+    // Keeps file-level (hunk `undefined`) first; it can't be sorted in among the hunk headers.
     const hasFileLevel = forPath.some(comment => comment.hunk === undefined)
     const hunkOrder: (string | undefined)[] = hasFileLevel ? [undefined, ...seenHunks] : seenHunks
 
@@ -88,16 +85,15 @@ export function reviewTextOf(comments: Comments): string | undefined {
 
 /** The changed lines of a hunk, each with the real line number it has on its side of the diff. */
 export function changedLinesOf(hunk: { header: string; text: string }): CommentLine[] {
-  const match = hunk.header.match(/^@@ -(\d+)(?:,\d+)? \+(\d+)(?:,\d+)? @@/)
-  if (!match) return []
-  let oldLine = Number(match[1])
-  let newLine = Number(match[2])
+  const parsed = parseHeader(hunk.header)
+  if (!parsed) return []
+  let oldLine = parsed.oldStart
+  let newLine = parsed.newStart
 
   const result: CommentLine[] = []
-  // `hunk.text` starts with the header line itself; skip it before walking the body. A line
-  // starting with '\' is the '\ No newline at end of file' marker for the line above it and
-  // advances neither counter.
-  for (const line of hunk.text.split('\n').slice(1)) {
+  // A line starting with '\' is the '\ No newline at end of file' marker for the line above it
+  // and advances neither counter.
+  for (const line of bodyLinesOf(hunk)) {
     if (line === '' || line.startsWith('\\')) continue
     if (line.startsWith('+')) {
       result.push({ number: newLine, side: 'new', text: line.slice(1) })
@@ -191,12 +187,12 @@ function commentOf(value: unknown): Comment | null {
   if (typeof id !== 'string' || typeof path !== 'string' || typeof text !== 'string') return null
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return null
   if (hunk !== undefined && typeof hunk !== 'string') return null
-  if (line !== undefined && lineOf(line) === null) return null
+  const parsedLine = line === undefined ? undefined : lineOf(line)
+  if (line !== undefined && parsedLine === null) return null
 
   const comment: Comment = { id, path, text, createdAt, status: statusOf(value.status) }
   if (hunk !== undefined) comment.hunk = hunk
-  const parsedLine = lineOf(line)
-  if (parsedLine !== null) comment.line = parsedLine
+  if (parsedLine) comment.line = parsedLine
   return comment
 }
 

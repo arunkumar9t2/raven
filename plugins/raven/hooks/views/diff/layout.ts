@@ -1,4 +1,4 @@
-import type { Hunk } from '../../git/hunks'
+import { bodyLinesOf, type Hunk, hunkFrom, parseHeader } from '../../git/hunks'
 
 /** A body block: an element of known height, or a hunk whose body lines are its rows. */
 export type Block =
@@ -7,17 +7,6 @@ export type Block =
 
 /** A block placed in the window: rows [from, to) of it are visible. */
 export type Placed = { block: Block; from: number; to: number }
-
-const HEADER_RE = /^@@ -(\d+)(?:,(\d+))? \+(\d+)(?:,(\d+))? @@(.*)$/
-
-// hunk.text is the header line plus '\n'-joined body lines, trailing '\n'; the header itself
-// isn't a row, so drop the first line and the empty tail left by the trailing '\n'.
-function bodyLinesOf(hunk: Hunk): string[] {
-  const lines = hunk.text.split('\n')
-  lines.pop()
-  lines.shift()
-  return lines
-}
 
 /** The rows a block takes: a fixed block its declared rows, a hunk its body line count. */
 export function rowsOf(block: Block): number {
@@ -67,12 +56,10 @@ export function sliceHunk(hunk: Hunk, from: number, to: number): Hunk {
   const lines = bodyLinesOf(hunk)
   const slice = lines.slice(from, to)
 
-  const match = HEADER_RE.exec(hunk.header)
-  if (!match) return { header: hunk.header, text: `${[hunk.header, ...slice].join('\n')}\n` }
+  const parsed = parseHeader(hunk.header)
+  if (!parsed) return hunkFrom(hunk.header, slice)
 
-  const oldStart = Number(match[1])
-  const newStart = Number(match[3])
-  const suffix = match[5] ?? ''
+  const { oldStart, newStart, suffix } = parsed
 
   const isOld = (line: string) => line.startsWith(' ') || line.startsWith('-')
   const isNew = (line: string) => line.startsWith(' ') || line.startsWith('+')
@@ -86,7 +73,7 @@ export function sliceHunk(hunk: Hunk, from: number, to: number): Hunk {
 
   const header = `@@ -${oldStartOut},${oldCountOut} +${newStartOut},${newCountOut} @@${suffix}`
 
-  return { header, text: `${[header, ...slice].join('\n')}\n` }
+  return hunkFrom(header, slice)
 }
 
 /** Keeps `top` within [0, max(0, contentRows - rows)]. */

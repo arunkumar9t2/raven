@@ -1,5 +1,5 @@
 import type { On } from 'claude-code'
-import { withoutDirectives } from './core/directive'
+import { DIRECTIVE_OPS, withoutDirectives } from './core/directive'
 import type { Host } from './core/host'
 import { isRecord } from './core/is-record'
 import { createRaven, type Raven } from './core/raven'
@@ -18,7 +18,7 @@ const TOOL_INPUT_SCHEMA = {
   type: 'object',
   properties: {
     op: {
-      enum: ['show', 'note', 'diff', 'comments'],
+      enum: [...DIRECTIVE_OPS],
       description:
         "'show' renders a file at `path`; 'note' renders the markdown you compose; 'diff' opens " +
         "the diff, optionally at `path`; 'comments' reads the user's pending review comments.",
