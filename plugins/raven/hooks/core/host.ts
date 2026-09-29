@@ -14,6 +14,8 @@ export type Host = {
   /** Resolves false when the engine left the pane waiting undrawn (too narrow to dock). */
   openPane: (pane: PaneOpenArgs) => Promise<boolean>
   closePane: (id: string) => Promise<void>
+  /** Whether the pane is the one the surface shows, rather than a tab behind it. */
+  isShown: (id: string) => Promise<boolean>
   /** Moves keyboard focus to the element drawn under `key` in pane `paneId`. */
   focus: (paneId: string, key: string) => Promise<void>
   status: (text: string | undefined) => void

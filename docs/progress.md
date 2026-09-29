@@ -9,11 +9,11 @@ Check `TaskList` / this log's latest entry, then continue with the next unchecke
 
 ## Milestones
 
-- [ ] M0 smoke mod: /raven opens docked pane (Markdown, Code diff, Button, Input); bin/ on PATH; Bash stdout intercept; prompt.submit context; validate + plugin test
-- [ ] M1 diff view: file list + per-hunk Code diff in one pane, refresh on Edit/Write/Bash
-- [ ] M2 doc view: auto-show markdown written to plan/spec dirs (superpowers, ~/.claude/plans)
-- [ ] M3 review comments: comment on file/hunk, ride next prompt / Send button
-- [ ] M4 CLI + skill: `raven show|diff|comments`, directive bridge via Bash result intercept
+- [x] M0 smoke mod: /raven opens docked pane (Markdown, Code diff, Button, Input); bin/ on PATH; Bash stdout intercept; prompt.submit context; validate + plugin test
+- [x] M1 diff view: file list + per-hunk Code diff in one pane, refresh on Edit/Write/Bash
+- [x] M2 doc view: auto-show markdown written to plan/spec dirs (superpowers, ~/.claude/plans)
+- [x] M3 review comments: comment on file/hunk, ride next prompt / Send button
+- [x] M4 CLI + skill: `raven show|diff|comments`, directive bridge via Bash result intercept
 - [ ] M5 simplify, review, validate, e2e
 
 ## Decisions
@@ -25,3 +25,12 @@ Check `TaskList` / this log's latest entry, then continue with the next unchecke
 - 2026-09-29 Only one pane shows at a time (others become tabs), so the file list and hunks share one pane. `Code` caps source at 10k chars: render per hunk.
 - 2026-09-29 Superpowers writes specs/plans to docs/superpowers/{specs,plans}/ and working notes to .superpowers/; built-in plan mode writes ~/.claude/plans/.
 - 2026-09-29 Weekly usage was at 87% at session start: verification prefers zero-token paths (slash commands, `claude plugin test`, shell edits) over live prompts.
+- 2026-09-29 Verified in tmux (Haiku): /raven docks the Diff pane; file rows select; hunk/file comments via Input; Send submits the review as a visible prompt and Claude acts on it; `raven note` and a Write under docs/superpowers/plans/ open the Doc pane; the engine draws a Diff|Doc tab bar.
+- 2026-09-29 The skill is named `preview`, not `raven`: a skill named like the plugin claims `/raven` and the mod's `command.register` is refused.
+- 2026-09-29 Focus: `autoFocus` does not take the keyboard from the composer and `$.ui.focus` is denied unless the pane holds it; the comment Input asks `ui.open({ focus: true })` first, then focuses its key.
+- 2026-09-29 Send puts the review in the submitted prompt's text rather than hidden context, so the person sees what Claude was asked; ordinary prompts still carry pending comments as hidden context.
+- 2026-09-29 Reopening an open pane id only retitles it; `show` closes and reopens a background tab to bring it forward.
+- 2026-09-29 The native built-in diff panel (not a plugin pane in this build) auto-opens on the first checkpointed edit and takes the dock over Raven. It obeys the `diffSidebarOpen` global preference (closing it once sets false). The harness runs with `CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1` rather than touching the user's config.
+- 2026-09-29 The engine writes current types to `plugins/raven/.claude-plugin/types/` on load; `bun run types:sync` copies them to `types/`.
+- 2026-09-29 The mod hot-reloads when its sources change during a session.
+- 2026-09-29 Open follow-ups: untracked files show +0; some Nerd Font glyphs render blank; simplify + review pass; more `claude plugin test` coverage.

@@ -41,11 +41,11 @@ export function createRaven(host: Host, now: () => number): Raven {
   }
 
   async function openPane(view: View): Promise<boolean> {
-    const isPlaced = await host.openPane({
-      id: view.pane.id,
-      title: view.pane.title,
-      holdToasts: true,
-    })
+    // Opening an open id only retitles it; a fresh open is what brings a background tab forward.
+    if (open.has(view.pane.id) && !(await host.isShown(view.pane.id))) {
+      await host.closePane(view.pane.id)
+    }
+    const isPlaced = await host.openPane({ ...view.pane, holdToasts: true })
     // A pane left waiting would seat itself on a later resize; withdraw it instead.
     if (!isPlaced) await host.closePane(view.pane.id)
     else open.add(view.pane.id)
