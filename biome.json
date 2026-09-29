@@ -1,7 +1,7 @@
 {
   "$schema": "https://biomejs.dev/schemas/2.5.14/schema.json",
   "files": {
-    "includes": ["cli/**", "plugins/**", "scripts/**", "!**/dist", "!**/.claude-plugin/types"]
+    "includes": ["plugins/**", "scripts/**", "!**/dist", "!**/.claude-plugin/types"]
   },
   "assist": {
     "actions": {

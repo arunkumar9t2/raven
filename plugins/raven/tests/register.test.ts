@@ -14,7 +14,7 @@ function world(on: On, stdout: string) {
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a repo' } }))
   on('ui.invalidate', () => ({ value: undefined }))
-  on('tool.call', () => ({ result: { stdout, stderr: '', interrupted: false }, text: stdout }))
+  on('tool.call', () => ({ result: { stdout, stderr: '', interrupted: false } }))
 }
 
 describe('register', () => {
@@ -25,6 +25,7 @@ describe('register', () => {
     const result = await $.tool.call({ tool: 'Bash', command: 'raven comments' })
 
     expect(result.text).toBe('The user has no pending review comments.')
+    expect(result.result).toMatchObject({ stdout: 'The user has no pending review comments.' })
   })
 
   test('the rest of a command that also printed a directive is kept', async ($, on) => {
@@ -42,6 +43,6 @@ describe('register', () => {
     await $.session.start(SESSION)
     const result = await $.tool.call({ tool: 'Bash', command: 'echo hello' })
 
-    expect(result.text).toBe('hello\n')
+    expect(result.result).toMatchObject({ stdout: 'hello\n' })
   })
 })

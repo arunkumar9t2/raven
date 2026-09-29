@@ -84,15 +84,18 @@ export function register(on: On) {
     }
 
     const ack = await raven.afterTool(event).catch(() => undefined)
-    if (ack === undefined || !isLanded) return result
-    // Keep whatever else the command printed; only the CLI's own lines give way to the ack.
-    const rest = withoutDirectives(result.text ?? event.stdout ?? '')
-    return { ...result, text: rest === '' ? ack : `${rest}\n${ack}` }
+    if (ack === undefined || !isLanded || !isRecord(result.result)) return result
+    // The model reads Bash's result from its `stdout`, so the ack replaces the CLI's lines there;
+    // anything else the command printed stays.
+    const rest = withoutDirectives(event.stdout ?? '')
+    const text = rest === '' ? ack : `${rest}\n${ack}`
+    return { ...result, result: { ...result.result, stdout: text }, text }
   })
 
-  // Only a prompt the person typed carries the review; bridged, scheduled and plugin prompts do not.
+  // Only a prompt the person sent (typed, or through Remote Control) carries the review.
   on('prompt.submit', ($, e, next) => {
-    const review = e.origin.kind === 'composer' ? raven?.takePromptContext() : undefined
+    const isPersons = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
+    const review = isPersons ? raven?.takePromptContext() : undefined
     return review ? next({ ...e, context: [...(e.context ?? []), review] }) : next(e)
   })
 }

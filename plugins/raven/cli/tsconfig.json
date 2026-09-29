@@ -12,5 +12,5 @@
     "allowImportingTsExtensions": true,
     "types": ["bun-types"]
   },
-  "include": ["src", "tests", "../plugins/raven/tests/unit", "../types"]
+  "include": ["src", "tests", "../tests/unit", "../../../types"]
 }

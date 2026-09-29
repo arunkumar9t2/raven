@@ -9,8 +9,8 @@ It ships as one Claude Code plugin with three layers:
 | Layer | Lives in | Runs | Owns |
 | --- | --- | --- | --- |
 | **Mod** (deterministic) | `plugins/raven/hooks/` | inside Claude Code, as function hooks | every pixel, every reaction to an engine event, in-session state, prompt injection |
-| **CLI** (agentic entry) | `cli/` → `plugins/raven/bin/raven` | as a process Claude starts through Bash | argument parsing, path resolution against the shell's cwd, file validation, the directive it prints |
-| **Skill** (agentic guidance) | `plugins/raven/skills/raven/` | in the model's context, on demand | when and how Claude should reach for the CLI |
+| **CLI** (agentic entry) | `plugins/raven/cli/` → `plugins/raven/bin/raven` | as a process Claude starts through Bash | argument parsing, path resolution against the shell's cwd, file validation, the directive it prints |
+| **Skill** (agentic guidance) | `plugins/raven/skills/preview/` | in the model's context, on demand | when and how Claude should reach for the CLI |
 
 ## The boundary
 
@@ -25,8 +25,10 @@ Claude ──Bash──▶ raven show docs/plan.md ──stdout──▶ ::raven
 ```
 
 - The CLI is stateless and must stay useful when the mod is absent (function hooks off): after the
-  directive it prints a plain human/model-readable fallback. The mod replaces the whole result text
-  with a short acknowledgement, so the model never reads the fallback when the pane is live.
+  directive it prints a plain human/model-readable fallback line. The mod swaps the directive and
+  fallback lines for a short acknowledgement and keeps anything else the command printed.
+- The CLI lives inside the plugin (`plugins/raven/cli/`) because an install copies only the plugin
+  directory; `bin/raven` runs the compiled `dist/raven` when present, else the source under Bun.
 - Anything that needs the shell's working directory, globbing, or validation belongs in the CLI; the
   mod does not know where Bash's `cd` left it.
 - Anything that needs the screen, engine events or session state belongs in the mod.
@@ -45,11 +47,9 @@ One line per directive, `::raven::` followed by compact JSON. Unknown ops are ig
 ## Views
 
 The pane is a host for **views**. A view is one engine pane (`id`, `title`); the engine shows one at a
-time and tabs the rest. A view declares:
-
-- `render(kit)` — draw from its own model;
-- `refresh(host)` — optional, recompute its model from the world;
-- how it is reached: a directive op, a trigger, or `/raven`.
+time and tabs the rest. A view declares its pane, the `/raven <subcommand>` that toggles it, and
+`render(kit)`, which draws from its own model. `/raven <subcommand>` brings a background tab forward
+and hides a shown one; `/raven` alone means `/raven diff`.
 
 **Triggers** map engine events to view actions and are listed in one registry, so adding a view or a
 trigger is one entry, not a change to `register`.
@@ -66,19 +66,20 @@ trigger is one entry, not a change to `register`.
 ### Doc view (`raven-doc`)
 
 - Renders one document: a markdown file, a non-markdown file (highlighted by its path), or inline
-  markdown from a `note` directive or `ExitPlanMode`'s plan.
+  markdown from a `note` directive.
 - Keeps a short history of shown documents, selectable from the pane.
 - Opens itself when Claude writes or edits a markdown file under a watched plan path:
   `docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`, `~/.claude/plans/`.
 
 ## Review comments
 
-- Each hunk and each file row carries a comment control; submitting its input records a comment
-  `{ path, hunk header?, text }`.
-- Pending comments are listed at the foot of the diff view, each removable.
-- On the next `prompt.submit` every pending comment rides the prompt as hidden context, formatted as a
-  review, and is marked sent. A **Send review** button submits a prompt carrying them at once.
-- `raven comments` returns the pending comments to Claude on demand.
+- The selected file and each of its hunks carry a comment control; submitting its input records a
+  comment `{ path, hunk header?, text }`, shown under what it anchors to, each removable.
+- The next prompt the person sends (typed, or through Remote Control) carries every pending comment
+  as hidden context, formatted as a review; they are then cleared. The header's
+  **Send N comments to Claude** button (or `/raven send`) instead submits the review as a visible
+  prompt.
+- `raven comments` returns the pending comments to Claude as the tool result, which delivers them.
 - Comments live in memory for the session and in `$.store` keyed by repository, never in the working
   tree.
 

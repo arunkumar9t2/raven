@@ -1,6 +1,6 @@
 #!/bin/sh
 # Resolve through symlinks so this works whether Claude Code invokes it via a plugin symlink or in
-# place; the compiled binary and the dev checkout are found relative to this file, not to $PWD.
+# place; the compiled binary, else the TypeScript source run by Bun, is found relative to this file.
 dir=$(dirname "$(readlink -f "$0")")
 
 if [ -x "$dir/../dist/raven" ]; then
@@ -8,8 +8,8 @@ if [ -x "$dir/../dist/raven" ]; then
 fi
 
 if command -v bun >/dev/null 2>&1; then
-  exec bun "$dir/../../../cli/src/main.ts" "$@"
+  exec bun "$dir/../cli/src/main.ts" "$@"
 fi
 
-echo "raven is not built and bun is not on PATH; run \`bun run build\`" >&2
+echo "raven needs Bun on PATH (https://bun.sh), or a build: bun run build" >&2
 exit 127
