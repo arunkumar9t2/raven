@@ -12,10 +12,13 @@ import {
   cancelKeyOf,
   commentButtonKeyOf,
   dropKeyOf,
+  hunkActionsKeyOf,
   noteKeyOf,
   resendKeyOf,
+  revertKeyOf,
   sameAnchor,
   selectKeyOf,
+  stageKeyOf,
 } from './anchor'
 
 const WHOLE_HUNK = 'whole'
@@ -133,6 +136,38 @@ export function note(
         dimColor
         label="✕"
         onPress={() => onRemove(comment.id)}
+      />
+    </Box>
+  )
+}
+
+export type HunkActionsProps = {
+  anchor: Anchor
+  isStaged: boolean
+  confirmingRevert: boolean
+  onStage: () => void
+  onRevert: () => void
+}
+
+/** A hunk's stage/revert row: staging is a no-op once staged, revert confirms on a second press. */
+export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement {
+  const { Box, Button } = kit.ui
+  const { anchor } = props
+  return (
+    <Box key={hunkActionsKeyOf(anchor)} flexDirection="row" gap={1}>
+      <Button
+        key={stageKeyOf(anchor)}
+        plain
+        dimColor
+        label={props.isStaged ? 'staged ✓' : 'stage'}
+        onPress={props.isStaged ? () => {} : props.onStage}
+      />
+      <Button
+        key={revertKeyOf(anchor)}
+        plain
+        dimColor
+        label={props.confirmingRevert ? 'revert? (again)' : 'revert'}
+        onPress={props.onRevert}
       />
     </Box>
   )

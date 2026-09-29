@@ -2,10 +2,18 @@ import type { ChangedFile } from '../../git/changes'
 import type { Hunk } from '../../git/hunks'
 import type { Comment, Comments } from '../../review/comments'
 import { groupByAnchor } from '../../review/comments'
-import { type Anchor, addressedKeyOf, commentBoxKeyOf, noteKeyOf, sameAnchor } from './anchor'
+import {
+  type Anchor,
+  addressedKeyOf,
+  anchorKeyOf,
+  commentBoxKeyOf,
+  hunkActionsKeyOf,
+  noteKeyOf,
+  sameAnchor,
+} from './anchor'
 import type { Block } from './layout'
 
-export { addressedKeyOf, commentBoxKeyOf, noteKeyOf } from './anchor'
+export { addressedKeyOf, commentBoxKeyOf, hunkActionsKeyOf, noteKeyOf } from './anchor'
 
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
@@ -23,8 +31,20 @@ export type BodyItem =
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk }
+  | {
+      kind: 'hunk-actions'
+      anchor: Anchor
+      hunk: Hunk
+      isStaged: boolean
+      confirmingRevert: boolean
+    }
   | { kind: 'gap' }
   | { kind: 'status'; text: string }
+
+/** A hunk's staged/confirming state, by its header, driving its stage/revert row. */
+export type HunkState = { staged: ReadonlySet<string>; confirmingRevert: string | null }
+
+const NO_HUNK_STATE: HunkState = { staged: new Set(), confirmingRevert: null }
 
 /** The block key of the blank row between hunk `index` and the one before it. */
 export const gapKeyOf = (index: number) => `gap:${index}`
@@ -113,15 +133,17 @@ function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
 
 /**
  * The selected file's body as fixed-height and hunk blocks, top to bottom: the title, the
- * file-level notes and comment box, then each hunk with its own notes and comment box, one blank
- * row between hunks, then an "Outdated" group for comments whose hunk no longer exists. A file
- * with no hunks (loading, binary, or no textual changes) ends with one status row instead.
+ * file-level notes and comment box, then each hunk with its own notes, comment box and
+ * stage/revert row, one blank row between hunks, then an "Outdated" group for comments whose
+ * hunk no longer exists. A file with no hunks (loading, binary, or no textual changes) ends with
+ * one status row instead.
  */
 export function blocksOf(
   file: ChangedFile,
   hunks: readonly Hunk[] | undefined,
   comments: Comments,
   composing: Anchor | null,
+  hunkState: HunkState = NO_HUNK_STATE,
 ): Block<BodyItem>[] {
   const fileAnchor: Anchor = { path: file.path }
   const grouped = groupByAnchor(comments, hunks?.map(hunk => hunk.header) ?? [])
@@ -145,6 +167,18 @@ export function blocksOf(
     const anchor: Anchor = { path: file.path, hunk: hunk.header }
     blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
     blocks.push(...anchorBlocksOf(grouped.byHunk.get(hunk.header) ?? [], anchor, composing, hunk))
+    blocks.push({
+      kind: 'fixed',
+      key: hunkActionsKeyOf(anchor),
+      rows: 1,
+      item: {
+        kind: 'hunk-actions',
+        anchor,
+        hunk,
+        isStaged: hunkState.staged.has(hunk.header),
+        confirmingRevert: hunkState.confirmingRevert === anchorKeyOf(anchor),
+      },
+    })
   })
 
   blocks.push(...outdatedBlocksOf(grouped.outdated))

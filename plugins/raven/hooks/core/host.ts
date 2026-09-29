@@ -7,7 +7,7 @@ export type RunResult = { exitCode: number; stdout: string; stderr: string }
  * views take a Host rather than `$`, so they can be driven by a fake in unit tests.
  */
 export type Host = {
-  run: (argv: readonly string[]) => Promise<RunResult>
+  run: (argv: readonly string[], stdin?: string) => Promise<RunResult>
   readFile: (path: string) => Promise<string>
   after: (ms: number, fn: () => void) => Timer
   redraw: () => void
@@ -27,4 +27,8 @@ export type Host = {
   fork: (prompt: string) => Promise<string | null>
   /** Pins `text` as Raven's status line under the prompt; `undefined` clears it. */
   status: (text: string | undefined) => void
+  /** Replaces the prompt box's draft with `text`; false when no box could take it. */
+  fillPrompt: (text: string) => Promise<{ isFilled: boolean; refusal?: 'no_composer' | 'dialog' }>
+  /** A transient toast over the transcript, for an error the pane has no room to show inline. */
+  toast: (text: string) => void
 }

@@ -15,6 +15,8 @@ export type Review = {
   remove: (id: string) => void
   /** Hands the pending comments over and marks them sent: they ride exactly one prompt. */
   take: () => Comments
+  /** Undoes `take()` for the named sent comments, moving them back to 'pending'. */
+  restore: (ids: readonly string[]) => void
   /** Comments not yet sent to the model. */
   pending: () => Comments
   /** Comments sent to the model, awaiting a reply naming which were addressed. */
@@ -84,6 +86,10 @@ export function createReview(host: Host, now: () => number): Review {
         save()
       }
       return taken
+    },
+    restore: ids => {
+      moveStatus('sent', 'pending', ids)
+      save()
     },
     pending: () => comments.filter(comment => comment.status === 'pending'),
     sent: () => comments.filter(comment => comment.status === 'sent'),

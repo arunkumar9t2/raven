@@ -39,6 +39,7 @@ export function createRaven(host: Host, now: () => number): Raven {
   const review = createReview(host, now)
   const diff = createDiffView(host, review, {
     send: () => void sendReview(),
+    editAndSend: () => void editAndSend(),
     focus: key => void focusIn(diff, key),
   })
   const doc = createDocView(host)
@@ -88,6 +89,26 @@ export function createRaven(host: Host, now: () => number): Raven {
     const text = takeReviewText()
     if (text !== undefined) await host.submitPrompt(text)
     return text !== undefined
+  }
+
+  const refusalTextOf = (refusal: 'no_composer' | 'dialog' | undefined) =>
+    refusal === 'no_composer'
+      ? 'no prompt box in this session'
+      : refusal === 'dialog'
+        ? 'a dialog has the keyboard'
+        : 'the fill was refused'
+
+  /** Fills the prompt box with the pending review so the person can edit it before sending. */
+  async function editAndSend(): Promise<void> {
+    if (review.pending().length === 0) return
+    const taken = review.take()
+    const text = reviewTextOf(taken)
+    if (text === undefined) return
+    const filled = await host.fillPrompt(text)
+    if (!filled.isFilled) {
+      review.restore(taken.map(comment => comment.id))
+      host.toast(`Raven: could not fill the prompt (${refusalTextOf(filled.refusal)})`)
+    }
   }
 
   /**

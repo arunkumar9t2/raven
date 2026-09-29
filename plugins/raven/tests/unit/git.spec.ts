@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import { changedFilesOf, numstatOf, statusEntriesOf } from '../../hooks/git/changes'
 import { clampHunk, hunksOf } from '../../hooks/git/hunks'
 import type { Run } from '../../hooks/git/load'
-import { loadChanges, loadHunks } from '../../hooks/git/load'
+import { applyPatch, loadChanges, loadHunks } from '../../hooks/git/load'
 
 describe('statusEntriesOf', () => {
   test('parses modified, added, deleted, untracked, and renamed entries', () => {
@@ -236,5 +236,46 @@ describe('loadHunks', () => {
     expect(await loadHunks(run, file)).toEqual([
       { header: '@@ -0,0 +1,2 @@', text: '@@ -0,0 +1,2 @@\n+hello\n+world\n' },
     ])
+  })
+})
+
+describe('applyPatch', () => {
+  test('stage runs git apply --cached with the patch on stdin, ok on exit 0', async () => {
+    const seen: { argv?: readonly string[]; stdin?: string } = {}
+    const run: Run = async (argv, stdin) => {
+      seen.argv = argv
+      seen.stdin = stdin
+      return { exitCode: 0, stdout: '', stderr: '' }
+    }
+
+    const result = await applyPatch(run, 'a patch\n', 'stage')
+
+    expect(result).toEqual({ ok: true })
+    expect(seen).toEqual({
+      argv: ['git', 'apply', '--cached', '--recount', '-'],
+      stdin: 'a patch\n',
+    })
+  })
+
+  test('revert runs git apply -R with the patch on stdin', async () => {
+    const seen: { argv?: readonly string[]; stdin?: string } = {}
+    const run: Run = async (argv, stdin) => {
+      seen.argv = argv
+      seen.stdin = stdin
+      return { exitCode: 0, stdout: '', stderr: '' }
+    }
+
+    await applyPatch(run, 'a patch\n', 'revert')
+
+    expect(seen).toEqual({ argv: ['git', 'apply', '-R', '--recount', '-'], stdin: 'a patch\n' })
+  })
+
+  test('a nonzero exit reports the trimmed stderr and ok: false', async () => {
+    const run: Run = async () => ({ exitCode: 1, stdout: '', stderr: 'patch does not apply\n' })
+
+    expect(await applyPatch(run, 'a patch\n', 'stage')).toEqual({
+      ok: false,
+      error: 'patch does not apply',
+    })
   })
 })

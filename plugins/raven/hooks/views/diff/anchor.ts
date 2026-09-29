@@ -25,3 +25,10 @@ export const dropKeyOf = (id: string) => `drop:${id}`
 export const resendKeyOf = (id: string) => `resend:${id}`
 /** The block key of an anchor's collapsed "N addressed" row. */
 export const addressedKeyOf = (anchor: Anchor) => `addressed:${anchorKeyOf(anchor)}`
+
+/** The block key of a hunk's stage/revert row. */
+export const hunkActionsKeyOf = (anchor: Anchor) => `hunk-actions:${anchorKeyOf(anchor)}`
+/** The element key of a hunk's stage button. */
+export const stageKeyOf = (anchor: Anchor) => `stage:${anchorKeyOf(anchor)}`
+/** The element key of a hunk's revert button. */
+export const revertKeyOf = (anchor: Anchor) => `revert:${anchorKeyOf(anchor)}`
