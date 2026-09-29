@@ -130,6 +130,24 @@ export function register(on: On) {
     return drawn ?? next(e)
   })
 
+  on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    if (!raven) return next(e)
+    const ui = (await $.ui.resolve(e)) as unknown as Ui
+    const kit = { ui, columns: e.props.bodyColumns, rows: e.props.maxRows }
+    const drawn = await raven.band(kit, e.props.hasSurvey)
+    return drawn ?? next(e)
+  })
+
+  on(
+    'ui.render',
+    { component: 'CommandOutput', props: { command: COMMAND } },
+    async ($, e, next) => {
+      if (!raven) return next(e)
+      const ui = (await $.ui.resolve(e)) as unknown as Ui
+      return raven.commandOutput({ ui }, { text: e.props.text, isErrored: e.props.isErrored })
+    },
+  )
+
   on('ui.scroll', { requestId: PANE_IDS }, ($, e, next) => {
     if (!raven || e.origin.kind !== 'person' || !raven.scroll(e.requestId, e.by)) return next(e)
     $.ui.invalidate('ui.render')

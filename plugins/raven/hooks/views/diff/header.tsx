@@ -25,10 +25,31 @@ export type HeaderProps = {
   onClear: () => void
 }
 
+// Mirrors diff/source.ts's turnValueOf prefix; a turn has no name to put on a button, so the
+// button row omits turns and offers HEAD/session/branch point only.
+const TURN_PREFIX = 'turn:'
+
+/** The source options as a row of plain buttons, for a surface with no `Select`. */
+function sourceButtons(kit: Kit, props: HeaderProps): RenderElement[] {
+  const { Button } = kit.ui
+  return props.sourceOptions
+    .filter(option => !option.value.startsWith(TURN_PREFIX))
+    .map(option => (
+      <Button
+        key={`source:${option.value}`}
+        plain
+        dimColor={option.value !== props.sourceValue}
+        label={option.label}
+        onPress={() => props.onSourceChange(option.value)}
+      />
+    ))
+}
+
 /**
- * Two fixed rows, neither ever wraps: counts and the source picker on top, file navigation,
- * refresh, clear and the send-to-Claude button (plus "edit & send" once pending) below. `j`/`k`
- * walk the file list, `r` refreshes, `s` sends, each only while the pane holds the keyboard.
+ * Two fixed rows, neither ever wraps: counts and the source picker (a Select, or plain buttons
+ * where the surface has none) on top, file navigation, refresh, clear and the send-to-Claude
+ * button (plus "edit & send" once pending) below. `j`/`k` walk the file list, `r` refreshes, `s`
+ * sends, each only while the pane holds the keyboard.
  */
 export function header(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text, Button, Select } = kit.ui
@@ -48,13 +69,17 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
         <Text color="red" wrap="truncate-end">
           −{dels}
         </Text>
-        <Select
-          key={SOURCE_SELECT_KEY}
-          label="source"
-          options={props.sourceOptions}
-          value={props.sourceValue}
-          onSelect={props.onSourceChange}
-        />
+        {Select ? (
+          <Select
+            key={SOURCE_SELECT_KEY}
+            label="source"
+            options={props.sourceOptions}
+            value={props.sourceValue}
+            onSelect={props.onSourceChange}
+          />
+        ) : (
+          sourceButtons(kit, props)
+        )}
       </Box>
       <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
         <Button key="previous" plain dimColor hotkey="k" label="↑" onPress={props.onPrevious} />

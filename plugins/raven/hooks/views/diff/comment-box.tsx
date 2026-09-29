@@ -52,8 +52,9 @@ export type CommentBoxProps = {
 }
 
 /**
- * The "＋ comment" button, swapped for a line picker (on a hunk) plus an Input+cancel pair once
- * this anchor is being composed.
+ * The "＋ comment" button, swapped for a line picker (on a hunk, when the surface has `Select`)
+ * plus an Input+cancel pair once this anchor is being composed. Never drawn without `Input`:
+ * `blocksOf` drops the whole box in that case, so this only ever runs where composing is possible.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Button, Input, Select } = kit.ui
@@ -72,6 +73,8 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     )
   }
 
+  if (!Input) return <Box />
+
   const lines = props.hunk ? changedLinesOf(props.hunk) : []
   // Leaves room for "Lnnn ± " and the Select's own chrome (label, current value marker).
   const maxLabelLen = Math.max(8, props.columns - 12)
@@ -88,7 +91,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
 
   return (
     <Box flexDirection="column">
-      {props.hunk ? (
+      {props.hunk && Select ? (
         <Select
           key={selectKeyOf(anchor)}
           options={options}

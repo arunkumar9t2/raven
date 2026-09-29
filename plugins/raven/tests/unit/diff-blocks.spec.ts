@@ -225,6 +225,51 @@ describe('blocksOf', () => {
   })
 })
 
+describe('blocksOf with degraded capabilities', () => {
+  test('no Input drops every comment-box block, file and hunk alike, but keeps notes', () => {
+    const comment = commentOf({ id: 'n1', hunk: hunkA.header })
+    const blocks = blocksOf(file, [hunkA], [comment], null, {
+      capabilities: { canType: false, canPick: true },
+    })
+
+    expect(blocks.some(b => b.kind === 'fixed' && b.item.kind === 'comment-box')).toBe(false)
+    expect(blocks.find(b => b.key === noteKeyOf('n1'))).toMatchObject({
+      item: { kind: 'note', comment },
+    })
+  })
+
+  test('no Input leaves composing with no compose box, even while an anchor is "composing"', () => {
+    const blocks = blocksOf(
+      file,
+      [hunkA],
+      [],
+      { path: file.path, hunk: hunkA.header },
+      {
+        capabilities: { canType: false, canPick: true },
+      },
+    )
+    expect(
+      blocks.some(b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header })),
+    ).toBe(false)
+  })
+
+  test('no Select composing on a hunk is 2 rows: the picker row is dropped', () => {
+    const blocks = blocksOf(
+      file,
+      [hunkA],
+      [],
+      { path: file.path, hunk: hunkA.header },
+      {
+        capabilities: { canType: true, canPick: false },
+      },
+    )
+    const hunkBox = blocks.find(
+      b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
+    )
+    expect(hunkBox).toMatchObject({ rows: 2 })
+  })
+})
+
 describe('blocksOf for a turn source', () => {
   test('titles the file with the turn index and drops comment/stage/revert rows', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null, { turnIndex: 3, readOnly: true })
