@@ -20,6 +20,8 @@ export type View = {
   readonly pane: { readonly id: string; readonly title: string }
   /** The `/raven <subcommand>` that toggles it. */
   readonly subcommand: string
+  /** Rereads the world; the controller runs it before the first drawing of a fresh module. */
+  refresh?: () => Promise<void>
   render: (kit: Kit) => RenderElement
   /** Moves the view's own scroll by `by` rows (negative up); true when it handled the move. */
   scroll?: (by: number) => boolean

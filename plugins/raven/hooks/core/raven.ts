@@ -72,10 +72,11 @@ export function createRaven(host: Host, now: () => number): Raven {
       // Reopening an open id only retitles it; a fresh open brings a background tab forward.
       if (!focus) await host.closePane(view.pane.id)
     }
+    // Marked before the open: the engine draws the pane while `openPane` is in flight.
+    open.add(view.pane.id)
     const isPlaced = await host.openPane({ ...view.pane, holdToasts: true, focus })
     // A pane left waiting would seat itself on a later resize; withdraw it instead.
     if (!isPlaced) await host.closePane(view.pane.id)
-    else open.add(view.pane.id)
     return isPlaced
   }
 
@@ -217,7 +218,17 @@ export function createRaven(host: Host, now: () => number): Raven {
       return runDirective(await resolveDirective(directive))
     },
     takePromptContext: takeReviewText,
-    render: (paneId, kit) => views.find(view => view.pane.id === paneId)?.render(kit) ?? null,
+    render: (paneId, kit) => {
+      const view = views.find(each => each.pane.id === paneId)
+      if (!view) return null
+      // A reloaded module inherits open panes it never opened: drawing one proves it is open, and
+      // its model starts empty until a refresh.
+      if (!open.has(paneId)) {
+        open.add(paneId)
+        void view.refresh?.().catch(() => undefined)
+      }
+      return view.render(kit)
+    },
     scroll: (paneId, by) => views.find(view => view.pane.id === paneId)?.scroll?.(by) ?? false,
     paneClosed: paneId => {
       open.delete(paneId)
