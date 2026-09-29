@@ -57,15 +57,22 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   const selectedFile = () =>
     model.repository?.files.find(file => file.path === model.selected) ?? null
 
+  // Bumped by each refresh, so a slow read that lands after a newer one is dropped.
+  let generation = 0
+
   async function loadSelected() {
     const file = selectedFile()
     if (!file) return
+    const started = generation
     const hunks = await loadHunks(host.run, file).catch((): Hunk[] => [])
-    if (model.selected === file.path) update({ hunks: new Map(model.hunks).set(file.path, hunks) })
+    const isCurrent = started === generation && model.selected === file.path
+    if (isCurrent) update({ hunks: new Map(model.hunks).set(file.path, hunks) })
   }
 
   async function refresh() {
+    const started = ++generation
     const repository = await loadChanges(host.run).catch(() => null)
+    if (started !== generation) return
     const files = repository?.files ?? []
     const isKept = files.some(file => file.path === model.selected)
 
@@ -186,8 +193,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         ) : hunks.length === 0 ? (
           <Text dimColor>{file.isBinary ? 'Binary file' : 'No textual changes'}</Text>
         ) : (
-          hunks.map(hunk => (
-            <Box key={`hunk:${hunk.header}`} flexDirection="column">
+          hunks.map((hunk, index) => (
+            <Box key={`hunk:${index}:${hunk.header}`} flexDirection="column">
               <Code source={clampHunk(hunk).text} format="diff" path={file.path} />
               {notes(kit, { path: file.path, hunk: hunk.header })}
               {commentBox(kit, { path: file.path, hunk: hunk.header })}

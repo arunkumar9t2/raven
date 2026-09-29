@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { Directive } from '../../plugins/raven/hooks/core/directive'
 import { directiveLine } from './directive'
-import { NAME, VERSION } from './names'
+import { FALLBACK_PREFIX, NAME, VERSION } from './names'
 
 /** The process-shaped bits the commands need, isolated so tests can inject fakes. */
 export type Io = {
@@ -29,7 +29,7 @@ Run "${NAME} --version" to print the version.
 /** Prints the directive, then what the reader sees when no mod consumed it. */
 function emit(io: Io, directive: Directive, fallback: string): number {
   io.stdout(`${directiveLine(directive)}\n`)
-  io.stdout(`Raven pane is not active; ${fallback} ${FALLBACK_HINT}\n`)
+  io.stdout(`${FALLBACK_PREFIX} ${fallback} ${FALLBACK_HINT}\n`)
   return 0
 }
 
