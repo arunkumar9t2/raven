@@ -6,6 +6,7 @@ import type { RenderElement } from 'claude-code'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import { iconOf, statusMarkOf } from '../icons'
+import { fileWindowOf } from './layout'
 
 export type FileListProps = {
   files: readonly ChangedFile[]
@@ -13,10 +14,29 @@ export type FileListProps = {
   onSelect: (path: string) => void
 }
 
-/** The changed-files list: one row per file, with status/kind marks and an add/del count. */
+/** The list's row cap; `diff-view.tsx` mirrors this in its fixed-row count. */
+export const MAX_ROWS = 8
+
+/**
+ * The changed-files list: one row per file, with status/kind marks and an add/del count, capped
+ * at `MAX_ROWS`; beyond that, the rows around the selected file plus a dim "… N more" row.
+ */
 export function fileList(kit: Kit, props: FileListProps): RenderElement {
-  const { Box } = kit.ui
-  return <Box flexDirection="column">{props.files.map(file => fileRow(kit, file, props))}</Box>
+  const { Box, Text } = kit.ui
+  const { files, selected } = props
+  const selectedIndex = files.findIndex(file => file.path === selected)
+  const { start, end, more } = fileWindowOf(files.length, selectedIndex, MAX_ROWS)
+
+  return (
+    <Box flexDirection="column">
+      {files.slice(start, end).map(file => fileRow(kit, file, props))}
+      {more > 0 ? (
+        <Text key="file-list:more" dimColor>
+          … {more} more
+        </Text>
+      ) : null}
+    </Box>
+  )
 }
 
 function fileRow(kit: Kit, file: ChangedFile, props: FileListProps): RenderElement {

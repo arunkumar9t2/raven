@@ -5,11 +5,10 @@ import type { RenderElement } from 'claude-code'
 
 import type { Kit } from '../../core/view'
 import { type Comments, commentsOn } from '../../review/comments'
+import { type Anchor, sameAnchor } from './anchor'
 
-/** Where a new comment is being typed: a file, or one of its hunks. */
-export type Anchor = { path: string; hunk?: string }
-
-export const sameAnchor = (a: Anchor | null, b: Anchor) => a?.path === b.path && a?.hunk === b.hunk
+export type { Anchor } from './anchor'
+export { sameAnchor } from './anchor'
 
 export type CommentBoxProps = {
   anchor: Anchor
@@ -63,7 +62,9 @@ export function notes(kit: Kit, props: NotesProps): RenderElement[] {
   const { Box, Text, Button } = kit.ui
   return commentsOn(props.comments, props.anchor.path, props.anchor.hunk).map(comment => (
     <Box key={`note:${comment.id}`} flexDirection="row" gap={1}>
-      <Text color="#e0af68">▍ {comment.text}</Text>
+      <Text color="#e0af68" wrap="truncate-end">
+        ▍ {comment.text}
+      </Text>
       <Button
         key={`drop:${comment.id}`}
         plain

@@ -4,6 +4,7 @@ import {
   type Block,
   clampTop,
   contentRowsOf,
+  fileWindowOf,
   rowOfKey,
   rowsOf,
   sliceHunk,
@@ -155,6 +156,32 @@ describe('windowOf on a large hunk', () => {
     const bodyLineCount = sliced.text.split('\n').length - 2 // header line + trailing ''
     expect(bodyLineCount).toBe(40)
     expect(sliced.text.length).toBeLessThan(10_000)
+  })
+})
+
+describe('fileWindowOf', () => {
+  test('a list that fits shows every item, no more row', () => {
+    expect(fileWindowOf(5, 2, 8)).toEqual({ start: 0, end: 5, more: 0 })
+  })
+
+  test('a list over the cap windows max-1 items around the selection plus a more count', () => {
+    const { start, end, more } = fileWindowOf(20, 10, 8)
+    expect(end - start).toBe(7)
+    expect(more).toBe(20 - end)
+    expect(start).toBeLessThanOrEqual(10)
+    expect(end).toBeGreaterThan(10)
+  })
+
+  test('selection near the start clamps the window to the front', () => {
+    expect(fileWindowOf(20, 0, 8)).toEqual({ start: 0, end: 7, more: 13 })
+  })
+
+  test('selection near the end clamps the window to the back', () => {
+    expect(fileWindowOf(20, 19, 8)).toEqual({ start: 13, end: 20, more: 0 })
+  })
+
+  test('no selection (-1) windows from the front', () => {
+    expect(fileWindowOf(20, -1, 8)).toEqual({ start: 0, end: 7, more: 13 })
   })
 })
 

@@ -9,8 +9,8 @@ export type Ui = Pick<
 /** The engine refuses a `Markdown`, `Code` or `Text` element whose text is longer than this. */
 export const ELEMENT_TEXT_LIMIT = 10_000
 
-/** What a view's render is handed: the elements and the pane body's width in cells. */
-export type Kit = { ui: Ui; columns: number }
+/** What a view's render is handed: the elements, the pane body's width and rows in cells. */
+export type Kit = { ui: Ui; columns: number; rows: number }
 
 /**
  * One engine pane Raven draws. The engine shows one pane at a time and tabs the rest, so each
@@ -21,4 +21,6 @@ export type View = {
   /** The `/raven <subcommand>` that toggles it. */
   readonly subcommand: string
   render: (kit: Kit) => RenderElement
+  /** Moves the view's own scroll by `by` rows (negative up); true when it handled the move. */
+  scroll?: (by: number) => boolean
 }
