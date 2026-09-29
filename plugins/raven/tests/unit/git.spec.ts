@@ -1,0 +1,235 @@
+import { describe, expect, test } from 'bun:test'
+import { changedFilesOf, numstatOf, statusEntriesOf } from '../../hooks/git/changes'
+import { clampHunk, hunksOf } from '../../hooks/git/hunks'
+import type { Run } from '../../hooks/git/load'
+import { loadChanges, loadHunks } from '../../hooks/git/load'
+
+describe('statusEntriesOf', () => {
+  test('parses modified, added, deleted, untracked, and renamed entries', () => {
+    const z = [
+      ' M modified.txt',
+      'A  added.txt',
+      'D  deleted.txt',
+      '?? untracked.txt',
+      'R  new.txt',
+      'old.txt',
+    ].join('\0')
+    expect(statusEntriesOf(z)).toEqual([
+      { path: 'modified.txt', status: 'modified' },
+      { path: 'added.txt', status: 'added' },
+      { path: 'deleted.txt', status: 'deleted' },
+      { path: 'untracked.txt', status: 'untracked' },
+      { path: 'new.txt', oldPath: 'old.txt', status: 'renamed' },
+    ])
+  })
+
+  test('ignores explicitly-ignored entries', () => {
+    const z = ['!! ignored.txt', ' M modified.txt'].join('\0')
+    expect(statusEntriesOf(z)).toEqual([{ path: 'modified.txt', status: 'modified' }])
+  })
+})
+
+describe('numstatOf', () => {
+  test('parses regular, binary, and rename records', () => {
+    const z = [
+      '3\t1\tmodified.txt',
+      '5\t0\tadded.txt',
+      '-\t-\timage.png',
+      '2\t2\t\0new.txt\0old.txt',
+    ].join('\0')
+    const map = numstatOf(z)
+    expect(map.get('modified.txt')).toEqual({ adds: 3, dels: 1, isBinary: false })
+    expect(map.get('added.txt')).toEqual({ adds: 5, dels: 0, isBinary: false })
+    expect(map.get('image.png')).toEqual({ adds: 0, dels: 0, isBinary: true })
+    expect(map.get('new.txt')).toEqual({ adds: 2, dels: 2, isBinary: false })
+  })
+})
+
+describe('changedFilesOf', () => {
+  test('joins status and numstat, sorted by path, with untracked line counts', () => {
+    const status = statusEntriesOf(
+      [' M modified.txt', '?? untracked.txt', 'A  added.txt'].join('\0'),
+    )
+    const numstat = numstatOf(['3\t1\tmodified.txt', '5\t0\tadded.txt'].join('\0'))
+    const untrackedLines = new Map([['untracked.txt', 7]])
+    expect(changedFilesOf(status, numstat, untrackedLines)).toEqual([
+      { path: 'added.txt', oldPath: undefined, status: 'added', adds: 5, dels: 0, isBinary: false },
+      {
+        path: 'modified.txt',
+        oldPath: undefined,
+        status: 'modified',
+        adds: 3,
+        dels: 1,
+        isBinary: false,
+      },
+      {
+        path: 'untracked.txt',
+        oldPath: undefined,
+        status: 'untracked',
+        adds: 7,
+        dels: 0,
+        isBinary: false,
+      },
+    ])
+  })
+
+  test('defaults untracked adds to 0 when no line-count map is given', () => {
+    const status = statusEntriesOf('?? untracked.txt')
+    expect(changedFilesOf(status, numstatOf(''))).toEqual([
+      {
+        path: 'untracked.txt',
+        oldPath: undefined,
+        status: 'untracked',
+        adds: 0,
+        dels: 0,
+        isBinary: false,
+      },
+    ])
+  })
+})
+
+const MODIFIED_DIFF = [
+  'diff --git a/foo.txt b/foo.txt',
+  'index abc..def 100644',
+  '--- a/foo.txt',
+  '+++ b/foo.txt',
+  '@@ -1,3 +1,3 @@',
+  ' line1',
+  '-line2',
+  '+line2b',
+  ' line3',
+  '@@ -10,2 +10,3 @@',
+  ' line10',
+  '+line11',
+  ' line12',
+  '',
+].join('\n')
+
+const NEW_FILE_DIFF = [
+  'diff --git a/dev/null b/newfile.txt',
+  'new file mode 100644',
+  'index 0000000..abc',
+  '--- /dev/null',
+  '+++ b/newfile.txt',
+  '@@ -0,0 +1,2 @@',
+  '+hello',
+  '+world',
+  '',
+].join('\n')
+
+describe('hunksOf', () => {
+  test('splits a two-hunk diff, dropping the preamble', () => {
+    const hunks = hunksOf(MODIFIED_DIFF)
+    expect(hunks).toHaveLength(2)
+    expect(hunks[0]).toEqual({
+      header: '@@ -1,3 +1,3 @@',
+      text: '@@ -1,3 +1,3 @@\n line1\n-line2\n+line2b\n line3\n',
+    })
+    expect(hunks[1]).toEqual({
+      header: '@@ -10,2 +10,3 @@',
+      text: '@@ -10,2 +10,3 @@\n line10\n+line11\n line12\n',
+    })
+  })
+
+  test('handles a new-file diff', () => {
+    const hunks = hunksOf(NEW_FILE_DIFF)
+    expect(hunks).toEqual([
+      { header: '@@ -0,0 +1,2 @@', text: '@@ -0,0 +1,2 @@\n+hello\n+world\n' },
+    ])
+  })
+})
+
+describe('clampHunk', () => {
+  test('returns the hunk unchanged when under the cap', () => {
+    const hunk = { header: '@@ -1,1 +1,1 @@', text: '@@ -1,1 +1,1 @@\n line1\n' }
+    expect(clampHunk(hunk, 10000)).toBe(hunk)
+  })
+
+  test('cuts at a line boundary and reports the remaining line count', () => {
+    const hunk = {
+      header: '@@ -1,5 +1,5 @@',
+      text: '@@ -1,5 +1,5 @@\nline1\nline2\nline3\nline4\nline5\n',
+    }
+    expect(clampHunk(hunk, 20)).toEqual({
+      header: '@@ -1,5 +1,5 @@',
+      text: '@@ -1,5 +1,5 @@\n … (5 more lines)\n',
+    })
+  })
+})
+
+const runOf = (outputs: Record<string, RunResultLike>): Run => {
+  return async argv => {
+    const key = argv.join(' ')
+    const out = outputs[key]
+    if (!out) throw new Error(`unexpected argv: ${key}`)
+    return { exitCode: out.exitCode ?? 0, stdout: out.stdout ?? '', stderr: out.stderr ?? '' }
+  }
+}
+
+type RunResultLike = { exitCode?: number; stdout?: string; stderr?: string }
+
+describe('loadChanges', () => {
+  test('returns null outside a git repo', async () => {
+    const run = runOf({ 'git rev-parse --show-toplevel': { exitCode: 128 } })
+    expect(await loadChanges(run)).toBeNull()
+  })
+
+  test('joins status and numstat under the repo toplevel', async () => {
+    const run = runOf({
+      'git rev-parse --show-toplevel': { stdout: '/repo\n' },
+      'git status --porcelain=v1 -z --untracked-files=all': { stdout: ' M foo.txt' },
+      'git diff HEAD --numstat -z': { stdout: '3\t1\tfoo.txt' },
+    })
+    expect(await loadChanges(run)).toEqual({
+      toplevel: '/repo',
+      files: [
+        {
+          path: 'foo.txt',
+          oldPath: undefined,
+          status: 'modified',
+          adds: 3,
+          dels: 1,
+          isBinary: false,
+        },
+      ],
+    })
+  })
+
+  test('treats numstat as empty when the HEAD diff fails (unborn HEAD)', async () => {
+    const run = runOf({
+      'git rev-parse --show-toplevel': { stdout: '/repo\n' },
+      'git status --porcelain=v1 -z --untracked-files=all': { stdout: 'A  foo.txt' },
+      'git diff HEAD --numstat -z': { exitCode: 128 },
+    })
+    expect(await loadChanges(run)).toEqual({
+      toplevel: '/repo',
+      files: [
+        { path: 'foo.txt', oldPath: undefined, status: 'added', adds: 0, dels: 0, isBinary: false },
+      ],
+    })
+  })
+})
+
+describe('loadHunks', () => {
+  test('diffs a tracked file against HEAD', async () => {
+    const run = runOf({ 'git diff HEAD -- foo.txt': { stdout: MODIFIED_DIFF } })
+    const file = { path: 'foo.txt', status: 'modified' as const, adds: 1, dels: 1, isBinary: false }
+    expect(await loadHunks(run, file)).toHaveLength(2)
+  })
+
+  test('diffs an untracked file against /dev/null, treating exit 1 as success', async () => {
+    const run = runOf({
+      'git diff --no-index -- /dev/null newfile.txt': { exitCode: 1, stdout: NEW_FILE_DIFF },
+    })
+    const file = {
+      path: 'newfile.txt',
+      status: 'untracked' as const,
+      adds: 2,
+      dels: 0,
+      isBinary: false,
+    }
+    expect(await loadHunks(run, file)).toEqual([
+      { header: '@@ -0,0 +1,2 @@', text: '@@ -0,0 +1,2 @@\n+hello\n+world\n' },
+    ])
+  })
+})

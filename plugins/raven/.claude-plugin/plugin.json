@@ -1,0 +1,6 @@
+{
+  "name": "raven",
+  "version": "0.1.0",
+  "description": "A live preview pane beside the transcript: the session's diff with review comments, and rendered plans and docs as Claude writes them.",
+  "author": { "name": "Arunkumar" }
+}

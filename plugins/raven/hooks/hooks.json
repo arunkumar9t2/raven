@@ -1,0 +1,4 @@
+{
+  "description": "Raven's live preview pane: diff, rendered docs and review comments",
+  "modules": ["./register.ts"]
+}

@@ -1,0 +1,7 @@
+node_modules/
+dist/
+.scratch/
+.superpowers/
+docs/superpowers/
+.claude/types/
+*.log
