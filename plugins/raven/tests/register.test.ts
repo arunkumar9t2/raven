@@ -20,15 +20,17 @@ const ravenCommand = (args: string): CommandRunInput => ({
 })
 
 /** A world outside any git repository, whose Bash calls print `stdout`. */
-function world(on: On, stdout: string) {
+function world(on: On, stdout: string, env: Readonly<Record<string, string>> = {}) {
   mock.clock(on)
   mock.store(on, {})
+  mock.env(on, env)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
   on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a repo' } }))
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
+  on('settings.read', () => ({ value: {} }))
   on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout, stderr: '', interrupted: false } }))
 
   const shown = new Set<string>()
@@ -377,5 +379,38 @@ describe('switching the diff source to a turn', () => {
 
     expect(await ui.find({ key: 'row:/work/util.ts' })).toBeDefined()
     expect(await ui.find({ text: 'Turn 1' })).toBeDefined()
+  })
+})
+
+/** A world whose global config answers as given, with every toast raised recorded. */
+function configWorld(on: On, stdout: string, globalConfig: unknown) {
+  world(on, stdout, { HOME: '/home' })
+  on('fs.read', () => ({ value: JSON.stringify(globalConfig) }))
+  const toasts: string[] = []
+  on('ui.toast', ($, e) => {
+    toasts.push(e.text)
+    return { value: undefined }
+  })
+  return toasts
+}
+
+describe('the built-in diff panel warning', () => {
+  test('the first /raven toasts once when the sidebar is open and checkpointing is on', async ($, on) => {
+    const toasts = configWorld(on, '', { diffSidebarOpen: true })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.command.run(ravenCommand('doc'))
+
+    expect(toasts).toHaveLength(1)
+  })
+
+  test('no toast when the sidebar is already closed', async ($, on) => {
+    const toasts = configWorld(on, '', { diffSidebarOpen: false })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect(toasts).toHaveLength(0)
   })
 })

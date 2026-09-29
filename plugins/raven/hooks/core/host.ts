@@ -33,4 +33,10 @@ export type Host = {
   toast: (text: string) => void
   /** The main conversation's transcript so far. */
   messages: () => Promise<readonly SessionMessage[]>
+  /** Writes `text` to the debug log only, for a failure a person never needs to see. */
+  debug: (text: string) => void
+  /** The parsed contents of `~/.claude.json` (settings never carries it); null when unreadable. */
+  readGlobalConfig: () => Promise<unknown>
+  /** Whether the session checkpoints Claude's edits, the built-in diff panel's own gate. */
+  isCheckpointing: () => Promise<boolean>
 }

@@ -5,7 +5,6 @@ import { groupByAnchor } from '../../review/comments'
 import {
   type Anchor,
   addressedKeyOf,
-  anchorKeyOf,
   commentBoxKeyOf,
   hunkActionsKeyOf,
   noteKeyOf,
@@ -13,11 +12,18 @@ import {
 } from './anchor'
 import type { Block } from './layout'
 
-export { addressedKeyOf, commentBoxKeyOf, hunkActionsKeyOf, noteKeyOf } from './anchor'
-
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
 export const OUTDATED_TITLE_KEY = 'outdated-title'
+
+/** The header's fixed row count (counts+source, then the action buttons) and the rule below it. */
+const HEADER_ROWS = 2
+const RULE_ROWS = 1
+
+/** The fixed rows above the scrolling body: the header, the (capped) file list, and the rule. */
+export function fixedRowsOf(fileCount: number, maxListRows: number): number {
+  return HEADER_ROWS + Math.min(fileCount, maxListRows) + RULE_ROWS
+}
 
 /** The compose box's rows with no line picker (an Input and a cancel button). */
 const COMPOSE_ROWS = 2
@@ -31,20 +37,9 @@ export type BodyItem =
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk }
-  | {
-      kind: 'hunk-actions'
-      anchor: Anchor
-      hunk: Hunk
-      isStaged: boolean
-      confirmingRevert: boolean
-    }
+  | { kind: 'hunk-actions'; anchor: Anchor; hunk: Hunk }
   | { kind: 'gap' }
   | { kind: 'status'; text: string }
-
-/** A hunk's staged/confirming state, by its header, driving its stage/revert row. */
-export type HunkState = { staged: ReadonlySet<string>; confirmingRevert: string | null }
-
-const NO_HUNK_STATE: HunkState = { staged: new Set(), confirmingRevert: null }
 
 /** The block key of the blank row between hunk `index` and the one before it. */
 export const gapKeyOf = (index: number) => `gap:${index}`
@@ -52,16 +47,10 @@ export const gapKeyOf = (index: number) => `gap:${index}`
 /** The block key of hunk `index`, unique even across hunks sharing a header (e.g. after a slice). */
 export const hunkKeyOf = (index: number, hunk: Hunk) => `hunk:${index}:${hunk.header}`
 
-/** One anchor's notes (addressed ones collapsed to a single row) followed by its comment box. */
-function anchorBlocksOf(
-  notes: Comments,
-  anchor: Anchor,
-  composing: Anchor | null,
-  hunk?: Hunk,
-): Block<BodyItem>[] {
+/** An anchor's notes: addressed ones collapsed to a single "N addressed" row, then each visible one. */
+function notesBlocksOf(notes: Comments, anchor: Anchor): Block<BodyItem>[] {
   const addressed = notes.filter(comment => comment.status === 'addressed')
   const visible = notes.filter(comment => comment.status !== 'addressed')
-  const rows = sameAnchor(composing, anchor) ? (hunk ? COMPOSE_ROWS_WITH_PICKER : COMPOSE_ROWS) : 1
 
   const blocks: Block<BodyItem>[] = []
   if (addressed.length > 0) {
@@ -82,13 +71,26 @@ function anchorBlocksOf(
       }),
     ),
   )
-  blocks.push({
-    kind: 'fixed',
-    key: commentBoxKeyOf(anchor),
-    rows,
-    item: { kind: 'comment-box', anchor, hunk },
-  })
   return blocks
+}
+
+/** One anchor's notes followed by its comment box. */
+function anchorBlocksOf(
+  notes: Comments,
+  anchor: Anchor,
+  composing: Anchor | null,
+  hunk?: Hunk,
+): Block<BodyItem>[] {
+  const rows = sameAnchor(composing, anchor) ? (hunk ? COMPOSE_ROWS_WITH_PICKER : COMPOSE_ROWS) : 1
+  return [
+    ...notesBlocksOf(notes, anchor),
+    {
+      kind: 'fixed',
+      key: commentBoxKeyOf(anchor),
+      rows,
+      item: { kind: 'comment-box', anchor, hunk },
+    },
+  ]
 }
 
 /** The outdated group: a dim title row, then each stale anchor's notes (no comment box). */
@@ -106,33 +108,12 @@ function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
     { kind: 'fixed', key: OUTDATED_TITLE_KEY, rows: 1, item: { kind: 'outdated-title' } },
   ]
   for (const [hunk, group] of byHunk) {
-    const anchor: Anchor = { path: group[0]?.path ?? '', hunk }
-    const addressed = group.filter(comment => comment.status === 'addressed')
-    const visible = group.filter(comment => comment.status !== 'addressed')
-    if (addressed.length > 0) {
-      blocks.push({
-        kind: 'fixed',
-        key: addressedKeyOf(anchor),
-        rows: 1,
-        item: { kind: 'addressed', anchor, count: addressed.length },
-      })
-    }
-    blocks.push(
-      ...visible.map(
-        (comment): Block<BodyItem> => ({
-          kind: 'fixed',
-          key: noteKeyOf(comment.id),
-          rows: 1,
-          item: { kind: 'note', comment },
-        }),
-      ),
-    )
+    blocks.push(...notesBlocksOf(group, { path: group[0]?.path ?? '', hunk }))
   }
   return blocks
 }
 
 export type BlocksOptions = {
-  hunkState?: HunkState
   /** A turn source's index, shown as the title ("Turn N") in place of the file path. */
   turnIndex?: number
   /** A turn's diff is read-only: no comment boxes, no stage/revert, just the title and hunks. */
@@ -153,7 +134,6 @@ export function blocksOf(
   composing: Anchor | null,
   options: BlocksOptions = {},
 ): Block<BodyItem>[] {
-  const hunkState = options.hunkState ?? NO_HUNK_STATE
   const isReadOnly = options.readOnly ?? false
   const fileAnchor: Anchor = { path: file.path }
   const grouped = groupByAnchor(comments, hunks?.map(hunk => hunk.header) ?? [])
@@ -187,13 +167,7 @@ export function blocksOf(
       kind: 'fixed',
       key: hunkActionsKeyOf(anchor),
       rows: 1,
-      item: {
-        kind: 'hunk-actions',
-        anchor,
-        hunk,
-        isStaged: hunkState.staged.has(hunk.header),
-        confirmingRevert: hunkState.confirmingRevert === anchorKeyOf(anchor),
-      },
+      item: { kind: 'hunk-actions', anchor, hunk },
     })
   })
 

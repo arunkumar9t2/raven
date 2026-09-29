@@ -4,14 +4,11 @@ import type { Hunk } from '../../hooks/git/hunks'
 import type { Comment, Comments } from '../../hooks/review/comments'
 import {
   addressedKeyOf,
-  blocksOf,
   commentBoxKeyOf,
   hunkActionsKeyOf,
   noteKeyOf,
-  OUTDATED_TITLE_KEY,
-  STATUS_KEY,
-  TITLE_KEY,
-} from '../../hooks/views/diff/blocks'
+} from '../../hooks/views/diff/anchor'
+import { blocksOf, OUTDATED_TITLE_KEY, STATUS_KEY, TITLE_KEY } from '../../hooks/views/diff/blocks'
 import { contentRowsOf } from '../../hooks/views/diff/layout'
 
 const file: ChangedFile = {
@@ -215,32 +212,15 @@ describe('blocksOf', () => {
     })
   })
 
-  test('a hunk-actions row follows every hunk, unstaged and not confirming by default', () => {
+  test('a hunk-actions row follows every hunk, carrying its anchor and hunk', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     const anchorA = { path: file.path, hunk: hunkA.header }
     const anchorB = { path: file.path, hunk: hunkB.header }
     expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorA))).toMatchObject({
-      item: { kind: 'hunk-actions', anchor: anchorA, isStaged: false, confirmingRevert: false },
+      item: { kind: 'hunk-actions', anchor: anchorA, hunk: hunkA },
     })
     expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorB))).toMatchObject({
-      item: { kind: 'hunk-actions', anchor: anchorB, isStaged: false, confirmingRevert: false },
-    })
-  })
-
-  test('hunkState marks the staged hunk and the hunk confirming a revert', () => {
-    const blocks = blocksOf(file, [hunkA, hunkB], [], null, {
-      hunkState: {
-        staged: new Set([hunkA.header]),
-        confirmingRevert: `${file.path}|${hunkB.header}`,
-      },
-    })
-    const anchorA = { path: file.path, hunk: hunkA.header }
-    const anchorB = { path: file.path, hunk: hunkB.header }
-    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorA))).toMatchObject({
-      item: { isStaged: true, confirmingRevert: false },
-    })
-    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorB))).toMatchObject({
-      item: { isStaged: false, confirmingRevert: true },
+      item: { kind: 'hunk-actions', anchor: anchorB, hunk: hunkB },
     })
   })
 })

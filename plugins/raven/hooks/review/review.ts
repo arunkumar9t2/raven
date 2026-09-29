@@ -60,7 +60,11 @@ export function createReview(host: Host, now: () => number): Review {
   }
 
   const save = () => {
-    if (scope !== null) void host.storeSet(commentsStoreKeyOf(scope), comments).catch(() => {})
+    if (scope !== null) {
+      void host
+        .storeSet(commentsStoreKeyOf(scope), comments)
+        .catch(error => host.debug(`raven: storing review comments failed: ${String(error)}`))
+    }
     notifyStatus()
     host.redraw()
   }

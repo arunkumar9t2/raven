@@ -81,6 +81,8 @@ trigger is one entry, not a change to `register`.
   caps a `Code` source at 10 000 characters; a longer hunk is truncated with a marker).
 - Refreshes, debounced, after `Edit`/`Write`/`NotebookEdit`/`Bash` calls land; opens on the first
   main-loop edit when the terminal docks panes.
+- On the first `/raven` or first main-loop edit, a one-time toast asks to close the built-in diff
+  panel when it would otherwise cover Raven's dock (open, or unreadable, and checkpointing is on).
 - Hotkeys, live while the pane holds the keyboard: `j`/`k` select the next/previous file (also
   plain `↓`/`↑` buttons in the header), `c` opens a comment on the selected file, `s` sends the
   pending review, `r` refreshes. Submitting or cancelling a comment returns the keyboard to that
@@ -141,7 +143,7 @@ trigger is one entry, not a change to `register`.
   naming it. The header's send button counts pending comments.
 - The next prompt the person sends (typed, or through Remote Control) carries every pending comment
   as hidden context, formatted as a review, and marks them sent rather than clearing them. The
-  header's **Send N comments to Claude** button (or `/raven send`) instead submits the review as a
+  header's **send N** button (or `/raven send`) instead submits the review as a
   visible prompt.
 - The header's plain **edit & send** button, shown alongside send whenever comments are pending,
   marks them sent and fills the prompt box with the same review text (`$.prompt.fill`, replacing

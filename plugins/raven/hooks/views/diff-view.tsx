@@ -13,7 +13,7 @@ import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { type BodyItem, blocksOf, type HunkState } from './diff/blocks'
+import { type BodyItem, blocksOf, fixedRowsOf } from './diff/blocks'
 import { addressedRow, commentBox, hunkActionsRow, note, outdatedTitle } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
@@ -29,8 +29,6 @@ import {
 import { sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 
-const HEADER_ROWS = 1
-const RULE_ROWS = 1
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
 const WHEEL_ROWS = 3
 const EMPTY_STAGED: ReadonlySet<string> = new Set()
@@ -44,12 +42,13 @@ type Model = {
   /** The line picked in the composing anchor's Select; null is "whole hunk". */
   composingLine: CommentLine | null
   top: number
-  /** Whether the "clear" button is waiting for a confirming second press. */
-  confirmingClear: boolean
   /** Staged hunk headers per file path, cleared for a path when its hunks no longer carry them. */
   stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
-  /** The anchor key of the hunk whose "revert" is waiting for a confirming second press. */
-  confirmingRevert: string | null
+  /**
+   * The key of the control waiting for a confirming second press: `'clear'`, or a hunk's revert
+   * anchor key. Any other update drops it (see `update`).
+   */
+  confirming: string | null
 }
 
 /** What the diff view asks of the controller. */
@@ -68,11 +67,6 @@ export type DiffView = View & {
   reveal: (path: string) => void
 }
 
-/** The fixed rows above the scrolling body: the header, the (capped) file list, and the rule. */
-function fixedRowsOf(fileCount: number): number {
-  return HEADER_ROWS + Math.min(fileCount, MAX_ROWS) + RULE_ROWS
-}
-
 export function createDiffView(host: Host, review: Review, actions: DiffActions): DiffView {
   let model: Model = {
     repository: null,
@@ -82,9 +76,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     composing: null,
     composingLine: null,
     top: 0,
-    confirmingClear: false,
     stagedHunks: new Map(),
-    confirmingRevert: null,
+    confirming: null,
   }
 
   const sourceController = createSourceController(host)
@@ -98,8 +91,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     hunks: readonly Hunk[] | undefined
     comments: Comments
     composing: Anchor | null
-    staged: ReadonlySet<string>
-    confirmingRevert: string | null
     turnIndex: number | undefined
     readOnly: boolean
     blocks: Block<BodyItem>[]
@@ -111,12 +102,18 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     return sourceController.files(model.repository)
   }
 
-  // Any action but a second "clear"/"revert" press drops those confirm states, so `patch`
-  // overrides them only when the caller means to set one.
+  // Any action but a second "clear"/"revert" press drops the armed confirm, so `patch` overrides
+  // it only when the caller means to set one.
   const update = (patch: Partial<Model>) => {
-    model = { ...model, confirmingClear: false, confirmingRevert: null, ...patch }
+    model = { ...model, confirming: null, ...patch }
     host.redraw()
   }
+
+  /** Drops the armed confirm without any other change; the intent-bearing name for a bare `update({})`. */
+  const resetConfirm = () => update({})
+
+  const isArmed = (key: string) => model.confirming === key
+  const arm = (key: string) => update({ confirming: key })
 
   const selectedFile = () => filesOf().find(file => file.path === model.selected) ?? null
 
@@ -229,11 +226,11 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   function pressClear() {
-    if (model.confirmingClear) {
-      update({ confirmingClear: false })
+    if (isArmed('clear')) {
+      resetConfirm()
       review.clear()
     } else {
-      update({ confirmingClear: true })
+      arm('clear')
     }
   }
 
@@ -255,18 +252,14 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     await loadSelected()
   }
 
-  function pressStage(file: ChangedFile, hunk: Hunk) {
-    void applyHunk(file, hunk, 'stage')
-  }
-
   /** First press asks for confirmation; a second press on the same hunk reverts it. */
   function pressRevert(file: ChangedFile, hunk: Hunk, anchor: Anchor) {
     const key = anchorKeyOf(anchor)
-    if (model.confirmingRevert === key) {
-      update({})
+    if (isArmed(key)) {
+      resetConfirm()
       void applyHunk(file, hunk, 'revert')
     } else {
-      update({ confirmingRevert: key })
+      arm(key)
     }
   }
 
@@ -285,7 +278,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     const source = sourceController.source()
     const hunks = sourceController.hunksFor(file) ?? model.hunks.get(file.path)
     const comments = review.comments()
-    const staged = model.stagedHunks.get(file.path) ?? EMPTY_STAGED
     const turnIndex = source.kind === 'turn' ? source.index : undefined
     const readOnly = sourceController.isReadOnly()
 
@@ -295,28 +287,19 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       cache.hunks === hunks &&
       cache.comments === comments &&
       cache.composing === model.composing &&
-      cache.staged === staged &&
-      cache.confirmingRevert === model.confirmingRevert &&
       cache.turnIndex === turnIndex &&
       cache.readOnly === readOnly
     ) {
       return { file, blocks: cache.blocks, contentRows: cache.contentRows }
     }
 
-    const hunkState: HunkState = { staged, confirmingRevert: model.confirmingRevert }
-    const blocks = blocksOf(file, hunks, comments, model.composing, {
-      hunkState,
-      turnIndex,
-      readOnly,
-    })
+    const blocks = blocksOf(file, hunks, comments, model.composing, { turnIndex, readOnly })
     const contentRows = contentRowsOf(blocks)
     cache = {
       file,
       hunks,
       comments,
       composing: model.composing,
-      staged,
-      confirmingRevert: model.confirmingRevert,
       turnIndex,
       readOnly,
       blocks,
@@ -326,7 +309,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   /** One fixed row's element, by its payload kind; `null` renders as a blank row (e.g. a gap). */
-  function bodyRowOf(kit: Kit, item: BodyItem): RenderElement | null {
+  function bodyRowOf(kit: Kit, item: BodyItem, file: ChangedFile): RenderElement | null {
     const { Text } = kit.ui
     switch (item.kind) {
       case 'title':
@@ -359,16 +342,14 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           onSubmit: text => submitComment(item.anchor, text),
           onCancel: () => stopComposing(item.anchor),
         })
-      case 'hunk-actions': {
-        const file = selectedFile()
+      case 'hunk-actions':
         return hunkActionsRow(kit, {
           anchor: item.anchor,
-          isStaged: item.isStaged,
-          confirmingRevert: item.confirmingRevert,
-          onStage: () => file && pressStage(file, item.hunk),
-          onRevert: () => file && pressRevert(file, item.hunk, item.anchor),
+          isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
+          confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
+          onStage: () => void applyHunk(file, item.hunk, 'stage'),
+          onRevert: () => pressRevert(file, item.hunk, item.anchor),
         })
-      }
     }
   }
 
@@ -388,7 +369,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       )
     }
 
-    return <Box key={block.key}>{bodyRowOf(kit, block.item)}</Box>
+    return <Box key={block.key}>{bodyRowOf(kit, block.item, file)}</Box>
   }
 
   function render(kit: Kit): RenderElement {
@@ -407,7 +388,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
 
     const { file, blocks, contentRows } = blocksForSelected()
 
-    const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length))
+    const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS))
     lastBodyRows = bodyRows
     const top = clampTop(model.top, contentRows, bodyRows)
     if (top !== model.top) model = { ...model, top }
@@ -419,17 +400,17 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         {header(kit, {
           files,
           pending: review.pending().length,
-          confirmingClear: model.confirmingClear,
+          confirmingClear: isArmed('clear'),
           sourceValue: sourceValueOf(sourceController.source()),
           sourceOptions: sourceController.options(),
           onSourceChange: selectSource,
           onRefresh: () => void refresh(),
           onSend: () => {
-            update({})
+            resetConfirm()
             actions.send()
           },
           onEditSend: () => {
-            update({})
+            resetConfirm()
             actions.editAndSend()
           },
           onPrevious: () => stepSelection(-1),
@@ -438,7 +419,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         })}
         {fileList(kit, { files, selected: model.selected, onSelect: select })}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
-        {placed.map(p => placedRowOf(kit, p, file as ChangedFile))}
+        {file ? placed.map(p => placedRowOf(kit, p, file)) : null}
       </Box>
     )
   }

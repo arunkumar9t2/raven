@@ -48,6 +48,9 @@ function fakeHost(overrides: Partial<Host> = {}): Host {
     fillPrompt: async () => ({ isFilled: true }),
     toast: () => {},
     messages: async () => turnMessages,
+    debug: () => {},
+    readGlobalConfig: async () => null,
+    isCheckpointing: async () => true,
     ...overrides,
   }
 }

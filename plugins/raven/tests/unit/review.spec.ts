@@ -24,6 +24,9 @@ function fakeHost(onStatus?: (text: string | undefined) => void): Host {
     fillPrompt: async () => ({ isFilled: true }),
     toast: () => {},
     messages: async () => [],
+    debug: () => {},
+    readGlobalConfig: async () => null,
+    isCheckpointing: async () => true,
   }
 }
 
