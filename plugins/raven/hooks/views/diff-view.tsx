@@ -79,6 +79,18 @@ export function createDiffView(host: Host, review: Review, onSend: () => void): 
     void loadSelected()
   }
 
+  const inputKeyOf = (anchor: Anchor) => `input:${anchor.path}|${anchor.hunk ?? ''}`
+
+  function startComposing(anchor: Anchor) {
+    update({ composing: anchor })
+    // The keyboard is the person's: a pane gets it only by asking to be focused, and only then
+    // can the new Input take it (`autoFocus` alone leaves it in the composer).
+    void host
+      .openPane({ ...DIFF_PANE, holdToasts: true, focus: true })
+      .then(() => host.focus(DIFF_PANE.id, inputKeyOf(anchor)))
+      .catch(() => {})
+  }
+
   function commentBox(kit: Kit, anchor: Anchor): RenderElement {
     const { Box, Button, Input } = kit.ui
     const key = `${anchor.path}|${anchor.hunk ?? ''}`
@@ -90,7 +102,7 @@ export function createDiffView(host: Host, review: Review, onSend: () => void): 
           plain
           dimColor
           label={anchor.hunk ? '＋ comment on this hunk' : '＋ comment on this file'}
-          onPress={() => update({ composing: anchor })}
+          onPress={() => startComposing(anchor)}
         />
       )
     }
@@ -98,7 +110,7 @@ export function createDiffView(host: Host, review: Review, onSend: () => void): 
     return (
       <Box flexDirection="column">
         <Input
-          key={`input:${key}`}
+          key={inputKeyOf(anchor)}
           autoFocus
           placeholder="Your comment for Claude…"
           submitLabel="add"
