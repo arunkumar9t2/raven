@@ -1,4 +1,4 @@
-import type { On } from 'claude-code'
+import type { CommandRunInput, On } from 'claude-code'
 import { describe, expect, mock, test, tier } from 'claude-code/testing'
 import { NAME, toolNameOf } from '../hooks/names'
 
@@ -8,6 +8,13 @@ const TOOL = toolNameOf(NAME)
 
 const SESSION = { surface: 'terminal', isInteractive: true, cwd: '/work' } as const
 const FALLBACK = 'Raven pane is not active; x was not shown. (Enable function hooks)'
+
+const ravenCommand = (args: string): CommandRunInput => ({
+  command: 'raven',
+  args,
+  origin: { kind: 'composer' },
+  presentation: { isFullscreen: true, columns: 160 },
+})
 
 /** A world outside any git repository, whose Bash calls print `stdout`. */
 function world(on: On, stdout: string) {
@@ -19,6 +26,26 @@ function world(on: On, stdout: string) {
   on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a repo' } }))
   on('ui.invalidate', () => ({ value: undefined }))
   on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout, stderr: '', interrupted: false } }))
+
+  const shown = new Set<string>()
+  on('ui.open', ($, e) => {
+    shown.add(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', ($, e) => {
+    shown.delete(e.id)
+    return { value: undefined }
+  })
+  on('ui.panes', () => ({
+    value: [...shown].map(id => ({
+      id,
+      title: id,
+      isShown: true,
+      isFocused: false,
+      isPlaced: true,
+    })),
+  }))
+  on('ui.focus', () => ({}))
 }
 
 describe('register', () => {
@@ -66,5 +93,24 @@ describe('register', () => {
     const result = await $.tool.call({ tool: TOOL, op: 'nonsense' })
 
     expect(result.deny).toBeDefined()
+  })
+
+  test('a TodoWrite call surfaces in the tasks view', async ($, on) => {
+    world(on, '')
+    on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))
+
+    await $.session.start(SESSION)
+    // With no Raven pane open, TodoWrite would auto-open Tasks itself; open Doc first so the
+    // explicit `/raven tasks` below is the one that shows it.
+    expect((await $.command.run(ravenCommand('doc'))).text).toBe('Raven doc shown')
+
+    const todo = await $.tool.call({
+      tool: 'TodoWrite',
+      todos: [{ content: 'write tests', status: 'pending' }],
+    })
+    expect(todo.deny).toBeUndefined()
+
+    const result = await $.command.run(ravenCommand('tasks'))
+    expect(result.text).toBe('Raven tasks shown')
   })
 })

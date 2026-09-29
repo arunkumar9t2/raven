@@ -24,9 +24,9 @@ const hunk5 = hunkOf(
   Array.from({ length: 5 }, (_, i) => ` line${i}`),
 )
 
-const fixed1: Block = { kind: 'fixed', key: 'h1', rows: 1 }
+const fixed1: Block = { kind: 'fixed', key: 'h1', rows: 1, item: null }
 const hunkBlock10: Block = { kind: 'hunk', key: 'hk1', hunk: hunk10 }
-const fixed2: Block = { kind: 'fixed', key: 'h2', rows: 2 }
+const fixed2: Block = { kind: 'fixed', key: 'h2', rows: 2, item: null }
 const hunkBlock5: Block = { kind: 'hunk', key: 'hk2', hunk: hunk5 }
 const blocks: Block[] = [fixed1, hunkBlock10, fixed2, hunkBlock5]
 

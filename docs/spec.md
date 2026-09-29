@@ -80,6 +80,26 @@ trigger is one entry, not a change to `register`.
 - Opens itself when Claude writes or edits a markdown file under a watched plan path:
   `docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`, `~/.claude/plans/`.
 
+### Files view (`raven-files`)
+
+- The repository's tracked and untracked files (`git ls-files --cached --others
+  --exclude-standard`), capped at 5 000 paths; a longer list shows a "capped" notice instead of
+  the rest.
+- A dir/file tree: dirs sorted before files, each sorted by name; a dir row carries an expand
+  arrow and, dimmed, its count of changed descendants. Dirs containing a change start expanded,
+  every other dir collapsed.
+- A file row carries its type icon and a change-status mark (added/modified/deleted/renamed/
+  untracked) against `HEAD`. Clicking a dir toggles it; clicking a file opens it in the Doc view.
+- Refreshes on the same debounce as the diff view, while its pane is open.
+
+### Tasks view (`raven-tasks`)
+
+- A checklist built from `TodoWrite`, `TaskCreate` and `TaskUpdate` calls: a progress header
+  ("N/M done"), then one row per task — `☐` pending, `◐` in_progress (showing its `activeForm`),
+  `☑` completed (dimmed).
+- Opens itself, as a background tab, the first time a task list becomes non-empty, but only if no
+  Raven pane is open yet; it never steals focus.
+
 ## Review comments
 
 - The selected file and each of its hunks carry a comment control; submitting its input records a

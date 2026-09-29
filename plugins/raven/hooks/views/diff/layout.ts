@@ -1,12 +1,12 @@
 import { bodyLinesOf, type Hunk, hunkFrom, parseHeader } from '../../git/hunks'
 
-/** A body block: an element of known height, or a hunk whose body lines are its rows. */
-export type Block =
-  | { kind: 'fixed'; key: string; rows: number }
+/** A body block: a payload of known height, or a hunk whose body lines are its rows. */
+export type Block<T = unknown> =
+  | { kind: 'fixed'; key: string; rows: number; item: T }
   | { kind: 'hunk'; key: string; hunk: Hunk }
 
 /** A block placed in the window: rows [from, to) of it are visible. */
-export type Placed = { block: Block; from: number; to: number }
+export type Placed<T = unknown> = { block: Block<T>; from: number; to: number }
 
 /** The rows a block takes: a fixed block its declared rows, a hunk its body line count. */
 export function rowsOf(block: Block): number {
@@ -22,9 +22,9 @@ export function contentRowsOf(blocks: readonly Block[]): number {
  * The blocks visible in rows [top, top + rows). A fixed block is placed whole when its first row
  * is visible (the pane clips any overhang); a hunk is placed with the exact visible line range.
  */
-export function windowOf(blocks: readonly Block[], top: number, rows: number): Placed[] {
+export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: number): Placed<T>[] {
   const bottom = top + rows
-  const placed: Placed[] = []
+  const placed: Placed<T>[] = []
   let offset = 0
 
   for (const block of blocks) {
