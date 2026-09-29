@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { COLORS } from '../../hooks/core/colors'
 import { iconOf, statusMarkOf } from '../../hooks/views/icons'
 
 describe('iconOf', () => {
@@ -37,14 +38,21 @@ describe('iconOf', () => {
 
 describe('statusMarkOf', () => {
   test('uses plain letters, not glyphs', () => {
-    expect(statusMarkOf('added')).toEqual({ glyph: 'A', color: '#3fb950' })
+    expect(statusMarkOf('added')).toEqual({ glyph: 'A', color: COLORS.added })
     expect(statusMarkOf('modified').glyph).toBe('M')
     expect(statusMarkOf('deleted').glyph).toBe('D')
     expect(statusMarkOf('renamed').glyph).toBe('R')
     expect(statusMarkOf('untracked').glyph).toBe('U')
   })
 
-  test('added and untracked are both green', () => {
+  test('colours by theme key, not a raw colour', () => {
+    expect(statusMarkOf('added').color).toBe(COLORS.added)
+    expect(statusMarkOf('modified').color).toBe(COLORS.modified)
+    expect(statusMarkOf('deleted').color).toBe(COLORS.removed)
+    expect(statusMarkOf('renamed').color).toBe(COLORS.suggestion)
+  })
+
+  test('added and untracked are both the same colour', () => {
     expect(statusMarkOf('added').color).toBe(statusMarkOf('untracked').color)
   })
 })

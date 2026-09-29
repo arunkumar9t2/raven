@@ -3,6 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
+import { COLORS } from '../core/colors'
 import type { Host } from '../core/host'
 import { capabilitiesOf, ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
@@ -80,7 +81,7 @@ export function createDocView(host: Host): DocView {
         />
       )
     }
-    if (shown.text === null) return <Text color="red">Could not read: {shown.error}</Text>
+    if (shown.text === null) return <Text color={COLORS.error}>Could not read: {shown.error}</Text>
     if (shown.doc.kind === 'note' || isMarkdown(shown.doc.path)) {
       const doc = shown.doc
       return (

@@ -1,3 +1,5 @@
+import { COLORS } from '../core/colors'
+
 type Glyph = { glyph: string; color: string }
 
 const EXT_ICONS: Record<string, Glyph> = {
@@ -75,11 +77,11 @@ export function iconOf(path: string): Glyph {
 }
 
 const STATUS_MARKS: Record<'added' | 'modified' | 'deleted' | 'renamed' | 'untracked', Glyph> = {
-  added: { glyph: 'A', color: '#3fb950' },
-  modified: { glyph: 'M', color: '#d29922' },
-  deleted: { glyph: 'D', color: '#f85149' },
-  renamed: { glyph: 'R', color: '#58a6ff' },
-  untracked: { glyph: 'U', color: '#3fb950' },
+  added: { glyph: 'A', color: COLORS.added },
+  modified: { glyph: 'M', color: COLORS.modified },
+  deleted: { glyph: 'D', color: COLORS.removed },
+  renamed: { glyph: 'R', color: COLORS.suggestion },
+  untracked: { glyph: 'U', color: COLORS.added },
 }
 
 /** Glyph + color for a change status. */

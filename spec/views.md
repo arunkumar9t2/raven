@@ -64,6 +64,11 @@ carries its type icon and a change-status mark — added, modified, deleted, ren
 computed against `HEAD`. Clicking a directory row toggles it; clicking a file row opens it in the
 Doc view.
 
+Raven colours its chrome — status marks, add/remove counts, errors, comment text — by Claude Code
+theme key via `plugins/raven/hooks/core/colors.ts`'s `COLORS` map, never a raw colour; the file-type
+icon's brand colour (TypeScript blue and so on) is the one exception, since it identifies the
+language rather than the UI.
+
 The view re-runs `git ls-files` only when the file set itself could have changed — an added,
 deleted, untracked or renamed entry in the latest change list — not on every refresh; a listing whose
 changes are all modifications reuses the previous file list. This keeps the view's refresh cheap on

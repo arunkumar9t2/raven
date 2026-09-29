@@ -3,6 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
+import { COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import { iconOf, statusMarkOf } from '../icons'
@@ -57,8 +58,8 @@ function fileRow(kit: Kit, file: ChangedFile, props: FileListProps): RenderEleme
         label={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
         onPress={() => props.onSelect(file.path)}
       />
-      <Text color="green">+{file.adds}</Text>
-      <Text color="red">−{file.dels}</Text>
+      <Text color={COLORS.added}>+{file.adds}</Text>
+      <Text color={COLORS.removed}>−{file.dels}</Text>
     </Box>
   )
 }

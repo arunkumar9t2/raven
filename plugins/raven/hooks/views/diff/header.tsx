@@ -3,6 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement, SelectOption } from 'claude-code'
 
+import { COLORS } from '../../core/colors'
 import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
@@ -58,10 +59,10 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
         <Text bold wrap="truncate-end">
           {countOf(files.length, 'file')}
         </Text>
-        <Text color="green" wrap="truncate-end">
+        <Text color={COLORS.added} wrap="truncate-end">
           +{adds}
         </Text>
-        <Text color="red" wrap="truncate-end">
+        <Text color={COLORS.removed} wrap="truncate-end">
           −{dels}
         </Text>
         {Select ? (
