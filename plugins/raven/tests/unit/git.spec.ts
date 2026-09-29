@@ -1,7 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { changedFilesOf, numstatOf, statusEntriesOf } from '../../hooks/git/changes'
 import { clampHunk, hunksOf } from '../../hooks/git/hunks'
-import type { Run } from '../../hooks/git/load'
+import type { Base, Run } from '../../hooks/git/load'
 import { applyPatch, loadChanges, loadHunks } from '../../hooks/git/load'
 
 describe('statusEntriesOf', () => {
@@ -173,10 +173,12 @@ const runOf = (outputs: Record<string, RunResultLike>): Run => {
 
 type RunResultLike = { exitCode?: number; stdout?: string; stderr?: string }
 
+const HEAD: Base = { kind: 'head' }
+
 describe('loadChanges', () => {
   test('returns null outside a git repo', async () => {
     const run = runOf({ 'git rev-parse --show-toplevel': { exitCode: 128 } })
-    expect(await loadChanges(run)).toBeNull()
+    expect(await loadChanges(run, HEAD)).toBeNull()
   })
 
   test('joins status and numstat under the repo toplevel', async () => {
@@ -185,7 +187,7 @@ describe('loadChanges', () => {
       'git status --porcelain=v1 -z --untracked-files=all': { stdout: ' M foo.txt' },
       'git diff HEAD --numstat -z': { stdout: '3\t1\tfoo.txt' },
     })
-    expect(await loadChanges(run)).toEqual({
+    expect(await loadChanges(run, HEAD)).toEqual({
       toplevel: '/repo',
       files: [
         {
@@ -206,7 +208,7 @@ describe('loadChanges', () => {
       'git status --porcelain=v1 -z --untracked-files=all': { stdout: 'A  foo.txt' },
       'git diff HEAD --numstat -z': { exitCode: 128 },
     })
-    expect(await loadChanges(run)).toEqual({
+    expect(await loadChanges(run, HEAD)).toEqual({
       toplevel: '/repo',
       files: [
         { path: 'foo.txt', oldPath: undefined, status: 'added', adds: 0, dels: 0, isBinary: false },
@@ -219,7 +221,13 @@ describe('loadHunks', () => {
   test('diffs a tracked file against HEAD', async () => {
     const run = runOf({ 'git diff HEAD -- foo.txt': { stdout: MODIFIED_DIFF } })
     const file = { path: 'foo.txt', status: 'modified' as const, adds: 1, dels: 1, isBinary: false }
-    expect(await loadHunks(run, file)).toHaveLength(2)
+    expect(await loadHunks(run, file, HEAD)).toHaveLength(2)
+  })
+
+  test('diffs a tracked file against a commit base', async () => {
+    const run = runOf({ 'git diff abc123 -- foo.txt': { stdout: MODIFIED_DIFF } })
+    const file = { path: 'foo.txt', status: 'modified' as const, adds: 1, dels: 1, isBinary: false }
+    expect(await loadHunks(run, file, { kind: 'commit', sha: 'abc123' })).toHaveLength(2)
   })
 
   test('diffs an untracked file against /dev/null, treating exit 1 as success', async () => {
@@ -233,7 +241,7 @@ describe('loadHunks', () => {
       dels: 0,
       isBinary: false,
     }
-    expect(await loadHunks(run, file)).toEqual([
+    expect(await loadHunks(run, file, HEAD)).toEqual([
       { header: '@@ -0,0 +1,2 @@', text: '@@ -0,0 +1,2 @@\n+hello\n+world\n' },
     ])
   })

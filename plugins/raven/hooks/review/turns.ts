@@ -1,6 +1,7 @@
 import type { SessionMessage } from 'claude-code'
 import { isRecord } from '../core/is-record'
-import { clampHunk, type Hunk, hunkFrom } from '../git/hunks'
+import type { ChangedFile } from '../git/changes'
+import { bodyLinesOf, clampHunk, type Hunk, hunkFrom } from '../git/hunks'
 
 /** One edited file: its path and the hunks left by the turn's tool uses, in call order. */
 export type TurnFile = { path: string; hunks: Hunk[] }
@@ -99,6 +100,24 @@ export function turnEditsOf(messages: readonly SessionMessage[]): TurnEdits[] {
       turnEditsOfRows(messages.slice(start, starts[ordinal + 1]), ordinal + 1),
     )
     .filter(turn => turn.files.length > 0)
+}
+
+/** Turn `index`'s files, or `[]` when no turn carries that index (e.g. a rewind dropped it). */
+export function turnFilesOf(turns: readonly TurnEdits[], index: number): TurnFile[] {
+  return turns.find(turn => turn.index === index)?.files ?? []
+}
+
+/** A turn's file as a `ChangedFile` for the diff view's file list: counts from its hunks' lines. */
+export function changedFileOfTurnFile(file: TurnFile): ChangedFile {
+  let adds = 0
+  let dels = 0
+  for (const hunk of file.hunks) {
+    for (const line of bodyLinesOf(hunk)) {
+      if (line.startsWith('+')) adds++
+      else if (line.startsWith('-')) dels++
+    }
+  }
+  return { path: file.path, status: 'modified', adds, dels, isBinary: false }
 }
 
 /** A unified-diff hunk turning `before` into `after`, header line numbers relative to the snippet. */

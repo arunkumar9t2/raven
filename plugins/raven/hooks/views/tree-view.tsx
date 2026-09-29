@@ -72,7 +72,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
     const toplevel = top.stdout.trim()
     const [ls, changes] = await Promise.all([
       host.run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z']),
-      loadChanges(host.run).catch(() => null),
+      loadChanges(host.run, { kind: 'head' }).catch(() => null),
     ])
     if (started !== generation) return
 

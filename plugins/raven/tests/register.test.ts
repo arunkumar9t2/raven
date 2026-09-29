@@ -1,7 +1,9 @@
-import type { CommandRunInput, On, TurnCompleteInput } from 'claude-code'
+import type { CommandRunInput, On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
 import { commentsStoreKeyOf, DIFF_PANE, NAME, toolNameOf } from '../hooks/names'
 import { stageKeyOf } from '../hooks/views/diff/anchor'
+import { SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
+import { turnValueOf } from '../hooks/views/diff/source'
 
 tier('user')
 
@@ -161,15 +163,17 @@ function gitWorld(
   storeEntries: Record<string, unknown>,
   forkText: string | null,
   files: readonly string[] = ['a.ts'],
+  messages: readonly SessionMessage[] = [],
 ) {
   mock.clock(on)
   mock.store(on, storeEntries)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  on('session.messages', () => ({ value: [...messages] }))
   on('process.run', ($, e) => {
     const [cmd, sub] = e.argv
-    if (cmd === 'git' && sub === 'rev-parse') {
+    if (cmd === 'git' && sub === 'rev-parse' && e.argv.includes('--show-toplevel')) {
       return { value: { exitCode: 0, stdout: REPO, stderr: '' } }
     }
     if (cmd === 'git' && sub === 'status') {
@@ -180,8 +184,8 @@ function gitWorld(
       const stdout = files.map(path => `1\t1\t${path}\0`).join('')
       return { value: { exitCode: 0, stdout, stderr: '' } }
     }
-    // loadHunks: no hunks, which is fine for a file-level comment.
-    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    // symbolic-ref/verify/merge-base (branch point) and loadHunks all get the same "nothing here".
+    return { value: { exitCode: 1, stdout: '', stderr: '' } }
   })
   on('model.fork', () => ({
     value:
@@ -335,5 +339,43 @@ describe('stage and revert a hunk', () => {
 
     expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
     expect(applied.stdin).toContain(HUNK_TEXT)
+  })
+})
+
+const TURN_MESSAGES: SessionMessage[] = [
+  { role: 'user', text: 'refactor the helper', toolUses: [] },
+  {
+    role: 'assistant',
+    text: '',
+    toolUses: [
+      {
+        tool_use_id: 'edit-1',
+        tool: 'Edit',
+        input: { file_path: '/work/util.ts', old_string: 'a', new_string: 'b' },
+      },
+    ],
+  },
+  {
+    role: 'user',
+    text: '',
+    toolUses: [],
+    toolResults: [{ tool_use_id: 'edit-1', text: 'ok', isError: false }],
+  },
+]
+
+describe('switching the diff source to a turn', () => {
+  test('picking a turn shows its edited file in the list', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts'], TURN_MESSAGES)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ key: 'row:/work/util.ts' })).toBeUndefined()
+
+    await ui.select({ key: SOURCE_SELECT_KEY, value: turnValueOf(1) })
+
+    expect(await ui.find({ key: 'row:/work/util.ts' })).toBeDefined()
+    expect(await ui.find({ text: 'Turn 1' })).toBeDefined()
   })
 })

@@ -1,4 +1,4 @@
-import type { PaneOpenArgs, Timer } from 'claude-code'
+import type { PaneOpenArgs, SessionMessage, Timer } from 'claude-code'
 
 export type RunResult = { exitCode: number; stdout: string; stderr: string }
 
@@ -31,4 +31,6 @@ export type Host = {
   fillPrompt: (text: string) => Promise<{ isFilled: boolean; refusal?: 'no_composer' | 'dialog' }>
   /** A transient toast over the transcript, for an error the pane has no room to show inline. */
   toast: (text: string) => void
+  /** The main conversation's transcript so far. */
+  messages: () => Promise<readonly SessionMessage[]>
 }

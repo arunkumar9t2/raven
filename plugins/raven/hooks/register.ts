@@ -74,6 +74,7 @@ export function register(on: On) {
         return { isFilled: result.isFilled, refusal: result.refusal }
       },
       toast: text => $.ui.toast(text),
+      messages: () => $.session.messages(),
     }
 
     const created = createRaven(host, () => Date.now())
