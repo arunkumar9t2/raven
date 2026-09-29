@@ -4,9 +4,10 @@
 import type { RenderElement } from 'claude-code'
 
 import type { Host } from '../core/host'
-import type { Kit, View } from '../core/view'
+import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
 import { baseName } from './icons'
+import { markdownChunksOf } from './markdown-chunks'
 
 /** A document the pane can show: a file read from disk, or markdown handed over inline. */
 export type Doc =
@@ -22,7 +23,6 @@ export type DocView = View & {
 }
 
 const HISTORY_LIMIT = 10
-const CODE_SOURCE_LIMIT = 10_000
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
 
@@ -59,12 +59,27 @@ export function createDocView(host: Host): DocView {
   }
 
   function body(kit: Kit, shown: Shown): RenderElement {
-    const { Text, Markdown, Code } = kit.ui
+    const { Box, Text, Markdown, Code } = kit.ui
     if (shown.text === null) return <Text color="red">Could not read: {shown.error}</Text>
-    if (shown.doc.kind === 'note' || isMarkdown(shown.doc.path))
-      return <Markdown text={shown.text} />
+    if (shown.doc.kind === 'note' || isMarkdown(shown.doc.path)) {
+      return (
+        <Box flexDirection="column">
+          {markdownChunksOf(shown.text).map((chunk, index) => (
+            <Markdown key={`md:${index}`} text={chunk} />
+          ))}
+        </Box>
+      )
+    }
+    const isCut = shown.text.length > ELEMENT_TEXT_LIMIT
     return (
-      <Code source={shown.text.slice(0, CODE_SOURCE_LIMIT)} path={shown.doc.path} startLine={1} />
+      <Box flexDirection="column">
+        <Code
+          source={shown.text.slice(0, ELEMENT_TEXT_LIMIT)}
+          path={shown.doc.path}
+          startLine={1}
+        />
+        {isCut ? <Text dimColor>… the rest of the file is not shown</Text> : null}
+      </Box>
     )
   }
 
