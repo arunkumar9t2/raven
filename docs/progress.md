@@ -46,6 +46,8 @@ M6 is done: every task in `docs/superpowers/plans/2026-09-29-raven-m6.md`, three
 
 ## Next ideas
 
+- UI pass: controls are not discoverable. The Doc pane's document history is a collapsed `Select` with no sign it holds more than one entry (show a count or ‹ › buttons); audit every pane for affordances (what is clickable, what is focused, which keys work) and for a consistent visual language across Diff / Doc / Files / Tasks and the status band.
+
 - Pinned header/file list with the engine's `ui.scroll` (the built-in diff mod's approach) for long diffs.
 - Base selection (HEAD / merge-base with the default branch), per-turn diffs from `$.session.messages()`.
 - `ExitPlanMode` plans into the Doc pane; a file-tree view; render `raven show` images via `Image`.
