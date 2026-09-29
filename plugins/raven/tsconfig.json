@@ -17,5 +17,5 @@
     "jsxFragmentFactory": "Fragment"
   },
   "include": ["../../types", "hooks", "tests"],
-  "exclude": ["tests/unit"]
+  "exclude": ["tests/unit", "cli"]
 }

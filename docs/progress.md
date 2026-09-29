@@ -5,7 +5,7 @@ Working title **Raven** (rename pending). Live-preview side pane for Claude Code
 
 ## Resume here
 
-Check `TaskList` / this log's latest entry, then continue with the next unchecked milestone.
+M0–M5 are done and verified. Nothing is in flight: pick from "Next ideas" only when the user asks.
 
 ## Milestones
 
@@ -36,6 +36,9 @@ Check `TaskList` / this log's latest entry, then continue with the next unchecke
 - 2026-09-29 Simplify pass (4 Sonnet reviewers): views declare their `/raven` subcommand; triggers emit `reload-doc` and `main-loop-edit`; focus goes through the controller; the CLI imports names and the Directive type from the mod at build time.
 - 2026-09-29 Correctness review: a Bash call that printed a directive keeps its other output (only directive/fallback lines give way to the ack); only composer prompts carry the hidden review; diff refreshes carry a generation so a stale read never lands; `raven comments` consuming the comments is intended (they reach Claude as the tool result). Skipped: serializing overlapping `show()` of one view.
 - 2026-09-29 Nerd Font glyphs are emitted correctly (U+E628 etc. present in the output); a plain `tmux capture-pane` view just doesn't draw them.
+- 2026-09-29 The CLI lives in `plugins/raven/cli/`: an install copies only the plugin directory, so a shim reaching outside it exits 127 for everyone else. Its bun tests are `*.spec.ts` so `claude plugin test` does not try to load them.
+- 2026-09-29 The model reads a Bash call's result from `result.stdout`, not the hook's `text`: the directive ack replaces the CLI's lines in `stdout` (verified live: the transcript's tool_result is the ack).
+- 2026-09-29 Hidden review context verified live (delivered as a system-reminder on a composer prompt). Comments persist per repository in `$.store` until sent, so a restarted session re-sends old unsent ones.
 
 ## Next ideas
 

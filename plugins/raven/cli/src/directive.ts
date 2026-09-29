@@ -1,4 +1,4 @@
-import type { Directive } from '../../plugins/raven/hooks/core/directive'
+import type { Directive } from '../../hooks/core/directive'
 import { DIRECTIVE_PREFIX } from './names'
 
 /** The one directive line the CLI prints; the mod reads it from the Bash tool's result. */

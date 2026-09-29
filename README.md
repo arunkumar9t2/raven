@@ -16,7 +16,10 @@ inside Claude Code, paired with a Bun CLI and a skill so Claude can drive the pa
 - Claude Code 2.1.259+ with function hooks enabled (early access): `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`
 - The fullscreen layout (`CLAUDE_CODE_NO_FLICKER=1`) and a terminal at least 110 columns wide
 - A Nerd Font for file icons
-- Bun, to build the CLI
+- Bun on PATH for the `raven` CLI (or a compiled `plugins/raven/dist/raven` from `bun run build`)
+- The built-in diff panel closed: it takes the dock on the first edit and hides Raven. Close it once
+  with its ✕ and Claude Code remembers. (`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1` also stops it,
+  at the cost of `/rewind`.)
 
 ## Try it
 
@@ -40,3 +43,4 @@ raven comments                    print pending review comments
 ## Develop
 
 See `CLAUDE.md`. `bun run check` runs everything; `scripts/cc.sh` drives a real session in tmux.
+The project name is a working title: every derived name lives in `plugins/raven/hooks/names.ts`.

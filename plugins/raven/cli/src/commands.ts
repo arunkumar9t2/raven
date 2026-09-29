@@ -1,5 +1,5 @@
 import { isAbsolute, resolve } from 'node:path'
-import type { Directive } from '../../plugins/raven/hooks/core/directive'
+import type { Directive } from '../../hooks/core/directive'
 import { directiveLine } from './directive'
 import { FALLBACK_PREFIX, NAME, VERSION } from './names'
 
