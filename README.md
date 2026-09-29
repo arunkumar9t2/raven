@@ -28,13 +28,15 @@ bun install && bun run build
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ./plugins/raven
 ```
 
-Or load it in every session, live from this checkout (saves hot-reload), through the `env` block of
-`~/.claude/settings.json`:
+Or load it in every session, live from this checkout (saves hot-reload):
 
-```json
-"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
-"CLAUDE_CODE_PLUGIN_DIRS": "/path/to/claude-mod/plugins/raven"
+```bash
+bun run setup:local            # --remove to undo, --dry-run to preview
 ```
+
+It sets `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and adds this plugin folder to
+`CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`'s `env`, and allows `Bash(raven:*)`. With a
+chezmoi-managed settings file, follow it with `chezmoi add ~/.claude/settings.json`.
 
 Then `/raven` (diff), `/raven doc`, `/raven send`. To let Claude run the CLI without a permission
 prompt, allow `Bash(raven:*)` in your settings.
