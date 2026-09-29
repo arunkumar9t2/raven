@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# Drives an interactive Claude Code session in tmux with the Raven plugin loaded,
+# Drives an interactive Claude Code session in tmux with the Raven plugin loaded (through
+# CLAUDE_CODE_PLUGIN_DIRS in ~/.claude/settings.json; see scripts/setup-local.ts),
 # so the mod can be exercised and its pane captured without a human at the keyboard.
 # File checkpointing is off so the built-in diff panel does not auto-open over Raven's panes.
 #
@@ -13,7 +14,6 @@ set -euo pipefail
 
 SESSION=${RAVEN_TMUX_SESSION:-raven-e2e}
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
-PLUGIN="$ROOT/plugins/raven"
 SANDBOX=${RAVEN_SANDBOX:-/tmp/raven-sandbox}
 
 sandbox() {
@@ -30,7 +30,7 @@ case "${1:-}" in
     if [[ -z "$workdir" ]]; then sandbox; workdir=$SANDBOX; fi
     tmux kill-session -t "$SESSION" 2>/dev/null || true
     tmux new-session -d -s "$SESSION" -x "${RAVEN_COLS:-200}" -y "${RAVEN_ROWS:-50}" -c "$workdir" \
-      "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 CLAUDE_CODE_NO_FLICKER=1 CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1 claude --model ${RAVEN_MODEL:-haiku} --plugin-dir '$PLUGIN' ${RAVEN_CLAUDE_ARGS:-}"
+      "CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 CLAUDE_CODE_NO_FLICKER=1 CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1 claude ${RAVEN_CLAUDE_ARGS:-}"
     sleep 5
     if tmux capture-pane -t "$SESSION" -p | grep -q "trust this folder"; then
       tmux send-keys -t "$SESSION" Down && sleep 0.3 && tmux send-keys -t "$SESSION" Enter
