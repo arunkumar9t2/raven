@@ -75,6 +75,13 @@ trigger is one entry, not a change to `register`.
   plain `↓`/`↑` buttons in the header), `c` opens a comment on the selected file, `s` sends the
   pending review, `r` refreshes. Submitting or cancelling a comment returns the keyboard to that
   anchor's comment button, so Esc/Enter flow stays in the pane.
+- Each hunk carries a `stage`/`revert` row under its comment box. `stage` runs
+  `git apply --cached` on that hunk's own patch; once it succeeds the button reads `staged ✓` and
+  stops responding until a refresh changes the hunk. `revert` runs `git apply -R` on it, restoring
+  the working tree; the first press relabels it "revert? (again)" and any other action in the pane
+  resets that, so a second, deliberate press is what applies it. The diff compares the working
+  tree against `HEAD`, so a staged hunk still shows here — `staged ✓` is the only sign it moved to
+  the index.
 
 ### Doc view (`raven-doc`)
 
@@ -126,6 +133,11 @@ trigger is one entry, not a change to `register`.
   as hidden context, formatted as a review, and marks them sent rather than clearing them. The
   header's **Send N comments to Claude** button (or `/raven send`) instead submits the review as a
   visible prompt.
+- The header's plain **edit & send** button, shown alongside send whenever comments are pending,
+  marks them sent and fills the prompt box with the same review text (`$.prompt.fill`, replacing
+  the draft) so the person can edit it before pressing Enter themselves. When the box refuses the
+  fill (no composer in this session, or a dialog holds the keyboard), the comments return to
+  pending and a toast names the reason.
 - Once the main loop's turn finishes answering with comments sent, Raven forks the conversation
   once with a prompt listing each sent comment (`[id] path Lnn: text`) asking for a JSON array of
   the ids it addressed; a named id becomes `addressed`, every other sent comment becomes `open`. A

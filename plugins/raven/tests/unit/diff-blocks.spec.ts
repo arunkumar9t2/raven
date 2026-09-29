@@ -6,6 +6,7 @@ import {
   addressedKeyOf,
   blocksOf,
   commentBoxKeyOf,
+  hunkActionsKeyOf,
   noteKeyOf,
   OUTDATED_TITLE_KEY,
   STATUS_KEY,
@@ -77,9 +78,11 @@ describe('blocksOf', () => {
       commentBoxKeyOf({ path: file.path }),
       'hunk:0:@@ -1,2 +1,2 @@',
       commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
+      hunkActionsKeyOf({ path: file.path, hunk: hunkA.header }),
       'gap:1',
       'hunk:1:@@ -10,1 +10,1 @@',
       commentBoxKeyOf({ path: file.path, hunk: hunkB.header }),
+      hunkActionsKeyOf({ path: file.path, hunk: hunkB.header }),
     ])
   })
 
@@ -90,9 +93,11 @@ describe('blocksOf', () => {
       'comment-box',
       'hunk',
       'comment-box',
+      'hunk-actions',
       'gap',
       'hunk',
       'comment-box',
+      'hunk-actions',
     ])
     expect(blocks.filter(b => b.kind === 'fixed' && b.item.kind === 'gap')).toHaveLength(1)
   })
@@ -110,6 +115,7 @@ describe('blocksOf', () => {
       'hunk:0:@@ -1,2 +1,2 @@',
       noteKeyOf('hunk-note'),
       commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
+      hunkActionsKeyOf({ path: file.path, hunk: hunkA.header }),
     ])
   })
 
@@ -129,18 +135,19 @@ describe('blocksOf', () => {
     expect(fileBox).toMatchObject({ rows: 2 })
   })
 
-  test('row total matches title + notes + boxes + hunk lines + gaps', () => {
+  test('row total matches title + notes + boxes + hunk lines + gaps + actions rows', () => {
     const comments: Comments = [commentOf({ id: 'n1' })]
     const blocks = blocksOf(file, [hunkA, hunkB], comments, null)
-    // title(1) + note(1) + filebox(1) + hunkA(3 lines) + hunkAbox(1) + gap(1) + hunkB(2 lines) + hunkBbox(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + 1 + 1 + 2 + 1)
+    // title(1) + note(1) + filebox(1) + hunkA(3 lines) + hunkAbox(1) + hunkAactions(1) + gap(1)
+    // + hunkB(2 lines) + hunkBbox(1) + hunkBactions(1)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + 1 + 1 + 1 + 2 + 1 + 1)
   })
 
   test('row total with a note and an active compose box together', () => {
     const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
     const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
-    // title(1) + filebox(1) + hunkA(3 lines) + note(1) + composebox(3, with the line picker)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 3)
+    // title(1) + filebox(1) + hunkA(3 lines) + note(1) + composebox(3, with the line picker) + actions(1)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 3 + 1)
   })
 
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
@@ -205,6 +212,33 @@ describe('blocksOf', () => {
       blocks.find(b => b.key === addressedKeyOf({ path: file.path, hunk: hunkB.header })),
     ).toMatchObject({
       item: { kind: 'addressed', count: 1 },
+    })
+  })
+
+  test('a hunk-actions row follows every hunk, unstaged and not confirming by default', () => {
+    const blocks = blocksOf(file, [hunkA, hunkB], [], null)
+    const anchorA = { path: file.path, hunk: hunkA.header }
+    const anchorB = { path: file.path, hunk: hunkB.header }
+    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorA))).toMatchObject({
+      item: { kind: 'hunk-actions', anchor: anchorA, isStaged: false, confirmingRevert: false },
+    })
+    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorB))).toMatchObject({
+      item: { kind: 'hunk-actions', anchor: anchorB, isStaged: false, confirmingRevert: false },
+    })
+  })
+
+  test('hunkState marks the staged hunk and the hunk confirming a revert', () => {
+    const blocks = blocksOf(file, [hunkA, hunkB], [], null, {
+      staged: new Set([hunkA.header]),
+      confirmingRevert: `${file.path}|${hunkB.header}`,
+    })
+    const anchorA = { path: file.path, hunk: hunkA.header }
+    const anchorB = { path: file.path, hunk: hunkB.header }
+    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorA))).toMatchObject({
+      item: { isStaged: true, confirmingRevert: false },
+    })
+    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorB))).toMatchObject({
+      item: { isStaged: false, confirmingRevert: true },
     })
   })
 })

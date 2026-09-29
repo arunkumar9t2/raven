@@ -12,6 +12,7 @@ export type HeaderProps = {
   confirmingClear: boolean
   onRefresh: () => void
   onSend: () => void
+  onEditSend: () => void
   onPrevious: () => void
   onNext: () => void
   onClear: () => void
@@ -19,8 +20,8 @@ export type HeaderProps = {
 
 /**
  * The top row: file/add/del counts, file navigation, refresh, clear, and the send-to-Claude
- * button. `j`/`k` walk the file list, `r` refreshes, `s` sends, each only while the pane holds
- * the keyboard.
+ * button, plus "edit & send" once there is something pending. `j`/`k` walk the file list,
+ * `r` refreshes, `s` sends, each only while the pane holds the keyboard.
  */
 export function header(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text, Button } = kit.ui
@@ -46,12 +47,15 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
         onPress={props.onClear}
       />
       {pending > 0 ? (
-        <Button
-          key="send"
-          hotkey="s"
-          label={`Send ${pending} ${pending === 1 ? 'comment' : 'comments'} to Claude`}
-          onPress={props.onSend}
-        />
+        <>
+          <Button key="edit-send" plain dimColor label="edit & send" onPress={props.onEditSend} />
+          <Button
+            key="send"
+            hotkey="s"
+            label={`Send ${pending} ${pending === 1 ? 'comment' : 'comments'} to Claude`}
+            onPress={props.onSend}
+          />
+        </>
       ) : null}
     </Box>
   )

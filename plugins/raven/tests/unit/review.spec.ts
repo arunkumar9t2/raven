@@ -21,6 +21,8 @@ function fakeHost(onStatus?: (text: string | undefined) => void): Host {
     cwd: async () => '/repo',
     fork: async () => null,
     status: text => onStatus?.(text),
+    fillPrompt: async () => ({ isFilled: true }),
+    toast: () => {},
   }
 }
 
@@ -49,6 +51,18 @@ describe('createReview state transitions', () => {
     review.resend()
     expect(review.pending().map(c => c.id)).toEqual([second?.id as string])
     expect(review.comments().find(c => c.id === first?.id)?.status).toBe('addressed')
+  })
+
+  test('restore undoes take for the named ids, leaving other sent comments alone', () => {
+    const review = createReview(fakeHost(), () => 1)
+    review.add({ path: 'a.ts', text: 'fix this' })
+    review.add({ path: 'b.ts', text: 'and this' })
+    const [first, second] = review.take()
+
+    review.restore([first?.id as string])
+
+    expect(review.pending().map(c => c.id)).toEqual([first?.id as string])
+    expect(review.sent().map(c => c.id)).toEqual([second?.id as string])
   })
 
   test('take with nothing pending returns empty and leaves sent comments as sent', () => {

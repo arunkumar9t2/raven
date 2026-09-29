@@ -7,13 +7,14 @@ import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
-import { loadChanges, loadHunks } from '../git/load'
+import { applyPatch, loadChanges, loadHunks } from '../git/load'
+import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { type Anchor, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { type BodyItem, blocksOf } from './diff/blocks'
-import { addressedRow, commentBox, note, outdatedTitle } from './diff/comment-box'
+import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
+import { type BodyItem, blocksOf, type HunkState } from './diff/blocks'
+import { addressedRow, commentBox, hunkActionsRow, note, outdatedTitle } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
 import {
@@ -30,6 +31,7 @@ const HEADER_ROWS = 1
 const RULE_ROWS = 1
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
 const WHEEL_ROWS = 3
+const EMPTY_STAGED: ReadonlySet<string> = new Set()
 
 type Model = {
   repository: { toplevel: string; files: readonly ChangedFile[] } | null
@@ -42,12 +44,18 @@ type Model = {
   top: number
   /** Whether the "clear" button is waiting for a confirming second press. */
   confirmingClear: boolean
+  /** Staged hunk headers per file path, cleared for a path when its hunks no longer carry them. */
+  stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
+  /** The anchor key of the hunk whose "revert" is waiting for a confirming second press. */
+  confirmingRevert: string | null
 }
 
 /** What the diff view asks of the controller. */
 export type DiffActions = {
   /** Submits the pending review to Claude. */
   send: () => void
+  /** Fills the prompt with the pending review so the person can edit it before sending. */
+  editAndSend: () => void
   /** Gives the keyboard to the element drawn under `key`. */
   focus: (key: string) => void
 }
@@ -73,6 +81,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     composingLine: null,
     top: 0,
     confirmingClear: false,
+    stagedHunks: new Map(),
+    confirmingRevert: null,
   }
 
   // The body rows the most recent render computed, so `scroll` can clamp without recomputing it.
@@ -84,14 +94,16 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     hunks: readonly Hunk[] | undefined
     comments: Comments
     composing: Anchor | null
+    staged: ReadonlySet<string>
+    confirmingRevert: string | null
     blocks: Block<BodyItem>[]
     contentRows: number
   } | null = null
 
-  // Any action but a second "clear" press drops the confirm state, so `patch` overrides it only
-  // when the caller means to set it.
+  // Any action but a second "clear"/"revert" press drops those confirm states, so `patch`
+  // overrides them only when the caller means to set one.
   const update = (patch: Partial<Model>) => {
-    model = { ...model, confirmingClear: false, ...patch }
+    model = { ...model, confirmingClear: false, confirmingRevert: null, ...patch }
     host.redraw()
   }
 
@@ -101,13 +113,32 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   // Bumped by each refresh, so a slow read that lands after a newer one is dropped.
   let generation = 0
 
+  /** Drops staged marks for headers that no longer appear in `file`'s current hunks. */
+  function prunedStaged(
+    path: string,
+    hunks: readonly Hunk[],
+  ): ReadonlyMap<string, ReadonlySet<string>> {
+    const staged = model.stagedHunks.get(path)
+    if (!staged || staged.size === 0) return model.stagedHunks
+    const headers = new Set(hunks.map(hunk => hunk.header))
+    const kept = new Set([...staged].filter(header => headers.has(header)))
+    return kept.size === staged.size
+      ? model.stagedHunks
+      : new Map(model.stagedHunks).set(path, kept)
+  }
+
   async function loadSelected() {
     const file = selectedFile()
     if (!file) return
     const started = generation
     const hunks = await loadHunks(host.run, file).catch((): Hunk[] => [])
     const isCurrent = started === generation && model.selected === file.path
-    if (isCurrent) update({ hunks: new Map(model.hunks).set(file.path, hunks) })
+    if (isCurrent) {
+      update({
+        hunks: new Map(model.hunks).set(file.path, hunks),
+        stagedHunks: prunedStaged(file.path, hunks),
+      })
+    }
   }
 
   async function refresh() {
@@ -171,6 +202,39 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     }
   }
 
+  /** Runs `git apply` for one hunk's patch; marks it staged on success, reloads hunks either way. */
+  async function applyHunk(file: ChangedFile, hunk: Hunk, mode: 'stage' | 'revert') {
+    const result = await applyPatch(host.run, patchOf(file, hunk), mode)
+    if (!result.ok) {
+      host.toast(
+        `Raven: git ${mode === 'stage' ? 'apply --cached' : 'apply -R'} failed: ${result.error ?? 'unknown error'}`,
+      )
+      return
+    }
+    if (mode === 'stage') {
+      const current = model.stagedHunks.get(file.path) ?? new Set<string>()
+      update({
+        stagedHunks: new Map(model.stagedHunks).set(file.path, new Set(current).add(hunk.header)),
+      })
+    }
+    await loadSelected()
+  }
+
+  function pressStage(file: ChangedFile, hunk: Hunk) {
+    void applyHunk(file, hunk, 'stage')
+  }
+
+  /** First press asks for confirmation; a second press on the same hunk reverts it. */
+  function pressRevert(file: ChangedFile, hunk: Hunk, anchor: Anchor) {
+    const key = anchorKeyOf(anchor)
+    if (model.confirmingRevert === key) {
+      update({})
+      void applyHunk(file, hunk, 'revert')
+    } else {
+      update({ confirmingRevert: key })
+    }
+  }
+
   /** The selected file's blocks and their total row count, cached while its inputs are unchanged. */
   function blocksForSelected(): {
     file: ChangedFile | null
@@ -185,20 +249,33 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
 
     const hunks = model.hunks.get(file.path)
     const comments = review.comments()
+    const staged = model.stagedHunks.get(file.path) ?? EMPTY_STAGED
 
     if (
       cache &&
       cache.file === file &&
       cache.hunks === hunks &&
       cache.comments === comments &&
-      cache.composing === model.composing
+      cache.composing === model.composing &&
+      cache.staged === staged &&
+      cache.confirmingRevert === model.confirmingRevert
     ) {
       return { file, blocks: cache.blocks, contentRows: cache.contentRows }
     }
 
-    const blocks = blocksOf(file, hunks, comments, model.composing)
+    const hunkState: HunkState = { staged, confirmingRevert: model.confirmingRevert }
+    const blocks = blocksOf(file, hunks, comments, model.composing, hunkState)
     const contentRows = contentRowsOf(blocks)
-    cache = { file, hunks, comments, composing: model.composing, blocks, contentRows }
+    cache = {
+      file,
+      hunks,
+      comments,
+      composing: model.composing,
+      staged,
+      confirmingRevert: model.confirmingRevert,
+      blocks,
+      contentRows,
+    }
     return { file, blocks, contentRows }
   }
 
@@ -232,6 +309,16 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           onSubmit: text => submitComment(item.anchor, text),
           onCancel: () => stopComposing(item.anchor),
         })
+      case 'hunk-actions': {
+        const file = selectedFile()
+        return hunkActionsRow(kit, {
+          anchor: item.anchor,
+          isStaged: item.isStaged,
+          confirmingRevert: item.confirmingRevert,
+          onStage: () => file && pressStage(file, item.hunk),
+          onRevert: () => file && pressRevert(file, item.hunk, item.anchor),
+        })
+      }
     }
   }
 
@@ -281,6 +368,10 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           onSend: () => {
             update({})
             actions.send()
+          },
+          onEditSend: () => {
+            update({})
+            actions.editAndSend()
           },
           onPrevious: () => stepSelection(-1),
           onNext: () => stepSelection(1),

@@ -3,8 +3,9 @@ import type { ChangedFile } from './changes'
 import { changedFilesOf, numstatOf, statusEntriesOf } from './changes'
 import type { Hunk } from './hunks'
 import { hunksOf } from './hunks'
+import { applyArgvOf } from './patch'
 
-export type Run = (argv: readonly string[]) => Promise<RunResult>
+export type Run = (argv: readonly string[], stdin?: string) => Promise<RunResult>
 
 /**
  * Reads the working tree's changes against HEAD. Returns null outside a git repo.
@@ -53,4 +54,14 @@ export async function loadHunks(run: Run, file: ChangedFile): Promise<Hunk[]> {
       : ['git', 'diff', 'HEAD', '--', file.path]
   const result = await run(argv)
   return hunksOf(result.stdout)
+}
+
+/** Stages or reverts one hunk's patch via `git apply`, reading it from stdin. */
+export async function applyPatch(
+  run: Run,
+  patch: string,
+  mode: 'stage' | 'revert',
+): Promise<{ ok: boolean; error?: string }> {
+  const result = await run(applyArgvOf(mode), patch)
+  return result.exitCode === 0 ? { ok: true } : { ok: false, error: result.stderr.trim() }
 }

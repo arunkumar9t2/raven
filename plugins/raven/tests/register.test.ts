@@ -1,6 +1,7 @@
 import type { CommandRunInput, On, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
 import { commentsStoreKeyOf, DIFF_PANE, NAME, toolNameOf } from '../hooks/names'
+import { stageKeyOf } from '../hooks/views/diff/anchor'
 
 tier('user')
 
@@ -267,5 +268,72 @@ describe('turn.complete resolves sent comments', () => {
     const ui = await mountDiff($)
     expect(await ui.find({ text: /addressed/ })).toBeUndefined()
     expect(await ui.find({ text: /fix this/ })).toBeDefined()
+  })
+})
+
+const HUNK_HEADER = '@@ -1,2 +1,2 @@'
+const HUNK_TEXT = `${HUNK_HEADER}\n a\n-b\n+c\n`
+
+/** A world inside a git repo with one file carrying one hunk, so stage/revert have something to act on. */
+function hunkWorld(on: On, onApply: (argv: readonly string[], stdin: string | undefined) => void) {
+  mock.clock(on)
+  mock.store(on, {})
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  on('process.run', ($, e) => {
+    const [cmd, sub] = e.argv
+    if (cmd === 'git' && sub === 'rev-parse')
+      return { value: { exitCode: 0, stdout: REPO, stderr: '' } }
+    if (cmd === 'git' && sub === 'status') {
+      return { value: { exitCode: 0, stdout: ' M a.ts\0', stderr: '' } }
+    }
+    if (cmd === 'git' && e.argv.includes('--numstat')) {
+      return { value: { exitCode: 0, stdout: '1\t1\ta.ts\0', stderr: '' } }
+    }
+    if (cmd === 'git' && sub === 'apply') {
+      onApply(e.argv, e.init?.stdin)
+      return { value: { exitCode: 0, stdout: '', stderr: '' } }
+    }
+    return { value: { exitCode: 0, stdout: HUNK_TEXT, stderr: '' } }
+  })
+
+  const shown = new Set<string>()
+  on('ui.open', ($, e) => {
+    shown.add(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', ($, e) => {
+    shown.delete(e.id)
+    return { value: undefined }
+  })
+  on('ui.panes', () => ({
+    value: [...shown].map(id => ({
+      id,
+      title: id,
+      isShown: true,
+      isFocused: false,
+      isPlaced: true,
+    })),
+  }))
+  on('ui.focus', () => ({}))
+}
+
+describe('stage and revert a hunk', () => {
+  test('pressing stage applies git apply --cached with the hunk patch on stdin', async ($, on) => {
+    const applied: { argv?: readonly string[]; stdin?: string } = {}
+    hunkWorld(on, (argv, stdin) => {
+      applied.argv = argv
+      applied.stdin = stdin
+    })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    await ui.press({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+
+    expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
+    expect(applied.stdin).toContain(HUNK_TEXT)
   })
 })

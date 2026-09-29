@@ -45,7 +45,7 @@ export function register(on: On) {
 
   on('session.start', async ($, e, next) => {
     const host: Host = {
-      run: argv => $.process.run(argv),
+      run: (argv, stdin) => $.process.run(argv, stdin === undefined ? undefined : { stdin }),
       readFile: async path => {
         const text = await $.fs.read(path)
         return typeof text === 'string' ? text : ''
@@ -69,6 +69,11 @@ export function register(on: On) {
         return result.isAnswered ? result.text : null
       },
       status: text => $.ui.status(text),
+      fillPrompt: async text => {
+        const result = await $.prompt.fill({ text, mode: 'replace' })
+        return { isFilled: result.isFilled, refusal: result.refusal }
+      },
+      toast: text => $.ui.toast(text),
     }
 
     const created = createRaven(host, () => Date.now())
