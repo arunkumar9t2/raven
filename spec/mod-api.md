@@ -201,7 +201,10 @@ resolves a key against the active theme — light or dark, the `/theme` choice, 
 built-in diff mod colours everything by key. `Code` and `Markdown` are drawn by the engine and follow
 the theme already. `$.config.list()` exposes the selected theme's name and `config.set` with
 `{ key: 'theme' }` observes a change, but no API reads a theme's palette, and a plugin cannot ship a
-theme.
+theme. The pane chrome — tab bar, divider, close glyph and background — is the engine's: `PaneOpenArgs`
+carries no colour or style, and the active tab is drawn in reverse video (`inverse`, no colour), so
+its highlight comes from the terminal's own palette rather than the theme. A plugin that wants its
+own highlights to match draws them with `inverse` and colours everything else by theme key.
 
 ## Panes
 
