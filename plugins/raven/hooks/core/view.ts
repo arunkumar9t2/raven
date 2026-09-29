@@ -16,6 +16,9 @@ export function capabilitiesOf(ui: Ui): Capabilities {
   return { canType: ui.Input !== undefined, canPick: ui.Select !== undefined }
 }
 
+/** Every surface has `Input` and `Select`, so a caller can skip `capabilities`. */
+export const FULL_CAPABILITIES: Capabilities = { canType: true, canPick: true }
+
 /** The engine refuses a `Markdown`, `Code` or `Text` element whose text is longer than this. */
 export const ELEMENT_TEXT_LIMIT = 10_000
 

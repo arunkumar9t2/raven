@@ -6,6 +6,7 @@ import type { RenderElement, SelectOption } from 'claude-code'
 import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
+import { selectButtons } from '../select-buttons'
 
 /** The source Select's element key, for a test or a focus target. */
 export const SOURCE_SELECT_KEY = 'source'
@@ -30,19 +31,13 @@ export type HeaderProps = {
 const TURN_PREFIX = 'turn:'
 
 /** The source options as a row of plain buttons, for a surface with no `Select`. */
-function sourceButtons(kit: Kit, props: HeaderProps): RenderElement[] {
-  const { Button } = kit.ui
-  return props.sourceOptions
-    .filter(option => !option.value.startsWith(TURN_PREFIX))
-    .map(option => (
-      <Button
-        key={`source:${option.value}`}
-        plain
-        dimColor={option.value !== props.sourceValue}
-        label={option.label}
-        onPress={() => props.onSourceChange(option.value)}
-      />
-    ))
+function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
+  return selectButtons(kit, {
+    key: 'source',
+    options: props.sourceOptions.filter(option => !option.value.startsWith(TURN_PREFIX)),
+    value: props.sourceValue,
+    onSelect: props.onSourceChange,
+  })
 }
 
 /**

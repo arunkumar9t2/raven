@@ -16,6 +16,8 @@ export type Host = {
   closePane: (id: string) => Promise<void>
   /** Whether the pane is the one the surface shows, rather than a tab behind it. */
   isShown: (id: string) => Promise<boolean>
+  /** Every pane id the surface currently shows, off one call — for a check over several ids. */
+  shownPaneIds: () => Promise<ReadonlySet<string>>
   /** Moves keyboard focus to the element drawn under `key` in pane `paneId`. */
   focus: (paneId: string, key: string) => Promise<void>
   storeGet: (key: string) => Promise<unknown>
