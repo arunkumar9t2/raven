@@ -1,5 +1,5 @@
 import type { SelectOption, SessionMessage } from 'claude-code'
-import type { Host } from '../../core/host'
+import { type Host, loggedAs } from '../../core/host'
 import { branchPointOf } from '../../git/base'
 import type { ChangedFile } from '../../git/changes'
 import type { Hunk } from '../../git/hunks'
@@ -70,7 +70,9 @@ export function createSourceController(host: Host): SourceController {
   async function resolveStoredSource(): Promise<void> {
     if (hasReadStoredSource) return
     hasReadStoredSource = true
-    const top = await host.run(['git', 'rev-parse', '--show-toplevel']).catch(() => null)
+    const top = await host
+      .run(['git', 'rev-parse', '--show-toplevel'])
+      .catch(loggedAs(host, 'toplevel', null))
     if (top?.exitCode !== 0) return
     toplevel = top.stdout.trim()
     const stored = await host.storeGet(sourceStoreKeyOf(toplevel))
@@ -84,8 +86,8 @@ export function createSourceController(host: Host): SourceController {
     const started = ++generation
 
     const [head, messages] = await Promise.all([
-      host.run(['git', 'rev-parse', 'HEAD']).catch(() => null),
-      host.messages().catch((): readonly SessionMessage[] => []),
+      host.run(['git', 'rev-parse', 'HEAD']).catch(loggedAs(host, 'HEAD', null)),
+      host.messages().catch(loggedAs<readonly SessionMessage[]>(host, 'session messages', [])),
     ])
     if (started !== generation) return
 
@@ -93,7 +95,10 @@ export function createSourceController(host: Host): SourceController {
     if (repository && sessionStartSha === null && headSha !== null) sessionStartSha = headSha
 
     if (headSha !== lastBranchPointHeadSha || toplevel !== lastBranchPointToplevel) {
-      const resolved = headSha === null ? null : await branchPointOf(host.run).catch(() => null)
+      const resolved =
+        headSha === null
+          ? null
+          : await branchPointOf(host.run).catch(loggedAs(host, 'branch point', null))
       if (started !== generation) return
       branchPointSha = resolved
       lastBranchPointHeadSha = headSha
@@ -149,7 +154,9 @@ export function createSourceController(host: Host): SourceController {
   function select(value: string): void {
     source = sourceOf(value)
     if (isPersistable(source) && toplevel) {
-      void host.storeSet(sourceStoreKeyOf(toplevel), value).catch(() => {})
+      void host
+        .storeSet(sourceStoreKeyOf(toplevel), value)
+        .catch(loggedAs(host, 'saving the source', undefined))
     }
   }
 

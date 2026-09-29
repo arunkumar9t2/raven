@@ -3,7 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import type { Host } from '../core/host'
+import { type Host, loggedAs } from '../core/host'
 import type { Kit, View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
@@ -140,7 +140,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     const file = selectedFile()
     if (!file) return
     const started = generation
-    const hunks = await loadHunks(host.run, file, sourceController.base()).catch((): Hunk[] => [])
+    const hunks = await loadHunks(host.run, file, sourceController.base()).catch(
+      loggedAs<Hunk[]>(host, 'loading hunks', []),
+    )
     const isCurrent = started === generation && model.selected === file.path
     if (isCurrent) {
       update({
@@ -153,7 +155,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   async function refresh() {
     await sourceController.resolveStoredSource()
     const started = ++generation
-    const read = () => loadChanges(host.run, sourceController.base()).catch(() => null)
+    const read = () =>
+      loadChanges(host.run, sourceController.base()).catch(loggedAs(host, 'loading changes', null))
     const baseRead = refOf(sourceController.base())
     let repository = await read()
     if (started !== generation) return
