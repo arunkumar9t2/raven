@@ -80,7 +80,8 @@ trigger is one entry, not a change to `register`.
 - The selected file's hunks, each drawn with `Code format="diff"`, one element per hunk (the engine
   caps a `Code` source at 10 000 characters; a longer hunk is truncated with a marker).
 - Refreshes, debounced, after `Edit`/`Write`/`NotebookEdit`/`Bash` calls land; opens on the first
-  main-loop edit when the terminal docks panes.
+  main-loop edit when the terminal docks panes, the `autoOpen` setting is on (the default), and the
+  last known terminal width is at least `autoOpenColumns` — unmeasured counts as wide enough.
 - On the first `/raven` or first main-loop edit, a one-time toast asks to close the built-in diff
   panel when it would otherwise cover Raven's dock (open, or unreadable, and checkpointing is on).
 - Hotkeys, live while the pane holds the keyboard: `j`/`k` select the next/previous file (also
@@ -103,7 +104,8 @@ trigger is one entry, not a change to `register`.
   text instead.
 - Keeps a short history of shown documents, selectable from the pane.
 - Opens itself when Claude writes or edits a markdown file under a watched plan path:
-  `docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`, `~/.claude/plans/`.
+  `docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`, `~/.claude/plans/`, or a
+  `/`-bounded segment named by the `watchedPaths` setting.
 - A relative or `file:` link in a shown file's markdown, resolved against the file's own directory,
   opens the target in the Doc view; an `http(s):` link keeps the surface's own behaviour.
 
@@ -186,6 +188,22 @@ is a whole-hunk comment.
   comments are pending, `send` (submits the review, as `/raven send` does) sit beside the text.
 - A doc/plan counts as unseen from the moment it is shown until its pane is actually drawn again;
   a change to either count invalidates the render so the band updates without a keystroke.
+
+## Settings
+
+The plugin manifest's `userConfig` puts three non-secret fields in the `/config` menu, parsed
+defensively (a stored value of the wrong type falls back to its default rather than failing load):
+
+- `watchedPaths` (string, default `''`): comma-separated path fragments, trimmed, blank ones
+  dropped. A landed edit whose path contains one as a `/`-bounded segment (never a bare substring,
+  so `notes/` matches `/work/notes/x.md` but not `/work/footnotes/x.md`) and ends in `.md` opens in
+  the Doc view, beside the built-in watched paths.
+- `autoOpen` (boolean, default `true`): whether the main loop's first edit of the session opens the
+  diff pane at all.
+- `autoOpenColumns` (number, default `144`): the terminal width, in columns, below which that
+  auto-open is skipped. The width comes from the last `ui.render` Raven has seen (`AbovePrompt` is
+  usually first, since no pane is open yet); unmeasured counts as wide enough, so the default is to
+  open.
 
 ## `/raven` command output
 

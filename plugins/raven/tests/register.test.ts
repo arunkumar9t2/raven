@@ -1,6 +1,6 @@
 import type { CommandRunInput, On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
-import { commentsStoreKeyOf, DIFF_PANE, NAME, toolNameOf } from '../hooks/names'
+import { commentsStoreKeyOf, DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
 import { stageKeyOf } from '../hooks/views/diff/anchor'
 import { SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
@@ -118,6 +118,80 @@ describe('register', () => {
 
     const result = await $.command.run(ravenCommand('tasks'))
     expect(result.text).toBe('Raven tasks shown')
+  })
+})
+
+/**
+ * A world like `world`'s, but recording every pane opened rather than just the ones currently
+ * shown, so a test can tell an auto-open happened from one that never did.
+ */
+function openWorld(on: On) {
+  const opened: string[] = []
+  mock.clock(on)
+  mock.store(on, {})
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a repo' } }))
+  on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
+  on('settings.read', () => ({ value: {} }))
+  on('ui.open', ($, e) => {
+    opened.push(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', () => ({ value: undefined }))
+  on('ui.panes', () => ({ value: [] }))
+  on('ui.focus', () => ({}))
+  on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+  return opened
+}
+
+const editOf = (path: string) => ({
+  tool: 'Edit',
+  file_path: path,
+  old_string: 'a',
+  new_string: 'b',
+})
+
+describe('options: main-loop-edit auto-open, defaults', () => {
+  test('the first main-loop edit auto-opens the diff pane', async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf('/work/a.ts'))
+
+    expect(opened).toContain(DIFF_PANE.id)
+  })
+
+  test('a second main-loop edit does not reopen it', async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf('/work/a.ts'))
+    await $.tool.call(editOf('/work/b.ts'))
+
+    expect(opened.filter(id => id === DIFF_PANE.id)).toHaveLength(1)
+  })
+})
+
+describe('options: watched doc paths, defaults', () => {
+  test('a built-in watched path opens the doc pane', async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf('/work/.claude/plans/x.md'))
+
+    expect(opened).toContain(DOC_PANE.id)
+  })
+
+  test('a markdown file outside the built-in paths, with watchedPaths unset, opens nothing', async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf('/work/notes/x.md'))
+
+    expect(opened).not.toContain(DOC_PANE.id)
   })
 })
 

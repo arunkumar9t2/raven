@@ -1,9 +1,10 @@
-import type { On } from 'claude-code'
+import type { On, PluginOptions } from 'claude-code'
 import { isCheckpointing } from './core/checkpointing'
 import { DIRECTIVE_OPS, withoutDirectives } from './core/directive'
 import type { Host } from './core/host'
 import { isRecord } from './core/is-record'
 import { createRaven, type Raven } from './core/raven'
+import { settingsOf } from './core/settings'
 import type { ToolEvent } from './core/triggers'
 import type { Ui } from './core/view'
 import { COMMAND, COMMAND_DESCRIPTION, PANE_IDS, TOOL_NAME, toolNameOf } from './names'
@@ -41,7 +42,8 @@ const TOOL_INPUT_SCHEMA = {
  * Raven's hooks: binds the engine once at `session.start`, then forwards commands, tool calls,
  * prompts and pane drawing to the controller in `core/raven`.
  */
-export function register(on: On) {
+export function register(on: On, options: PluginOptions) {
+  const settings = settingsOf(options)
   let raven: Raven | null = null
   // Set alongside `raven`, so `afterTool`'s catch below can log without threading `host` through.
   let host: Host | null = null
@@ -96,7 +98,7 @@ export function register(on: On) {
         ),
     }
 
-    const created = createRaven(bound, () => Date.now())
+    const created = createRaven(bound, settings, () => Date.now())
     await $.command.register({
       name: COMMAND,
       description: COMMAND_DESCRIPTION,
@@ -120,6 +122,7 @@ export function register(on: On) {
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
+    raven?.noteViewport(e.viewport?.columns)
     if (!raven || !PANE_IDS.includes(e.requestId)) return next(e)
     const ui = (await $.ui.resolve(e)) as unknown as Ui
     const drawn = raven.render(e.requestId, {
@@ -131,6 +134,7 @@ export function register(on: On) {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
+    raven?.noteViewport(e.viewport?.columns)
     if (!raven) return next(e)
     const ui = (await $.ui.resolve(e)) as unknown as Ui
     const kit = { ui, columns: e.props.bodyColumns, rows: e.props.maxRows }
@@ -142,6 +146,7 @@ export function register(on: On) {
     'ui.render',
     { component: 'CommandOutput', props: { command: COMMAND } },
     async ($, e, next) => {
+      raven?.noteViewport(e.viewport?.columns)
       if (!raven) return next(e)
       const ui = (await $.ui.resolve(e)) as unknown as Ui
       return raven.commandOutput({ ui }, { text: e.props.text, isErrored: e.props.isErrored })
