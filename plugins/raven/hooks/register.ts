@@ -5,7 +5,36 @@ import { isRecord } from './core/is-record'
 import { createRaven, type Raven } from './core/raven'
 import type { ToolEvent } from './core/triggers'
 import type { Ui } from './core/view'
-import { COMMAND, COMMAND_DESCRIPTION, PANE_IDS } from './names'
+import { COMMAND, COMMAND_DESCRIPTION, PANE_IDS, TOOL_NAME, toolNameOf } from './names'
+
+// The plugin's own name is only known once `$` binds, so the tool's full name cannot be a static
+// string here; this matches any plugin's `show` tool as `tool.call`'s matcher must be static.
+const TOOL_MATCH = new RegExp(`^mcp__.+__${TOOL_NAME}$`)
+
+const TOOL_DESCRIPTION =
+  'Show something to the user in the Raven preview pane beside the transcript.'
+
+const TOOL_INPUT_SCHEMA = {
+  type: 'object',
+  properties: {
+    op: {
+      enum: ['show', 'note', 'diff', 'comments'],
+      description:
+        "'show' renders a file at `path`; 'note' renders the markdown you compose; 'diff' opens " +
+        "the diff, optionally at `path`; 'comments' reads the user's pending review comments.",
+    },
+    path: {
+      type: 'string',
+      description: 'A file path, relative to the session cwd unless absolute.',
+    },
+    markdown: { type: 'string', description: 'Markdown to render, for `op: "note"`.' },
+    title: {
+      type: 'string',
+      description: 'A title for the pane, for `op: "show"` or `op: "note"`.',
+    },
+  },
+  required: ['op'],
+}
 
 /**
  * Raven's hooks: binds the engine once at `session.start`, then forwards commands, tool calls,
@@ -34,6 +63,7 @@ export function register(on: On) {
       submitPrompt: async text => {
         await $.prompt.submit({ text })
       },
+      cwd: () => $.session.cwd(),
     }
 
     const created = createRaven(host, () => Date.now())
@@ -41,6 +71,11 @@ export function register(on: On) {
       name: COMMAND,
       description: COMMAND_DESCRIPTION,
       argumentHint: created.argumentHint,
+    })
+    await $.tool.register({
+      name: TOOL_NAME,
+      description: TOOL_DESCRIPTION,
+      inputSchema: TOOL_INPUT_SCHEMA,
     })
     raven = created
 
@@ -67,6 +102,18 @@ export function register(on: On) {
     const result = await next(e)
     if (result.deny === undefined) raven?.paneClosed(e.id)
     return result
+  })
+
+  // Registered before the catch-all below: answering here without calling `next` keeps that hook
+  // from also reacting to this call (a call no hook answers fails, so this one must answer).
+  on('tool.call', { tool: TOOL_MATCH }, async ($, e, next) => {
+    if (e.tool !== toolNameOf($.plugin.name) || !raven) return next(e)
+    try {
+      const text = await raven.runTool(e)
+      return { result: text, text }
+    } catch (error) {
+      return { deny: error instanceof Error ? error.message : String(error) }
+    }
   })
 
   on('tool.call', async ($, e, next) => {

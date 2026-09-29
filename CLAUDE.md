@@ -33,7 +33,7 @@ types/claude-code.d.ts            the mod API declarations (from /plugin-types)
 bun run check        # typecheck + biome + unit tests + mod tests + plugin validate
 bun run typecheck    # tsc for the mod (jsx=h, no Node) and the CLI (bun-types)
 bun run lint:fix     # biome
-bun test             # CLI + pure-module unit tests
+bun run test         # CLI + pure-module unit tests (plain `bun test` also picks up the mod-kit tests and fails)
 bun run build        # compiles the CLI to plugins/raven/dist/raven (gitignored)
 bun run validate     # claude plugin validate --strict, marketplace + plugin
 ```

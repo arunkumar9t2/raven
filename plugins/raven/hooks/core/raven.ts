@@ -4,7 +4,7 @@ import { reviewTextOf } from '../review/comments'
 import { createReview } from '../review/review'
 import { createDiffView } from '../views/diff-view'
 import { createDocView, type Doc } from '../views/doc-view'
-import type { Directive } from './directive'
+import { type Directive, directiveOf } from './directive'
 import type { Host } from './host'
 import { type Action, actionsOf, type ToolEvent } from './triggers'
 import type { Kit, View } from './view'
@@ -16,6 +16,8 @@ export type Raven = {
   command: (args: string) => Promise<string>
   /** Reacts to a finished tool call; returns replacement result text for the model, if any. */
   afterTool: (event: ToolEvent) => Promise<string | undefined>
+  /** Runs the `show` tool's input as a directive; throws on input `directiveOf` rejects. */
+  runTool: (input: unknown) => Promise<string>
   /** Hidden context the next prompt carries: the pending review, which it consumes. */
   takePromptContext: () => string | undefined
   render: (paneId: string, kit: Kit) => RenderElement | null
@@ -118,6 +120,14 @@ export function createRaven(host: Host, now: () => number): Raven {
     }
   }
 
+  /** A relative `path` is the tool's own, resolved against the session's cwd, not the CLI's shell. */
+  async function resolveDirective(directive: Directive): Promise<Directive> {
+    if (directive.op !== 'show' && directive.op !== 'diff') return directive
+    const { path } = directive
+    if (path === undefined || path.startsWith('/')) return directive
+    return { ...directive, path: `${await host.cwd()}/${path}` }
+  }
+
   async function runAction(action: Action): Promise<string | undefined> {
     switch (action.kind) {
       case 'refresh-diff':
@@ -170,6 +180,12 @@ export function createRaven(host: Host, now: () => number): Raven {
         if (text !== undefined) texts.push(text)
       }
       return texts.length > 0 ? texts.join('\n') : undefined
+    },
+    runTool: async input => {
+      const directive = directiveOf(input)
+      if (!directive)
+        throw new Error(`Invalid input for the Raven show tool: ${JSON.stringify(input)}`)
+      return runDirective(await resolveDirective(directive))
     },
     takePromptContext: () => reviewTextOf(review.take()),
     render: (paneId, kit) => views.find(view => view.pane.id === paneId)?.render(kit) ?? null,
