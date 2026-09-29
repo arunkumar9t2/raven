@@ -1,5 +1,6 @@
 import type { RenderElement } from 'claude-code'
 import { outputOf } from '../git/load'
+import { PANE_IDS } from '../names'
 import type { Review } from '../review/review'
 import { band as renderBand } from '../views/band'
 import type { Host } from './host'
@@ -12,8 +13,6 @@ export type BandStateDeps = {
   openDoc: () => Promise<void>
   /** Submits the pending review as a prompt; true when there was one to send. */
   sendReview: () => Promise<boolean>
-  /** The ids of every pane the controller currently considers open, read live. */
-  openIds: () => Iterable<string>
 }
 
 export type BandState = {
@@ -71,11 +70,13 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
     }
   }
 
+  /**
+   * Asks the engine directly rather than trusting the controller's own `open` bookkeeping: a hot
+   * module reload starts that bookkeeping empty even while Raven's panes are still on screen.
+   */
   async function isAnyPaneShown(): Promise<boolean> {
-    const ids = [...deps.openIds()]
-    if (ids.length === 0) return false
     const shown = await host.shownPaneIds()
-    return ids.some(id => shown.has(id))
+    return PANE_IDS.some(id => shown.has(id))
   }
 
   async function openFromBand(): Promise<void> {

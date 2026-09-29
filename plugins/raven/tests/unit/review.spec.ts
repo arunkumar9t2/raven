@@ -32,7 +32,7 @@ function fakeHost(onStatus?: (text: string | undefined) => void): Host {
 }
 
 describe('createReview state transitions', () => {
-  test('add -> take marks sent -> markAddressed -> resend', async () => {
+  test('add -> take marks sent -> resolveBatch -> resend', async () => {
     const review = createReview(fakeHost(), () => 1)
     await review.load('/repo')
 
@@ -48,7 +48,8 @@ describe('createReview state transitions', () => {
     expect(review.comments()).toHaveLength(2)
 
     const [first, second] = taken
-    review.markAddressed([first?.id as string])
+    const batchIds = taken.map(c => c.id)
+    review.resolveBatch(batchIds, [first?.id as string])
     expect(review.sent()).toHaveLength(0)
     expect(review.comments().find(c => c.id === first?.id)?.status).toBe('addressed')
     expect(review.comments().find(c => c.id === second?.id)?.status).toBe('open')
@@ -56,6 +57,22 @@ describe('createReview state transitions', () => {
     review.resend()
     expect(review.pending().map(c => c.id)).toEqual([second?.id as string])
     expect(review.comments().find(c => c.id === first?.id)?.status).toBe('addressed')
+  })
+
+  test('resolveBatch only touches ids in its own batch, leaving a later batch sent while it resolves', () => {
+    const review = createReview(fakeHost(), () => 1)
+
+    review.add({ path: 'a.ts', text: 'A' })
+    const batchA = review.take().map(c => c.id)
+
+    // A newer batch sent while batch A's resolve (e.g. a fork) is still in flight.
+    review.add({ path: 'b.ts', text: 'B' })
+    const batchB = review.take().map(c => c.id)
+
+    review.resolveBatch(batchA, [])
+
+    expect(review.comments().find(c => c.id === batchA[0])?.status).toBe('open')
+    expect(review.sent().map(c => c.id)).toEqual(batchB)
   })
 
   test('restore undoes take for the named ids, leaving other sent comments alone', () => {

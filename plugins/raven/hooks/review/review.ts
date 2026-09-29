@@ -22,8 +22,12 @@ export type Review = {
   pending: () => Comments
   /** Comments sent to the model, awaiting a reply naming which were addressed. */
   sent: () => Comments
-  /** Moves the named sent comments to 'addressed'; every other sent comment becomes 'open'. */
-  markAddressed: (ids: readonly string[]) => void
+  /**
+   * Resolves one sent batch: the named `addressedIds` become 'addressed', every other id in
+   * `batchIds` becomes 'open'. Comments outside `batchIds` — a newer batch sent while this one's
+   * fork was in flight — are untouched, whatever their status.
+   */
+  resolveBatch: (batchIds: readonly string[], addressedIds: readonly string[]) => void
   /** Returns every 'open' comment to 'pending' so it rides the next prompt. */
   resend: () => void
   /** Drops every comment. */
@@ -100,9 +104,14 @@ export function createReview(host: Host, now: () => number): Review {
     },
     pending: () => byStatus('pending'),
     sent: () => byStatus('sent'),
-    markAddressed: ids => {
-      moveStatus('sent', 'addressed', ids)
-      moveStatus('sent', 'open')
+    resolveBatch: (batchIds, addressedIds) => {
+      const addressed = new Set(addressedIds)
+      const batch = new Set(batchIds)
+      comments = comments.map(comment =>
+        batch.has(comment.id)
+          ? { ...comment, status: addressed.has(comment.id) ? 'addressed' : 'open' }
+          : comment,
+      )
       save()
     },
     resend: () => {

@@ -237,9 +237,10 @@ const mountDiff = ($: Engine) =>
 function gitWorld(
   on: On,
   storeEntries: Record<string, unknown>,
-  forkText: string | null,
+  forkText: string | null | Error,
   files: readonly string[] = ['a.ts'],
   messages: readonly SessionMessage[] = [],
+  extraShownIds: readonly string[] = [],
 ) {
   mock.clock(on)
   mock.store(on, storeEntries)
@@ -263,12 +264,15 @@ function gitWorld(
     // symbolic-ref/verify/merge-base (branch point) and loadHunks all get the same "nothing here".
     return { value: { exitCode: 1, stdout: '', stderr: '' } }
   })
-  on('model.fork', () => ({
-    value:
-      forkText === null
-        ? { isAnswered: false, reason: 'nothing-to-fork' }
-        : { isAnswered: true, text: forkText, usage: USAGE },
-  }))
+  on('model.fork', () => {
+    if (forkText instanceof Error) throw forkText
+    return {
+      value:
+        forkText === null
+          ? { isAnswered: false, reason: 'nothing-to-fork' }
+          : { isAnswered: true, text: forkText, usage: USAGE },
+    }
+  })
   on('turn.complete', ($, e) => ({ text: e.answer }))
 
   const shown = new Set<string>()
@@ -281,7 +285,7 @@ function gitWorld(
     return { value: undefined }
   })
   on('ui.panes', () => ({
-    value: [...shown].map(id => ({
+    value: [...new Set([...shown, ...extraShownIds])].map(id => ({
       id,
       title: id,
       isShown: true,
@@ -349,13 +353,30 @@ describe('turn.complete resolves sent comments', () => {
     expect(await ui.find({ text: /addressed/ })).toBeUndefined()
     expect(await ui.find({ text: /fix this/ })).toBeDefined()
   })
+
+  test('a fork rejection leaves the comment sent and never surfaces as an unhandled rejection', async ($, on) => {
+    const sent = { id: 'c4', path: 'a.ts', text: 'fix this', status: 'sent', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [sent] }, new Error('fork failed'))
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.turn.complete(mainLoopTurn('done'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: /addressed/ })).toBeUndefined()
+    expect(await ui.find({ text: /fix this/ })).toBeDefined()
+  })
 })
 
 const HUNK_HEADER = '@@ -1,2 +1,2 @@'
 const HUNK_TEXT = `${HUNK_HEADER}\n a\n-b\n+c\n`
 
 /** A world inside a git repo with one file carrying one hunk, so stage/revert have something to act on. */
-function hunkWorld(on: On, onApply: (argv: readonly string[], stdin: string | undefined) => void) {
+function hunkWorld(
+  on: On,
+  onApply: (argv: readonly string[], stdin: string | undefined) => void,
+  diffTextOf: () => string = () => HUNK_TEXT,
+) {
   mock.clock(on)
   mock.store(on, {})
   on('session.start', ($, e) => ({ cwd: e.cwd }))
@@ -375,7 +396,7 @@ function hunkWorld(on: On, onApply: (argv: readonly string[], stdin: string | un
       onApply(e.argv, e.init?.stdin)
       return { value: { exitCode: 0, stdout: '', stderr: '' } }
     }
-    return { value: { exitCode: 0, stdout: HUNK_TEXT, stderr: '' } }
+    return { value: { exitCode: 0, stdout: diffTextOf(), stderr: '' } }
   })
 
   const shown = new Set<string>()
@@ -415,6 +436,36 @@ describe('stage and revert a hunk', () => {
 
     expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
     expect(applied.stdin).toContain(HUNK_TEXT)
+  })
+
+  test('a hunk that changed since it was rendered is not applied; a toast explains and the view refreshes', async ($, on) => {
+    let diffText = HUNK_TEXT
+    let applyRan = false
+    hunkWorld(
+      on,
+      () => {
+        applyRan = true
+      },
+      () => diffText,
+    )
+    const toasts: string[] = []
+    on('ui.toast', ($, e) => {
+      toasts.push(e.text)
+      return { value: undefined }
+    })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+
+    // The working tree changes between the render above and the stage press below.
+    diffText = '@@ -1,2 +1,2 @@\n a\n-b\n+d\n'
+
+    await ui.press({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+
+    expect(applyRan).toBe(false)
+    expect(toasts).toContain('The hunk changed — refreshed, try again')
   })
 })
 
@@ -504,6 +555,20 @@ describe('the AbovePrompt status band', () => {
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountBand($)
+    expect(await ui.find({ text: /pending/ })).toBeUndefined()
+  })
+
+  test('draws nothing when the engine reports the diff pane shown even though this instance never opened it (hot reload)', async ($, on) => {
+    const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
+    // A reloaded module's `open` bookkeeping starts empty; the engine itself still shows the pane.
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null, ['a.ts'], [], [DIFF_PANE.id])
+    // Stands in for the engine's own drawing once Raven passes with `next(e)`.
+    on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', children: [''] }))
+
+    await $.session.start(SESSION)
+    // No `/raven diff` run here: this instance's `open` set stays empty.
 
     const ui = await mountBand($)
     expect(await ui.find({ text: /pending/ })).toBeUndefined()

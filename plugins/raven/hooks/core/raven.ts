@@ -85,7 +85,6 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       await show(doc)
     },
     sendReview,
-    openIds: () => open,
   })
 
   /**
@@ -113,19 +112,19 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     const sent = review.sent()
     if (sent.length === 0 || isResolving) return
     isResolving = true
+    // Captured before the fork: a newer batch sent while this fork is in flight must not be
+    // touched by the reply this one gets back.
+    const batchIds = sent.map(comment => comment.id)
     try {
       const reply = await host.fork(resolvePromptOf(sent))
       // No bracketed array in the reply means it was unparseable, not "nothing addressed"; leave
       // the comments sent rather than bouncing every one of them to 'open'.
       if (reply !== null && /\[[\s\S]*\]/.test(reply)) {
-        review.markAddressed(
-          addressedIdsOf(
-            reply,
-            sent.map(comment => comment.id),
-          ),
-        )
+        review.resolveBatch(batchIds, addressedIdsOf(reply, batchIds))
         host.redraw()
       }
+    } catch (error) {
+      host.debug(`raven: resolving sent comments failed: ${String(error)}`)
     } finally {
       isResolving = false
     }
