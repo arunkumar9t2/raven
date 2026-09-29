@@ -6,7 +6,7 @@ Working title **Raven** (rename pending). Live-preview side pane for Claude Code
 ## Resume here
 
 M6 in progress: `docs/superpowers/plans/2026-09-29-raven-m6.md` (gitignored; the plan's
-"Execution order" section is authoritative). Current task: **6/7 view wiring** (pure models for 6, 7, 8, 10 are in). Done: 1, 3, 11, 12, 14 + a simplify pass.
+"Execution order" section is authoritative). Current task: **4+5** (keyboard, status/clear). Done: 1, 3, 6, 7, 11, 12, 13, 14 + a simplify pass. Live-verified: native tool call, pinned scrolling, comment → send → Claude edits → ✓ addressed.
 
 ## Milestones
 
