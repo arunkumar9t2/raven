@@ -1,3 +1,4 @@
+import { TASK_TOOLS } from '../review/tasks'
 import { type Directive, directivesIn } from './directive'
 
 /** A finished tool call, as the triggers read it. */
@@ -9,6 +10,8 @@ export type ToolEvent = {
   /** Set when a subagent made the call. */
   agentId?: string
   stdout?: string
+  /** The tool result's structured `result`, when the call landed. */
+  result?: unknown
 }
 
 export type Action =
@@ -18,6 +21,7 @@ export type Action =
   | { kind: 'show-doc'; path: string }
   | { kind: 'reload-doc'; path: string }
   | { kind: 'directive'; directive: Directive }
+  | { kind: 'tasks'; tool: string; input: Readonly<Record<string, unknown>>; result?: unknown }
 
 export type Trigger = (event: ToolEvent) => readonly Action[]
 
@@ -62,8 +66,13 @@ const onDirective: Trigger = event =>
     ? directivesIn(event.stdout).map(directive => ({ kind: 'directive', directive }))
     : []
 
+const onTasks: Trigger = event =>
+  event.isLanded && TASK_TOOLS.includes(event.tool)
+    ? [{ kind: 'tasks', tool: event.tool, input: event.input, result: event.result }]
+    : []
+
 /** Every trigger, in the order their actions run. Adding a reaction is one entry here. */
-export const TRIGGERS: readonly Trigger[] = [onEdit, onShell, onWatchedDoc, onDirective]
+export const TRIGGERS: readonly Trigger[] = [onEdit, onShell, onWatchedDoc, onDirective, onTasks]
 
 export const actionsOf = (event: ToolEvent, triggers = TRIGGERS) =>
   triggers.flatMap(trigger => trigger(event))

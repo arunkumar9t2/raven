@@ -4,11 +4,15 @@
 import type { RenderElement } from 'claude-code'
 
 import type { Kit } from '../../core/view'
-import { type Comments, commentsOn } from '../../review/comments'
-import { type Anchor, sameAnchor } from './anchor'
-
-export type { Anchor } from './anchor'
-export { sameAnchor } from './anchor'
+import type { Comment } from '../../review/comments'
+import {
+  type Anchor,
+  cancelKeyOf,
+  commentButtonKeyOf,
+  dropKeyOf,
+  noteKeyOf,
+  sameAnchor,
+} from './anchor'
 
 export type CommentBoxProps = {
   anchor: Anchor
@@ -23,12 +27,11 @@ export type CommentBoxProps = {
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Button, Input } = kit.ui
   const { anchor } = props
-  const key = `${anchor.path}|${anchor.hunk ?? ''}`
 
   if (!sameAnchor(props.composing, anchor)) {
     return (
       <Button
-        key={`comment:${key}`}
+        key={commentButtonKeyOf(anchor)}
         plain
         dimColor
         label={anchor.hunk ? '＋ comment on this hunk' : '＋ comment on this file'}
@@ -46,32 +49,26 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
         submitLabel="add"
         onSubmit={text => props.onSubmit(text)}
       />
-      <Button key={`cancel:${key}`} plain dimColor label="cancel" onPress={props.onCancel} />
+      <Button key={cancelKeyOf(anchor)} plain dimColor label="cancel" onPress={props.onCancel} />
     </Box>
   )
 }
 
-export type NotesProps = {
-  anchor: Anchor
-  comments: Comments
-  onRemove: (id: string) => void
-}
-
-/** The existing comments anchored to a file or hunk, each with a remove button. */
-export function notes(kit: Kit, props: NotesProps): RenderElement[] {
+/** One existing comment, with a button to remove it. */
+export function note(kit: Kit, comment: Comment, onRemove: (id: string) => void): RenderElement {
   const { Box, Text, Button } = kit.ui
-  return commentsOn(props.comments, props.anchor.path, props.anchor.hunk).map(comment => (
-    <Box key={`note:${comment.id}`} flexDirection="row" gap={1}>
+  return (
+    <Box key={noteKeyOf(comment.id)} flexDirection="row" gap={1}>
       <Text color="#e0af68" wrap="truncate-end">
         ▍ {comment.text}
       </Text>
       <Button
-        key={`drop:${comment.id}`}
+        key={dropKeyOf(comment.id)}
         plain
         dimColor
         label="✕"
-        onPress={() => props.onRemove(comment.id)}
+        onPress={() => onRemove(comment.id)}
       />
     </Box>
-  ))
+  )
 }

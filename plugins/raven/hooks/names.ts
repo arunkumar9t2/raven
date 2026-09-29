@@ -9,7 +9,9 @@ export const COMMAND_DESCRIPTION = 'Toggle the Raven preview pane (diff, docs, r
 
 export const DIFF_PANE = { id: NAME, title: 'Diff' } as const
 export const DOC_PANE = { id: `${NAME}-doc`, title: 'Doc' } as const
-export const PANE_IDS: readonly string[] = [DIFF_PANE.id, DOC_PANE.id]
+export const TREE_PANE = { id: `${NAME}-files`, title: 'Files' } as const
+export const TASKS_PANE = { id: `${NAME}-tasks`, title: 'Tasks' } as const
+export const PANE_IDS: readonly string[] = [DIFF_PANE.id, DOC_PANE.id, TREE_PANE.id, TASKS_PANE.id]
 
 /** The short name `$.tool.register` takes; the model calls it as `mcp__<plugin>__show`. */
 export const TOOL_NAME = 'show'

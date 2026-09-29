@@ -4,6 +4,8 @@ import { reviewTextOf } from '../review/comments'
 import { createReview } from '../review/review'
 import { createDiffView } from '../views/diff-view'
 import { createDocView, type Doc } from '../views/doc-view'
+import { createTasksView } from '../views/tasks-view'
+import { createTreeView } from '../views/tree-view'
 import { type Directive, directiveOf } from './directive'
 import type { Host } from './host'
 import { type Action, actionsOf, type ToolEvent } from './triggers'
@@ -37,11 +39,14 @@ export function createRaven(host: Host, now: () => number): Raven {
     focus: key => void focusIn(diff, key),
   })
   const doc = createDocView(host)
-  const views: readonly View[] = [diff, doc]
+  const tree = createTreeView(host, { open: path => void showDoc({ kind: 'file', path }) })
+  const tasksView = createTasksView(host)
+  const views: readonly View[] = [diff, doc, tree, tasksView]
 
   const open = new Set<string>()
   let refreshTimer: Timer | null = null
   let hasAutoOpened = false
+  let hasOpenedTasks = false
 
   const takeReviewText = () => reviewTextOf(review.take())
 
@@ -88,13 +93,15 @@ export function createRaven(host: Host, now: () => number): Raven {
     cancelRefresh()
     refreshTimer = host.after(REFRESH_DEBOUNCE_MS, () => {
       refreshTimer = null
-      void diff.refresh()
+      if (open.has(diff.pane.id)) void diff.refresh()
+      if (open.has(tree.pane.id)) void tree.refresh()
     })
   }
 
   async function showDiff(path?: string) {
     cancelRefresh()
     await diff.refresh()
+    if (open.has(tree.pane.id)) void tree.refresh()
     if (path) diff.reveal(path)
     return show(diff)
   }
@@ -102,6 +109,11 @@ export function createRaven(host: Host, now: () => number): Raven {
   async function showDoc(shown: Doc) {
     await doc.show(shown)
     return show(doc)
+  }
+
+  async function showTree() {
+    await tree.refresh()
+    return show(tree)
   }
 
   const shownText = (isShown: boolean, what: string) =>
@@ -139,7 +151,7 @@ export function createRaven(host: Host, now: () => number): Raven {
   async function runAction(action: Action): Promise<string | undefined> {
     switch (action.kind) {
       case 'refresh-diff':
-        if (open.has(diff.pane.id)) scheduleRefresh()
+        if (open.has(diff.pane.id) || open.has(tree.pane.id)) scheduleRefresh()
         return undefined
       case 'main-loop-edit':
         if (!hasAutoOpened) {
@@ -155,6 +167,14 @@ export function createRaven(host: Host, now: () => number): Raven {
         return undefined
       case 'directive':
         return runDirective(action.directive)
+      case 'tasks': {
+        const changed = tasksView.apply(action.tool, action.input, action.result)
+        if (changed && !hasOpenedTasks && tasksView.hasTasks()) {
+          hasOpenedTasks = true
+          if (open.size === 0) await show(tasksView)
+        }
+        return undefined
+      }
     }
   }
 
@@ -164,7 +184,8 @@ export function createRaven(host: Host, now: () => number): Raven {
       await hide(view)
       return `${name} hidden`
     }
-    const isShown = view === diff ? await showDiff() : await show(view)
+    const isShown =
+      view === diff ? await showDiff() : view === tree ? await showTree() : await show(view)
     return isShown ? `${name} shown` : NARROW_TEXT
   }
 

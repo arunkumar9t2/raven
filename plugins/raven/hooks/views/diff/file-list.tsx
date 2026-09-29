@@ -14,7 +14,7 @@ export type FileListProps = {
   onSelect: (path: string) => void
 }
 
-/** The list's row cap; `diff-view.tsx` mirrors this in its fixed-row count. */
+/** The list's row cap; `diff-view.tsx` imports it to size the fixed rows above the scrolling body. */
 export const MAX_ROWS = 8
 
 /**

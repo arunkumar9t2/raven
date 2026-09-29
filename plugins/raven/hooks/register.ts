@@ -135,6 +135,7 @@ export function register(on: On) {
       isLanded,
       agentId: e.agentId,
       stdout: typeof output.stdout === 'string' ? output.stdout : undefined,
+      result: isLanded ? result.result : undefined,
     }
 
     const ack = await raven.afterTool(event).catch(() => undefined)

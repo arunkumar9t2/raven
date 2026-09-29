@@ -45,6 +45,27 @@ describe('blocksOf', () => {
       commentBoxKeyOf({ path: file.path }),
       STATUS_KEY,
     ])
+    expect(blocks[0]).toMatchObject({ item: { kind: 'title', file } })
+    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Loading…' } })
+  })
+
+  test('a comment box block carries its anchor', () => {
+    const blocks = blocksOf(file, [hunkA], [], null)
+    const box = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
+    expect(box).toMatchObject({ item: { kind: 'comment-box', anchor: { path: file.path } } })
+  })
+
+  test('a note block carries its comment', () => {
+    const comment = commentOf({ id: 'n1' })
+    const blocks = blocksOf(file, [hunkA], [comment], null)
+    const noteBlock = blocks.find(b => b.key === noteKeyOf('n1'))
+    expect(noteBlock).toMatchObject({ item: { kind: 'note', comment } })
+  })
+
+  test('a gap block carries the gap kind', () => {
+    const blocks = blocksOf(file, [hunkA, hunkB], [], null)
+    const gap = blocks.find(b => b.key === 'gap:1')
+    expect(gap).toMatchObject({ item: { kind: 'gap' } })
   })
 
   test('order: title, file comment box, then each hunk with its own comment box, gap between', () => {
@@ -58,6 +79,20 @@ describe('blocksOf', () => {
       'hunk:1:@@ -10,1 +10,1 @@',
       commentBoxKeyOf({ path: file.path, hunk: hunkB.header }),
     ])
+  })
+
+  test('order by item kind mirrors the key order, and exactly one gap sits between two hunks', () => {
+    const blocks = blocksOf(file, [hunkA, hunkB], [], null)
+    expect(blocks.map(b => (b.kind === 'hunk' ? 'hunk' : b.item.kind))).toEqual([
+      'title',
+      'comment-box',
+      'hunk',
+      'comment-box',
+      'gap',
+      'hunk',
+      'comment-box',
+    ])
+    expect(blocks.filter(b => b.kind === 'fixed' && b.item.kind === 'gap')).toHaveLength(1)
   })
 
   test('a note per comment adds one fixed row each, at the right anchor', () => {
@@ -93,6 +128,13 @@ describe('blocksOf', () => {
     expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + 1 + 1 + 2 + 1)
   })
 
+  test('row total with a note and an active compose box together', () => {
+    const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
+    const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
+    // title(1) + filebox(1) + hunkA(3 lines) + note(1) + composebox(2)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 2)
+  })
+
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
     const blocks = blocksOf(file, [], [], null)
     expect(blocks.map(b => b.key)).toEqual([
@@ -100,5 +142,11 @@ describe('blocksOf', () => {
       commentBoxKeyOf({ path: file.path }),
       STATUS_KEY,
     ])
+    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'No textual changes' } })
+  })
+
+  test('a binary file with no hunks gets a "Binary file" status row', () => {
+    const blocks = blocksOf({ ...file, isBinary: true }, [], [], null)
+    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Binary file' } })
   })
 })

@@ -9,13 +9,21 @@ import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
 import { loadChanges, loadHunks } from '../git/load'
 import { DIFF_PANE } from '../names'
-import { commentsOn } from '../review/comments'
+import type { Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { blocksOf, commentBoxKeyOf, noteKeyOf, STATUS_KEY, TITLE_KEY } from './diff/blocks'
-import { type Anchor, commentBox, notes } from './diff/comment-box'
+import { type Anchor, inputKeyOf } from './diff/anchor'
+import { type BodyItem, blocksOf } from './diff/blocks'
+import { commentBox, note } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
-import { clampTop, contentRowsOf, sliceHunk, windowOf } from './diff/layout'
+import {
+  type Block,
+  clampTop,
+  contentRowsOf,
+  type Placed,
+  sliceHunk,
+  windowOf,
+} from './diff/layout'
 
 const HEADER_ROWS = 1
 const RULE_ROWS = 1
@@ -60,8 +68,18 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     top: 0,
   }
 
-  // The body rows the most recent render was given, so `scroll` can clamp without a render.
-  let lastRows = 0
+  // The body rows the most recent render computed, so `scroll` can clamp without recomputing it.
+  let lastBodyRows = 0
+
+  // The last blocksOf() result, valid while its inputs are reference-equal to these.
+  let cache: {
+    file: ChangedFile
+    hunks: readonly Hunk[] | undefined
+    comments: Comments
+    composing: Anchor | null
+    blocks: Block<BodyItem>[]
+    contentRows: number
+  } | null = null
 
   const update = (patch: Partial<Model>) => {
     model = { ...model, ...patch }
@@ -107,8 +125,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     void loadSelected()
   }
 
-  const inputKeyOf = (anchor: Anchor) => `input:${anchor.path}|${anchor.hunk ?? ''}`
-
   function startComposing(anchor: Anchor) {
     update({ composing: anchor })
     actions.focus(inputKeyOf(anchor))
@@ -119,90 +135,95 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     update({ composing: null })
   }
 
-  function blocksForSelected() {
+  /** The selected file's blocks and their total row count, cached while its inputs are unchanged. */
+  function blocksForSelected(): {
+    file: ChangedFile | null
+    blocks: Block<BodyItem>[]
+    contentRows: number
+  } {
     const file = selectedFile()
-    if (!file) return { file: null, blocks: [] }
-    return {
-      file,
-      blocks: blocksOf(file, model.hunks.get(file.path), review.comments(), model.composing),
+    if (!file) {
+      cache = null
+      return { file: null, blocks: [], contentRows: 0 }
+    }
+
+    const hunks = model.hunks.get(file.path)
+    const comments = review.comments()
+
+    if (
+      cache &&
+      cache.file === file &&
+      cache.hunks === hunks &&
+      cache.comments === comments &&
+      cache.composing === model.composing
+    ) {
+      return { file, blocks: cache.blocks, contentRows: cache.contentRows }
+    }
+
+    const blocks = blocksOf(file, hunks, comments, model.composing)
+    const contentRows = contentRowsOf(blocks)
+    cache = { file, hunks, comments, composing: model.composing, blocks, contentRows }
+    return { file, blocks, contentRows }
+  }
+
+  /** One fixed row's element, by its payload kind; `null` renders as a blank row (e.g. a gap). */
+  function bodyRowOf(kit: Kit, item: BodyItem): RenderElement | null {
+    const { Text } = kit.ui
+    switch (item.kind) {
+      case 'title':
+        return <Text bold>{item.file.path}</Text>
+      case 'status':
+        return <Text dimColor>{item.text}</Text>
+      case 'gap':
+        return null
+      case 'note':
+        return note(kit, item.comment, id => review.remove(id))
+      case 'comment-box':
+        return commentBox(kit, {
+          anchor: item.anchor,
+          composing: model.composing,
+          inputKey: inputKeyOf(item.anchor),
+          onStart: startComposing,
+          onSubmit: text => submitComment(item.anchor, text),
+          onCancel: () => update({ composing: null }),
+        })
     }
   }
 
-  /** The fixed-row elements a render places into the window, keyed exactly as `blocksOf` keys them. */
-  function elementsOf(kit: Kit, file: ChangedFile): Map<string, RenderElement> {
-    const { Text } = kit.ui
-    const elements = new Map<string, RenderElement>()
+  function placedRowOf(kit: Kit, placed: Placed<BodyItem>, file: ChangedFile): RenderElement {
+    const { Box, Code } = kit.ui
+    const { block } = placed
 
-    const addAnchor = (anchor: Anchor) => {
-      const comments = commentsOn(review.comments(), anchor.path, anchor.hunk)
-      const rows = notes(kit, {
-        anchor,
-        comments: review.comments(),
-        onRemove: id => review.remove(id),
-      })
-      comments.forEach((comment, i) => {
-        elements.set(noteKeyOf(comment.id), rows[i] as RenderElement)
-      })
-      elements.set(
-        commentBoxKeyOf(anchor),
-        commentBox(kit, {
-          anchor,
-          composing: model.composing,
-          inputKey: inputKeyOf(anchor),
-          onStart: startComposing,
-          onSubmit: text => submitComment(anchor, text),
-          onCancel: () => update({ composing: null }),
-        }),
+    if (block.kind === 'hunk') {
+      return (
+        <Code
+          key={block.key}
+          source={sliceHunk(block.hunk, placed.from, placed.to).text}
+          format="diff"
+          path={file.path}
+          wrap="truncate-end"
+        />
       )
     }
 
-    elements.set(
-      TITLE_KEY,
-      <Text bold key={TITLE_KEY}>
-        {file.path}
-      </Text>,
-    )
-    addAnchor({ path: file.path })
-
-    const hunks = model.hunks.get(file.path)
-    if (hunks === undefined) {
-      elements.set(
-        STATUS_KEY,
-        <Text dimColor key={STATUS_KEY}>
-          Loading…
-        </Text>,
-      )
-    } else if (hunks.length === 0) {
-      elements.set(
-        STATUS_KEY,
-        <Text dimColor key={STATUS_KEY}>
-          {file.isBinary ? 'Binary file' : 'No textual changes'}
-        </Text>,
-      )
-    } else {
-      for (const hunk of hunks) addAnchor({ path: file.path, hunk: hunk.header })
-    }
-
-    return elements
+    return <Box key={block.key}>{bodyRowOf(kit, block.item)}</Box>
   }
 
   function render(kit: Kit): RenderElement {
-    const { Box, Text, Code } = kit.ui
+    const { Box, Text } = kit.ui
     const { repository } = model
 
     if (!model.isLoaded) return <Text dimColor>Reading the repository…</Text>
     if (!repository) return <Text dimColor>Not in a git repository.</Text>
     if (repository.files.length === 0) return <Text dimColor>No uncommitted changes.</Text>
 
-    const file = selectedFile()
-    const { blocks } = blocksForSelected()
+    const { file, blocks, contentRows } = blocksForSelected()
 
-    lastRows = kit.rows
     const bodyRows = Math.max(0, kit.rows - fixedRowsOf(repository.files.length))
-    const top = clampTop(model.top, contentRowsOf(blocks), bodyRows)
+    lastBodyRows = bodyRows
+    const top = clampTop(model.top, contentRows, bodyRows)
     if (top !== model.top) model = { ...model, top }
 
-    const elements = file ? elementsOf(kit, file) : new Map<string, RenderElement>()
     const placed = file ? windowOf(blocks, top, bodyRows) : []
 
     return (
@@ -215,28 +236,15 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         })}
         {fileList(kit, { files: repository.files, selected: model.selected, onSelect: select })}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
-        {placed.map(p =>
-          p.block.kind === 'hunk' ? (
-            <Code
-              key={p.block.key}
-              source={sliceHunk(p.block.hunk, p.from, p.to).text}
-              format="diff"
-              path={(file as ChangedFile).path}
-              wrap="truncate-end"
-            />
-          ) : (
-            <Box key={p.block.key}>{elements.get(p.block.key)}</Box>
-          ),
-        )}
+        {placed.map(p => placedRowOf(kit, p, file as ChangedFile))}
       </Box>
     )
   }
 
   function scroll(by: number): boolean {
-    const { file, blocks } = blocksForSelected()
+    const { file, contentRows } = blocksForSelected()
     if (!file) return false
-    const bodyRows = Math.max(0, lastRows - fixedRowsOf(model.repository?.files.length ?? 0))
-    const contentRows = contentRowsOf(blocks)
+    const bodyRows = lastBodyRows
     const size = Math.abs(by)
     // A wheel tick or arrow asks for a row or two; scale it to a readable step, as the terminal's
     // own scrollable views do. A page or Home/End key already asks for a step this size or more.
