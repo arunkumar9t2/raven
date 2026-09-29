@@ -39,6 +39,7 @@ M0–M5 are done and verified. Nothing is in flight: pick from "Next ideas" only
 - 2026-09-29 The CLI lives in `plugins/raven/cli/`: an install copies only the plugin directory, so a shim reaching outside it exits 127 for everyone else. Its bun tests are `*.spec.ts` so `claude plugin test` does not try to load them.
 - 2026-09-29 The model reads a Bash call's result from `result.stdout`, not the hook's `text`: the directive ack replaces the CLI's lines in `stdout` (verified live: the transcript's tool_result is the ack).
 - 2026-09-29 Hidden review context verified live (delivered as a system-reminder on a composer prompt). Comments persist per repository in `$.store` until sent, so a restarted session re-sends old unsent ones.
+- 2026-09-29 Loaded in all of the user's local sessions via `CLAUDE_CODE_PLUGIN_DIRS` (settings `env`): read live from disk and hot-reloaded, unlike a directory marketplace, whose installs are served from a cache copy.
 
 ## Next ideas
 

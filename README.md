@@ -28,6 +28,14 @@ bun install && bun run build
 CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ./plugins/raven
 ```
 
+Or load it in every session, live from this checkout (saves hot-reload), through the `env` block of
+`~/.claude/settings.json`:
+
+```json
+"CLAUDE_CODE_ENABLE_FUNCTION_HOOKS": "1",
+"CLAUDE_CODE_PLUGIN_DIRS": "/path/to/claude-mod/plugins/raven"
+```
+
 Then `/raven` (diff), `/raven doc`, `/raven send`. To let Claude run the CLI without a permission
 prompt, allow `Bash(raven:*)` in your settings.
 
