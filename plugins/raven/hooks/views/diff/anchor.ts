@@ -14,8 +14,14 @@ export const commentButtonKeyOf = (anchor: Anchor) => `comment:${anchorKeyOf(anc
 export const cancelKeyOf = (anchor: Anchor) => `cancel:${anchorKeyOf(anchor)}`
 /** The element key of the compose Input, focused when composing starts. */
 export const inputKeyOf = (anchor: Anchor) => `input:${anchorKeyOf(anchor)}`
+/** The element key of the compose box's line-picker Select. */
+export const selectKeyOf = (anchor: Anchor) => `select:${anchorKeyOf(anchor)}`
 
 /** The block key of a comment's note row, keyed by comment id so removal keeps other rows put. */
 export const noteKeyOf = (id: string) => `note:${id}`
 /** The element key of a note's remove button. */
 export const dropKeyOf = (id: string) => `drop:${id}`
+/** The element key of an open note's resend button. */
+export const resendKeyOf = (id: string) => `resend:${id}`
+/** The block key of an anchor's collapsed "N addressed" row. */
+export const addressedKeyOf = (anchor: Anchor) => `addressed:${anchorKeyOf(anchor)}`

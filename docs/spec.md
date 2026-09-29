@@ -74,11 +74,15 @@ trigger is one entry, not a change to `register`.
 
 ### Doc view (`raven-doc`)
 
-- Renders one document: a markdown file, a non-markdown file (highlighted by its path), or inline
-  markdown from a `note` directive.
+- Renders one document: a markdown file, an image (`.png`, `.jpg`/`.jpeg`, `.gif`, `.webp`) as an
+  `Image` element sized to fit the pane's width, a non-markdown file (highlighted by its path), or
+  inline markdown from a `note` directive. A surface without `Image` shows the image's path as dim
+  text instead.
 - Keeps a short history of shown documents, selectable from the pane.
 - Opens itself when Claude writes or edits a markdown file under a watched plan path:
   `docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`, `~/.claude/plans/`.
+- A relative or `file:` link in a shown file's markdown, resolved against the file's own directory,
+  opens the target in the Doc view; an `http(s):` link keeps the surface's own behaviour.
 
 ### Files view (`raven-files`)
 
@@ -102,12 +106,27 @@ trigger is one entry, not a change to `register`.
 
 ## Review comments
 
-- The selected file and each of its hunks carry a comment control; submitting its input records a
-  comment `{ path, hunk header?, text }`, shown under what it anchors to, each removable.
+- The selected file and each of its hunks carry a comment control. On a hunk, composing shows a
+  line picker — "whole hunk" plus one option per changed line (`Lnn +`/`-` its text, truncated to
+  the pane) — alongside the text input; the chosen line rides with the comment as
+  `{ path, hunk header?, line?: { number, side, text }, text }`. A line-anchored note shows `Lnn`
+  before its text.
+- A comment anchored to a hunk header no longer among the file's current hunks (Claude edited past
+  it) renders in an "Outdated" group after the hunks, under a dim title row; it stays removable and
+  sendable.
+- A comment's status is `pending` (normal), `sent` (dim, `⧗`, once it has ridden a prompt),
+  `addressed` (collapsed with every other addressed comment at its anchor into one dim
+  "✓ N addressed" row), or `open` (`↻`, with a plain `resend` button) when a turn finished without
+  naming it. The header's send button counts pending comments.
 - The next prompt the person sends (typed, or through Remote Control) carries every pending comment
-  as hidden context, formatted as a review; they are then cleared. The header's
-  **Send N comments to Claude** button (or `/raven send`) instead submits the review as a visible
-  prompt.
+  as hidden context, formatted as a review, and marks them sent rather than clearing them. The
+  header's **Send N comments to Claude** button (or `/raven send`) instead submits the review as a
+  visible prompt.
+- Once the main loop's turn finishes answering with comments sent, Raven forks the conversation
+  once with a prompt listing each sent comment (`[id] path Lnn: text`) asking for a JSON array of
+  the ids it addressed; a named id becomes `addressed`, every other sent comment becomes `open`. A
+  null or unparseable reply leaves them `sent`. Only one fork runs per sent batch, and an agent's
+  own turn (not the main loop's) never forks.
 - `raven comments` returns the pending comments to Claude as the tool result, which delivers them.
 - Comments live in memory for the session and in `$.store` keyed by repository, never in the working
   tree.

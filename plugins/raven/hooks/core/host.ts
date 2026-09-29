@@ -23,4 +23,6 @@ export type Host = {
   submitPrompt: (text: string) => Promise<void>
   /** The session's working directory, absolute; relative tool paths resolve against it. */
   cwd: () => Promise<string>
+  /** Forks the main thread's last turn with `prompt`; the reply's text, or null when unanswered. */
+  fork: (prompt: string) => Promise<string | null>
 }

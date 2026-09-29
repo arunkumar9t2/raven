@@ -19,6 +19,7 @@ function fakeHost(): Host {
     },
     submitPrompt: async () => {},
     cwd: async () => '/repo',
+    fork: async () => null,
   }
 }
 
