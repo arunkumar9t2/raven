@@ -530,9 +530,26 @@ describe('the /raven command output row', () => {
     world(on, '')
 
     await $.session.start(SESSION)
+    // Opens, then hides, so `raven` has actually recorded this exact text as 'hidden'.
+    await $.command.run(ravenCommand('diff'))
+    await $.command.run(ravenCommand('diff'))
 
     const ui = await mountCommandOutput($)
     expect(await ui.find({ text: '◇ Raven diff hidden' })).toBeDefined()
+  })
+
+  test('a row whose text no command call in this session produced falls back to the neutral glyph', async ($, on) => {
+    world(on, '')
+
+    await $.session.start(SESSION)
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'CommandOutput',
+      props: { ...COMMAND_OUTPUT_PROPS, text: 'a stale row from a past session' },
+    })
+    expect(await ui.find({ text: '◆ a stale row from a past session' })).toBeDefined()
   })
 })
 

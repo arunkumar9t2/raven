@@ -82,12 +82,11 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
 
   const sourceController = createSourceController(host)
 
-  // The body rows the most recent render computed, so `scroll` can clamp without recomputing it.
+  // The body rows, selected file and content-row count the most recent render computed, so
+  // `scroll` (which has no kit) can clamp without recomputing them.
   let lastBodyRows = 0
-
-  // The capabilities the most recent render read off `kit.ui`, so `scroll` (which has no kit) can
-  // recompute the same blocks; fixed for the drawing's lifetime since a surface's table doesn't change.
-  let lastCapabilities: Capabilities = { canType: true, canPick: true }
+  let lastFile: ChangedFile | null = null
+  let lastContentRows = 0
 
   // The last blocksOf() result, valid while its inputs are reference-equal to these.
   let cache: {
@@ -401,8 +400,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       return <Text dimColor>{text}</Text>
     }
 
-    lastCapabilities = capabilitiesOf(kit.ui)
-    const { file, blocks, contentRows } = blocksForSelected(lastCapabilities)
+    const { file, blocks, contentRows } = blocksForSelected(capabilitiesOf(kit.ui))
+    lastFile = file
+    lastContentRows = contentRows
 
     const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS))
     lastBodyRows = bodyRows
@@ -441,14 +441,13 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   function scroll(by: number): boolean {
-    const { file, contentRows } = blocksForSelected(lastCapabilities)
-    if (!file) return false
+    if (!lastFile) return false
     const bodyRows = lastBodyRows
     const size = Math.abs(by)
     // A wheel tick or arrow asks for a row or two; scale it to a readable step, as the terminal's
     // own scrollable views do. A page or Home/End key already asks for a step this size or more.
     const step = size >= bodyRows ? size : size * WHEEL_ROWS
-    const top = clampTop(model.top + Math.sign(by) * step, contentRows, bodyRows)
+    const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows)
     if (top !== model.top) update({ top })
     return true
   }

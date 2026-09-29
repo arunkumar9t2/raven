@@ -4,11 +4,12 @@
 import type { RenderElement } from 'claude-code'
 
 import type { Host } from '../core/host'
-import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
+import { capabilitiesOf, ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { baseName } from './icons'
 import { markdownChunksOf } from './markdown-chunks'
+import { selectButtons } from './select-buttons'
 
 /** A document the pane can show: a file read from disk, or markdown handed over inline. */
 export type Doc =
@@ -117,23 +118,15 @@ export function createDocView(host: Host): DocView {
 
   /** The last 3 docs as plain buttons, for a surface with no `Select` to pick a history entry. */
   function historyButtons(kit: Kit, shown: Shown): RenderElement {
-    const { Box, Button } = kit.ui
-    return (
-      <Box key="history" flexDirection="row" gap={1}>
-        {history.slice(0, 3).map(each => (
-          <Button
-            key={`history:${each.key}`}
-            plain
-            dimColor={each.key !== shown.key}
-            label={each.title}
-            onPress={() => {
-              current = each.key
-              host.redraw()
-            }}
-          />
-        ))}
-      </Box>
-    )
+    return selectButtons(kit, {
+      key: 'history',
+      options: history.slice(0, 3).map(each => ({ value: each.key, label: each.title })),
+      value: shown.key,
+      onSelect: value => {
+        current = value
+        host.redraw()
+      },
+    })
   }
 
   function render(kit: Kit): RenderElement {
@@ -144,7 +137,7 @@ export function createDocView(host: Host): DocView {
       return <Text dimColor>Nothing shown yet. Plans and docs Claude writes open here.</Text>
 
     const picker =
-      history.length <= 1 ? null : Select ? (
+      history.length <= 1 ? null : capabilitiesOf(kit.ui).canPick && Select ? (
         <Select
           key="history"
           label="Documents"

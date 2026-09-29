@@ -1,20 +1,23 @@
 /** The text `/raven` answers when the terminal is too narrow to dock the pane. */
 export const NARROW_TEXT = 'Widen the terminal to dock the Raven pane'
-const FAILED_PREFIX = 'Raven failed:'
-const USAGE_PREFIX = 'Usage: /raven'
 
 /**
- * Which glyph leads a `/raven` command's output row: `!` for a narrow terminal, a thrown error or
- * usage help; `◇` for a pane hidden or nothing to send; `◆` for a pane shown or the review sent.
+ * What a `/raven` command run resolved to. `info` is the fallback for a `CommandOutput` row whose
+ * text no `command()` call in this session produced (a replayed transcript, a reloaded module).
  */
-export function commandGlyphOf(text: string, isErrored: boolean): string {
-  if (
-    isErrored ||
-    text === NARROW_TEXT ||
-    text.startsWith(FAILED_PREFIX) ||
-    text.startsWith(USAGE_PREFIX)
-  )
-    return '!'
-  if (text.endsWith(' hidden') || text === 'No review comments to send') return '◇'
-  return '◆'
+export type CommandKind = 'shown' | 'hidden' | 'narrow' | 'error' | 'info'
+
+export type CommandResult = { kind: CommandKind; text: string }
+
+const GLYPHS: Record<CommandKind, string> = {
+  shown: '◆',
+  hidden: '◇',
+  narrow: '!',
+  error: '!',
+  info: '◆',
+}
+
+/** Which glyph leads a `/raven` command's output row, by its result's kind. */
+export function commandGlyphOf(kind: CommandKind): string {
+  return GLYPHS[kind]
 }

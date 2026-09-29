@@ -24,7 +24,7 @@ export type Action =
   | { kind: 'directive'; directive: Directive }
   | { kind: 'tasks'; tool: string; input: Readonly<Record<string, unknown>>; result?: unknown }
 
-export type Trigger = (event: ToolEvent, settings: RavenSettings) => readonly Action[]
+export type Trigger = (event: ToolEvent) => readonly Action[]
 
 const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'MultiEdit']
 const SHELL_TOOLS = ['Bash', 'PowerShell']
@@ -36,10 +36,22 @@ const WATCHED_DOC_PATTERNS = [
   /\/\.claude\/plans\/[^/]+\.md$/,
 ]
 
-/** True when `fragment` occurs in `path` as a `/`-bounded segment, not merely a substring. */
-const containsFragment = (path: string, fragment: string) => {
-  const bounded = fragment.startsWith('/') ? fragment : `/${fragment}`
-  return `/${path}`.includes(bounded)
+/** `fragment` split into its non-empty `/`-separated segments. */
+const segmentsOf = (value: string) => value.split('/').filter(segment => segment !== '')
+
+/**
+ * True when `fragment`'s segments occur contiguously among `path`'s, so a single-segment fragment
+ * like `docs` never matches a longer segment like `docsystem`, while a multi-segment fragment like
+ * `notes/drafts` still matches across the two segments it names.
+ */
+const containsFragment = (path: string, fragment: string): boolean => {
+  const needle = segmentsOf(fragment)
+  if (needle.length === 0) return false
+  const haystack = path.split('/')
+  for (let start = 0; start + needle.length <= haystack.length; start++) {
+    if (needle.every((segment, i) => haystack[start + i] === segment)) return true
+  }
+  return false
 }
 
 const isWatchedDocPath = (path: string, watchedPaths: readonly string[]) =>
@@ -66,12 +78,12 @@ const onEdit: Trigger = event => {
 const onShell: Trigger = event =>
   SHELL_TOOLS.includes(event.tool) ? [{ kind: 'refresh-diff' }] : []
 
-const onWatchedDoc: Trigger = (event, settings) => {
-  const path = editedPathOf(event)
-  return path !== null && isWatchedDocPath(path, settings.watchedPaths)
-    ? [{ kind: 'show-doc', path }]
-    : []
-}
+const onWatchedDocOf =
+  (watchedPaths: readonly string[]): Trigger =>
+  event => {
+    const path = editedPathOf(event)
+    return path !== null && isWatchedDocPath(path, watchedPaths) ? [{ kind: 'show-doc', path }] : []
+  }
 
 const onDirective: Trigger = event =>
   SHELL_TOOLS.includes(event.tool) && event.stdout
@@ -83,8 +95,14 @@ const onTasks: Trigger = event =>
     ? [{ kind: 'tasks', tool: event.tool, input: event.input, result: event.result }]
     : []
 
-/** Every trigger, in the order their actions run. Adding a reaction is one entry here. */
-export const TRIGGERS: readonly Trigger[] = [onEdit, onShell, onWatchedDoc, onDirective, onTasks]
+/** Every trigger, built once per session from its settings; only `onWatchedDoc` reads them. */
+export const triggersOf = (settings: RavenSettings): readonly Trigger[] => [
+  onEdit,
+  onShell,
+  onWatchedDocOf(settings.watchedPaths),
+  onDirective,
+  onTasks,
+]
 
-export const actionsOf = (event: ToolEvent, settings: RavenSettings, triggers = TRIGGERS) =>
-  triggers.flatMap(trigger => trigger(event, settings))
+export const actionsOf = (event: ToolEvent, triggers: readonly Trigger[]) =>
+  triggers.flatMap(trigger => trigger(event))

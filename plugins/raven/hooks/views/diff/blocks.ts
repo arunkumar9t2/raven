@@ -1,4 +1,4 @@
-import type { Capabilities } from '../../core/view'
+import { type Capabilities, FULL_CAPABILITIES } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import type { Hunk } from '../../git/hunks'
 import type { Comment, Comments } from '../../review/comments'
@@ -30,9 +30,6 @@ export function fixedRowsOf(fileCount: number, maxListRows: number): number {
 const COMPOSE_ROWS = 2
 /** The compose box's rows on a hunk, where a line-picker Select draws above the Input. */
 const COMPOSE_ROWS_WITH_PICKER = COMPOSE_ROWS + 1
-
-/** Every surface has `Input` and `Select`, so a caller can skip `capabilities`. */
-const FULL_CAPABILITIES: Capabilities = { canType: true, canPick: true }
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =

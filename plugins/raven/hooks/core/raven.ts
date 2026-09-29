@@ -1,28 +1,27 @@
 import type { RenderElement, Timer, TurnCompleteInput } from 'claude-code'
-import { outputOf } from '../git/load'
 import { DIFF_PANEL_WARNING } from '../names'
 import { addressedIdsOf, reviewTextOf } from '../review/comments'
 import { resolvePromptOf } from '../review/resolve'
 import { createReview } from '../review/review'
-import { commandOutputRow, band as renderBand } from '../views/band'
 import { createDiffView } from '../views/diff-view'
 import { createDocView, type Doc } from '../views/doc-view'
 import { createTasksView } from '../views/tasks-view'
 import { createTreeView } from '../views/tree-view'
 import { shouldAutoOpen } from './auto-open'
+import { createBandState } from './band-state'
 import { coversRavenDock } from './checkpointing'
-import { commandGlyphOf, NARROW_TEXT } from './command-glyph'
+import { type CommandKind, type CommandResult, NARROW_TEXT } from './command-glyph'
 import { type Directive, directiveOf } from './directive'
 import type { Host } from './host'
 import type { RavenSettings } from './settings'
-import { type Action, actionsOf, type ToolEvent } from './triggers'
+import { type Action, actionsOf, type ToolEvent, triggersOf } from './triggers'
 import type { Kit, View } from './view'
 
 /** The engine-facing surface of Raven; `register` forwards engine events here and nothing else. */
 export type Raven = {
   /** The `/raven` argument hint: each view's subcommand, then `send`. */
   argumentHint: string
-  command: (args: string) => Promise<string>
+  command: (args: string) => Promise<CommandResult>
   /** Reacts to a finished tool call; returns replacement result text for the model, if any. */
   afterTool: (event: ToolEvent) => Promise<string | undefined>
   /** Runs the `show` tool's input as a directive; throws on input `directiveOf` rejects. */
@@ -42,11 +41,8 @@ export type Raven = {
    * pending, or a Raven pane is already visible (not just open behind another tab).
    */
   band: (kit: Kit, hasSurvey: boolean) => Promise<RenderElement | null>
-  /** The `/raven` command's `CommandOutput` row: its reply text behind a leading glyph. */
-  commandOutput: (
-    kit: Pick<Kit, 'ui'>,
-    props: { text: string; isErrored: boolean },
-  ) => RenderElement
+  /** The kind a past `command()` call resolved `text` to; `'info'` when no call produced it. */
+  resultKindOf: (text: string) => CommandKind
 }
 
 const REFRESH_DEBOUNCE_MS = 300
@@ -76,16 +72,21 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   let hasWarnedDiffPanel = false
   // Guards the fork below from re-entering itself and caps it at one per sent batch.
   let isResolving = false
-  // Set whenever a doc/plan is shown or reloaded while its pane is not on screen; cleared once
-  // the doc pane is actually drawn, so the band flags only what nobody has seen yet.
-  let isDocUpdated = false
-  // Every path ever shown in the doc view, so a `reload-doc` (fired for any edited file) only
-  // flags the band for one the person actually opened here before.
-  const shownDocPaths = new Set<string>()
-  let hasLoadedReview = false
-  // The last width any `ui.render` reported; undefined until one has, which the auto-open gate
-  // reads as "unknown" and opens anyway rather than staying silent by default.
-  let lastViewportColumns: number | undefined
+  const triggers = triggersOf(settings)
+  // The kind the most recent `command()` call resolved each reply text to, for a `CommandOutput`
+  // row the engine asks Raven to redraw without re-running the command.
+  const resultKindByText = new Map<string, CommandKind>()
+
+  const bandState = createBandState(host, review, {
+    openDiff: async () => {
+      await showDiff()
+    },
+    openDoc: async () => {
+      await show(doc)
+    },
+    sendReview,
+    openIds: () => open,
+  })
 
   /**
    * Once per module instance: warns when the built-in diff panel will cover Raven's dock. Never
@@ -182,21 +183,6 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     host.redraw()
   }
 
-  /**
-   * Loads the review once without opening any pane, so the band and status line see comments a
-   * past session left pending. A failure (no repository) is not retried on every call.
-   */
-  async function ensureReviewLoaded(): Promise<void> {
-    if (hasLoadedReview) return
-    hasLoadedReview = true
-    try {
-      const toplevel = outputOf(await host.run(['git', 'rev-parse', '--show-toplevel']))
-      if (toplevel !== null) await review.load(toplevel)
-    } catch (error) {
-      host.debug(`raven: resolving the repository for the review failed: ${String(error)}`)
-    }
-  }
-
   /** The keyboard is the person's: an element can take it only once its pane asked for focus. */
   async function focusIn(view: View, key: string) {
     if (await show(view, true)) {
@@ -225,31 +211,16 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
 
   async function showDoc(shown: Doc) {
     await doc.show(shown)
-    if (shown.kind === 'file') shownDocPaths.add(shown.path)
-    if (!(await host.isShown(doc.pane.id))) {
-      isDocUpdated = true
-      host.redraw()
-    }
+    bandState.noteDocShown(
+      shown.kind === 'file' ? shown.path : undefined,
+      await host.isShown(doc.pane.id),
+    )
     return show(doc)
   }
 
   async function showTree() {
     await tree.refresh({ force: true })
     return show(tree)
-  }
-
-  /** True while some Raven pane is the one the surface shows, not just a tab behind another. */
-  async function isAnyPaneShown(): Promise<boolean> {
-    for (const id of open) {
-      if (await host.isShown(id)) return true
-    }
-    return false
-  }
-
-  /** The band's `open`: the diff while comments are pending, else the doc. */
-  async function openFromBand(): Promise<void> {
-    if (review.pending().length > 0) await showDiff()
-    else await show(doc)
   }
 
   const shownText = (isShown: boolean, what: string) =>
@@ -293,7 +264,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         void warnDiffPanelOnce()
         if (!hasAutoOpened) {
           hasAutoOpened = true
-          if (shouldAutoOpen(settings, lastViewportColumns)) await showDiff()
+          if (shouldAutoOpen(settings, bandState.viewportColumns())) await showDiff()
         }
         return undefined
       case 'show-doc':
@@ -301,10 +272,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         return undefined
       case 'reload-doc':
         await doc.reload(action.path)
-        if (shownDocPaths.has(action.path) && !(await host.isShown(doc.pane.id))) {
-          isDocUpdated = true
-          host.redraw()
-        }
+        bandState.noteDocReloaded(action.path, await host.isShown(doc.pane.id))
         return undefined
       case 'directive':
         return runDirective(action.directive)
@@ -319,26 +287,41 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     }
   }
 
-  async function toggle(view: View): Promise<string> {
+  /** Records `kind` against `text` for a later `resultKindOf`, and returns the pair as-is. */
+  const resultOf = (kind: CommandKind, text: string): CommandResult => {
+    resultKindByText.set(text, kind)
+    return { kind, text }
+  }
+
+  async function toggle(view: View): Promise<CommandResult> {
     const name = `Raven ${view.pane.title.toLowerCase()}`
     if (open.has(view.pane.id) && (await host.isShown(view.pane.id))) {
       await hide(view)
-      return `${name} hidden`
+      return resultOf('hidden', `${name} hidden`)
     }
     const isShown =
       view === diff ? await showDiff() : view === tree ? await showTree() : await show(view)
-    return isShown ? `${name} shown` : NARROW_TEXT
+    return isShown ? resultOf('shown', `${name} shown`) : resultOf('narrow', NARROW_TEXT)
   }
 
   const argumentHint = `[${[...views.map(view => view.subcommand), SEND].join('|')}]`
 
-  async function command(args: string): Promise<string> {
-    await warnDiffPanelOnce()
-    const word = args.trim() || diff.subcommand
-    const view = views.find(each => each.subcommand === word)
-    if (view) return toggle(view)
-    if (word === SEND) return (await sendReview()) ? 'Review sent' : 'No review comments to send'
-    return `Usage: /raven ${argumentHint}`
+  /** Never rejects: a thrown failure becomes an `'error'` result like usage help does. */
+  async function command(args: string): Promise<CommandResult> {
+    try {
+      await warnDiffPanelOnce()
+      const word = args.trim() || diff.subcommand
+      const view = views.find(each => each.subcommand === word)
+      if (view) return toggle(view)
+      if (word === SEND) {
+        return (await sendReview())
+          ? resultOf('shown', 'Review sent')
+          : resultOf('hidden', 'No review comments to send')
+      }
+      return resultOf('error', `Usage: /raven ${argumentHint}`)
+    } catch (error) {
+      return resultOf('error', `Raven failed: ${String(error)}`)
+    }
   }
 
   return {
@@ -346,7 +329,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     command,
     afterTool: async event => {
       const texts: string[] = []
-      for (const action of actionsOf(event, settings)) {
+      for (const action of actionsOf(event, triggers)) {
         const text = await runAction(action)
         if (text !== undefined) texts.push(text)
       }
@@ -369,7 +352,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         open.add(paneId)
         void view.refresh?.().catch(error => host.debug(`raven: refresh failed: ${String(error)}`))
       }
-      if (view === doc) isDocUpdated = false
+      if (view === doc) bandState.noteDocRendered()
       return view.render(kit)
     },
     scroll: (paneId, by) => views.find(view => view.pane.id === paneId)?.scroll?.(by) ?? false,
@@ -377,22 +360,8 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       open.delete(paneId)
       host.redraw()
     },
-    noteViewport: columns => {
-      if (columns !== undefined) lastViewportColumns = columns
-    },
-    band: async (kit, hasSurvey) => {
-      if (hasSurvey || kit.rows < 1) return null
-      await ensureReviewLoaded()
-      const pendingCount = review.pending().length
-      if (pendingCount === 0 && !isDocUpdated) return null
-      if (await isAnyPaneShown()) return null
-      return renderBand(
-        kit,
-        { pendingCount, isDocUpdated },
-        { open: () => void openFromBand(), send: () => void sendReview() },
-      )
-    },
-    commandOutput: (kit, props) =>
-      commandOutputRow(kit, { ...props, glyph: commandGlyphOf(props.text, props.isErrored) }),
+    noteViewport: columns => bandState.noteViewport(columns),
+    band: (kit, hasSurvey) => bandState.band(kit, hasSurvey),
+    resultKindOf: text => resultKindByText.get(text) ?? 'info',
   }
 }

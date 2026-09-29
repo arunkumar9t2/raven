@@ -1,13 +1,15 @@
 import type { On, PluginOptions } from 'claude-code'
 import { isCheckpointing } from './core/checkpointing'
+import { commandGlyphOf } from './core/command-glyph'
 import { DIRECTIVE_OPS, withoutDirectives } from './core/directive'
 import type { Host } from './core/host'
 import { isRecord } from './core/is-record'
 import { createRaven, type Raven } from './core/raven'
 import { settingsOf } from './core/settings'
 import type { ToolEvent } from './core/triggers'
-import type { Ui } from './core/view'
+import type { Kit, Ui } from './core/view'
 import { COMMAND, COMMAND_DESCRIPTION, PANE_IDS, TOOL_NAME, toolNameOf } from './names'
+import { commandOutputRow } from './views/band'
 
 // The plugin's own name is only known once `$` binds, so the tool's full name cannot be a static
 // string here; this matches any plugin's `show` tool as `tool.call`'s matcher must be static.
@@ -48,6 +50,30 @@ export function register(on: On, options: PluginOptions) {
   // Set alongside `raven`, so `afterTool`'s catch below can log without threading `host` through.
   let host: Host | null = null
 
+  /**
+   * Notes the viewport off any `ui.render` event and builds its `Kit` around `resolve` (always
+   * `() => $.ui.resolve(e)` at the call site — the sandbox forbids passing `$` itself), whose `ui`
+   * resolves lazily so a handler whose guard declines to draw (a hidden pane, a band a survey
+   * suppresses) never pays for `$.ui.resolve`.
+   */
+  function kitOf(
+    viewport: { columns?: number } | undefined,
+    resolve: () => unknown,
+    columns: number,
+    rows: number,
+  ): Kit {
+    raven?.noteViewport(viewport?.columns)
+    let cached: Ui | undefined
+    return {
+      get ui() {
+        if (cached === undefined) cached = resolve() as unknown as Ui
+        return cached
+      },
+      columns,
+      rows,
+    }
+  }
+
   on('session.start', async ($, e, next) => {
     const bound: Host = {
       run: (argv, stdin) => $.process.run(argv, stdin === undefined ? undefined : { stdin }),
@@ -59,7 +85,9 @@ export function register(on: On, options: PluginOptions) {
       redraw: () => $.ui.invalidate('ui.render'),
       openPane: async pane => (await $.ui.open(pane)).isPlaced,
       closePane: id => $.ui.close({ id }),
-      isShown: async id => (await $.ui.panes()).some(pane => pane.id === id && pane.isShown),
+      shownPaneIds: async () =>
+        new Set((await $.ui.panes()).filter(pane => pane.isShown).map(pane => pane.id)),
+      isShown: async id => (await bound.shownPaneIds()).has(id),
       focus: async (paneId, key) => {
         await $.ui.focus({ requestId: paneId, key })
       },
@@ -117,27 +145,25 @@ export function register(on: On, options: PluginOptions) {
 
   on('command.run', { command: COMMAND }, async ($, e, next) => {
     if (!raven) return next(e)
-    const text = await raven.command(e.args).catch(error => `Raven failed: ${String(error)}`)
-    return { text }
+    const result = await raven.command(e.args)
+    return { text: result.text }
   })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
-    raven?.noteViewport(e.viewport?.columns)
+    const kit = kitOf(
+      e.viewport,
+      () => $.ui.resolve(e),
+      e.props.bodyColumns,
+      e.props.scroll.bodyRows,
+    )
     if (!raven || !PANE_IDS.includes(e.requestId)) return next(e)
-    const ui = (await $.ui.resolve(e)) as unknown as Ui
-    const drawn = raven.render(e.requestId, {
-      ui,
-      columns: e.props.bodyColumns,
-      rows: e.props.scroll.bodyRows,
-    })
+    const drawn = raven.render(e.requestId, kit)
     return drawn ?? next(e)
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    raven?.noteViewport(e.viewport?.columns)
+    const kit = kitOf(e.viewport, () => $.ui.resolve(e), e.props.bodyColumns, e.props.maxRows)
     if (!raven) return next(e)
-    const ui = (await $.ui.resolve(e)) as unknown as Ui
-    const kit = { ui, columns: e.props.bodyColumns, rows: e.props.maxRows }
     const drawn = await raven.band(kit, e.props.hasSurvey)
     return drawn ?? next(e)
   })
@@ -146,10 +172,13 @@ export function register(on: On, options: PluginOptions) {
     'ui.render',
     { component: 'CommandOutput', props: { command: COMMAND } },
     async ($, e, next) => {
-      raven?.noteViewport(e.viewport?.columns)
+      const kit = kitOf(e.viewport, () => $.ui.resolve(e), 0, 0)
       if (!raven) return next(e)
-      const ui = (await $.ui.resolve(e)) as unknown as Ui
-      return raven.commandOutput({ ui }, { text: e.props.text, isErrored: e.props.isErrored })
+      return commandOutputRow(kit, {
+        text: e.props.text,
+        isErrored: e.props.isErrored,
+        glyph: commandGlyphOf(raven.resultKindOf(e.props.text)),
+      })
     },
   )
 

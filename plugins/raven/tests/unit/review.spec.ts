@@ -12,6 +12,7 @@ function fakeHost(onStatus?: (text: string | undefined) => void): Host {
     openPane: async () => true,
     closePane: async () => {},
     isShown: async () => true,
+    shownPaneIds: async () => new Set(),
     focus: async () => {},
     storeGet: async key => store.get(key),
     storeSet: async (key, value) => {
