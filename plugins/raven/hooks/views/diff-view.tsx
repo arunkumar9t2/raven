@@ -9,11 +9,11 @@ import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
 import { loadChanges, loadHunks } from '../git/load'
 import { DIFF_PANE } from '../names'
-import type { Comments } from '../review/comments'
+import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { type Anchor, inputKeyOf } from './diff/anchor'
 import { type BodyItem, blocksOf } from './diff/blocks'
-import { commentBox, note } from './diff/comment-box'
+import { addressedRow, commentBox, note, outdatedTitle } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
 import {
@@ -36,6 +36,8 @@ type Model = {
   selected: string | null
   hunks: ReadonlyMap<string, readonly Hunk[]>
   composing: Anchor | null
+  /** The line picked in the composing anchor's Select; null is "whole hunk". */
+  composingLine: CommentLine | null
   top: number
 }
 
@@ -65,6 +67,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     selected: null,
     hunks: new Map(),
     composing: null,
+    composingLine: null,
     top: 0,
   }
 
@@ -126,13 +129,16 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   function startComposing(anchor: Anchor) {
-    update({ composing: anchor })
+    update({ composing: anchor, composingLine: null })
     actions.focus(inputKeyOf(anchor))
   }
 
   function submitComment(anchor: Anchor, text: string) {
-    if (text.trim() !== '') review.add({ ...anchor, text: text.trim() })
-    update({ composing: null })
+    if (text.trim() !== '') {
+      const line = model.composingLine
+      review.add(line ? { ...anchor, line, text: text.trim() } : { ...anchor, text: text.trim() })
+    }
+    update({ composing: null, composingLine: null })
   }
 
   /** The selected file's blocks and their total row count, cached while its inputs are unchanged. */
@@ -176,16 +182,24 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         return <Text dimColor>{item.text}</Text>
       case 'gap':
         return null
+      case 'outdated-title':
+        return outdatedTitle(kit)
+      case 'addressed':
+        return addressedRow(kit, item.anchor, item.count)
       case 'note':
-        return note(kit, item.comment, id => review.remove(id))
+        return note(kit, item.comment, id => review.remove(id), review.resend)
       case 'comment-box':
         return commentBox(kit, {
           anchor: item.anchor,
           composing: model.composing,
           inputKey: inputKeyOf(item.anchor),
+          hunk: item.hunk,
+          line: model.composingLine,
+          columns: kit.columns,
           onStart: startComposing,
+          onLineChange: line => update({ composingLine: line }),
           onSubmit: text => submitComment(item.anchor, text),
-          onCancel: () => update({ composing: null }),
+          onCancel: () => update({ composing: null, composingLine: null }),
         })
     }
   }

@@ -4,28 +4,54 @@
 import type { RenderElement } from 'claude-code'
 
 import type { Kit } from '../../core/view'
-import type { Comment } from '../../review/comments'
+import type { Hunk } from '../../git/hunks'
+import { type Comment, type CommentLine, changedLinesOf } from '../../review/comments'
 import {
   type Anchor,
+  addressedKeyOf,
   cancelKeyOf,
   commentButtonKeyOf,
   dropKeyOf,
   noteKeyOf,
+  resendKeyOf,
   sameAnchor,
+  selectKeyOf,
 } from './anchor'
+
+const WHOLE_HUNK = 'whole'
+
+const lineValueOf = (line: CommentLine) => `${line.side}:${line.number}`
+
+function lineOfValue(value: string, lines: readonly CommentLine[]): CommentLine | null {
+  return lines.find(line => lineValueOf(line) === value) ?? null
+}
+
+/** Cuts `text` to at most `max` chars, marking the cut with an ellipsis. */
+function truncate(text: string, max: number): string {
+  return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`
+}
 
 export type CommentBoxProps = {
   anchor: Anchor
   composing: Anchor | null
   inputKey: string
+  /** The anchor's hunk; present only for a hunk anchor, drives the line-picker Select. */
+  hunk?: Hunk
+  /** The line chosen in the picker; null means "whole hunk". */
+  line: CommentLine | null
+  columns: number
   onStart: (anchor: Anchor) => void
+  onLineChange: (line: CommentLine | null) => void
   onSubmit: (text: string) => void
   onCancel: () => void
 }
 
-/** The "＋ comment" button, swapped for an Input+cancel pair once this anchor is being composed. */
+/**
+ * The "＋ comment" button, swapped for a line picker (on a hunk) plus an Input+cancel pair once
+ * this anchor is being composed.
+ */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
-  const { Box, Button, Input } = kit.ui
+  const { Box, Button, Input, Select } = kit.ui
   const { anchor } = props
 
   if (!sameAnchor(props.composing, anchor)) {
@@ -40,8 +66,30 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     )
   }
 
+  const lines = props.hunk ? changedLinesOf(props.hunk) : []
+  // Leaves room for "Lnnn ± " and the Select's own chrome (label, current value marker).
+  const maxLabelLen = Math.max(8, props.columns - 12)
+  const options = [
+    { value: WHOLE_HUNK, label: 'whole hunk' },
+    ...lines.map(line => ({
+      value: lineValueOf(line),
+      label: truncate(
+        `L${line.number} ${line.side === 'old' ? '-' : '+'} ${line.text}`,
+        maxLabelLen,
+      ),
+    })),
+  ]
+
   return (
     <Box flexDirection="column">
+      {props.hunk ? (
+        <Select
+          key={selectKeyOf(anchor)}
+          options={options}
+          value={props.line ? lineValueOf(props.line) : WHOLE_HUNK}
+          onSelect={value => props.onLineChange(lineOfValue(value, lines))}
+        />
+      ) : null}
       <Input
         key={props.inputKey}
         autoFocus
@@ -54,14 +102,28 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   )
 }
 
-/** One existing comment, with a button to remove it. */
-export function note(kit: Kit, comment: Comment, onRemove: (id: string) => void): RenderElement {
+/** One existing comment: pending plain, sent dim with `⧗`, open with `↻` and a resend button. */
+export function note(
+  kit: Kit,
+  comment: Comment,
+  onRemove: (id: string) => void,
+  onResend: () => void,
+): RenderElement {
   const { Box, Text, Button } = kit.ui
+  const isDim = comment.status === 'sent' || comment.status === 'open'
+  const prefix = comment.status === 'sent' ? '⧗ ' : comment.status === 'open' ? '↻ ' : ''
+  const lineLabel = comment.line ? `L${comment.line.number} ` : ''
+
   return (
     <Box key={noteKeyOf(comment.id)} flexDirection="row" gap={1}>
-      <Text color="#e0af68" wrap="truncate-end">
-        ▍ {comment.text}
+      <Text color={isDim ? undefined : '#e0af68'} dimColor={isDim} wrap="truncate-end">
+        ▍ {prefix}
+        {lineLabel}
+        {comment.text}
       </Text>
+      {comment.status === 'open' ? (
+        <Button key={resendKeyOf(comment.id)} plain dimColor label="resend" onPress={onResend} />
+      ) : null}
       <Button
         key={dropKeyOf(comment.id)}
         plain
@@ -71,4 +133,20 @@ export function note(kit: Kit, comment: Comment, onRemove: (id: string) => void)
       />
     </Box>
   )
+}
+
+/** The collapsed row for an anchor's addressed comments: "✓ N addressed". */
+export function addressedRow(kit: Kit, anchor: Anchor, count: number): RenderElement {
+  const { Text } = kit.ui
+  return (
+    <Text key={addressedKeyOf(anchor)} dimColor>
+      ✓ {count} addressed
+    </Text>
+  )
+}
+
+/** The dim title row above the outdated-comments group. */
+export function outdatedTitle(kit: Kit): RenderElement {
+  const { Text } = kit.ui
+  return <Text dimColor>Outdated</Text>
 }

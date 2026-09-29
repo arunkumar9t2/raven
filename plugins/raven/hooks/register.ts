@@ -64,6 +64,10 @@ export function register(on: On) {
         await $.prompt.submit({ text })
       },
       cwd: () => $.session.cwd(),
+      fork: async prompt => {
+        const result = await $.model.fork({ prompt })
+        return result.isAnswered ? result.text : null
+      },
     }
 
     const created = createRaven(host, () => Date.now())
@@ -103,6 +107,14 @@ export function register(on: On) {
     if (!raven || e.origin.kind !== 'person' || !raven.scroll(e.requestId, e.by)) return next(e)
     $.ui.invalidate('ui.render')
     return {}
+  })
+
+  // A fork of its own answer raises no turn.complete the types promise, but the flag inside
+  // `turnCompleted` guards it either way; `next(e)` runs first so this never slows the turn.
+  on('turn.complete', ($, e, next) => {
+    const result = next(e)
+    if (raven && e.reason === 'answer' && e.agentId === undefined) void raven.turnCompleted(e)
+    return result
   })
 
   on('ui.close', { id: PANE_IDS }, async ($, e, next) => {

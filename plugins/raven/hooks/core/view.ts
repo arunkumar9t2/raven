@@ -1,10 +1,14 @@
 import type { Elements, RenderElement } from 'claude-code'
 
-/** The elements a view draws with; Raven draws on the terminal surface. */
+/**
+ * The elements a view draws with; Raven draws on the terminal surface. `Image` is optional: a
+ * view checks `kit.ui.Image === undefined` and falls back to text before drawing one.
+ */
 export type Ui = Pick<
   Elements['terminal'],
   'Box' | 'Text' | 'Button' | 'Input' | 'Select' | 'Code' | 'Markdown'
->
+> &
+  Partial<Pick<Elements['terminal'], 'Image'>>
 
 /** The engine refuses a `Markdown`, `Code` or `Text` element whose text is longer than this. */
 export const ELEMENT_TEXT_LIMIT = 10_000

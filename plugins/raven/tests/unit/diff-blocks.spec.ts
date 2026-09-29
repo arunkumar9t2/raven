@@ -3,9 +3,11 @@ import type { ChangedFile } from '../../hooks/git/changes'
 import type { Hunk } from '../../hooks/git/hunks'
 import type { Comment, Comments } from '../../hooks/review/comments'
 import {
+  addressedKeyOf,
   blocksOf,
   commentBoxKeyOf,
   noteKeyOf,
+  OUTDATED_TITLE_KEY,
   STATUS_KEY,
   TITLE_KEY,
 } from '../../hooks/views/diff/blocks'
@@ -111,14 +113,20 @@ describe('blocksOf', () => {
     ])
   })
 
-  test('the compose box at the composing anchor is 2 rows, every other comment box is 1', () => {
+  test('composing on a hunk is 3 rows (line-picker Select + Input + cancel)', () => {
     const blocks = blocksOf(file, [hunkA], [], { path: file.path, hunk: hunkA.header })
     const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
     const hunkBox = blocks.find(
       b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
     )
     expect(fileBox).toMatchObject({ rows: 1 })
-    expect(hunkBox).toMatchObject({ rows: 2 })
+    expect(hunkBox).toMatchObject({ rows: 3 })
+  })
+
+  test('composing on the file (no hunk) is 2 rows: no line-picker to draw', () => {
+    const blocks = blocksOf(file, [hunkA], [], { path: file.path })
+    const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
+    expect(fileBox).toMatchObject({ rows: 2 })
   })
 
   test('row total matches title + notes + boxes + hunk lines + gaps', () => {
@@ -131,8 +139,8 @@ describe('blocksOf', () => {
   test('row total with a note and an active compose box together', () => {
     const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
     const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
-    // title(1) + filebox(1) + hunkA(3 lines) + note(1) + composebox(2)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 2)
+    // title(1) + filebox(1) + hunkA(3 lines) + note(1) + composebox(3, with the line picker)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 3)
   })
 
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
@@ -148,5 +156,55 @@ describe('blocksOf', () => {
   test('a binary file with no hunks gets a "Binary file" status row', () => {
     const blocks = blocksOf({ ...file, isBinary: true }, [], [], null)
     expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Binary file' } })
+  })
+
+  test('a comment anchored to a hunk no longer present renders in an outdated group after the hunks', () => {
+    const stale = commentOf({ id: 'stale', hunk: hunkB.header, text: 'still relevant' })
+    const blocks = blocksOf(file, [hunkA], [stale], null)
+    const titleIndex = blocks.findIndex(b => b.key === OUTDATED_TITLE_KEY)
+    const noteIndex = blocks.findIndex(b => b.key === noteKeyOf('stale'))
+    expect(titleIndex).toBeGreaterThan(-1)
+    expect(noteIndex).toBeGreaterThan(titleIndex)
+    expect(blocks.find(b => b.key === noteKeyOf('stale'))).toMatchObject({
+      item: { kind: 'note', comment: stale },
+    })
+    // Not rendered under hunkA's own (unrelated) anchor.
+    expect(
+      blocks.findIndex(b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header })),
+    ).toBeLessThan(titleIndex)
+  })
+
+  test('an outdated comment stays out of the group once its hunk reappears', () => {
+    const live = commentOf({ id: 'live', hunk: hunkA.header })
+    const blocks = blocksOf(file, [hunkA], [live], null)
+    expect(blocks.some(b => b.key === OUTDATED_TITLE_KEY)).toBe(false)
+    expect(blocks.find(b => b.key === noteKeyOf('live'))).toBeDefined()
+  })
+
+  test('addressed comments at an anchor collapse into one "N addressed" row, others still show', () => {
+    const addressed = commentOf({ id: 'a1', hunk: hunkA.header, status: 'addressed' })
+    const other = commentOf({ id: 'a2', hunk: hunkA.header, status: 'addressed' })
+    const pending = commentOf({ id: 'p1', hunk: hunkA.header, status: 'pending' })
+    const blocks = blocksOf(file, [hunkA], [addressed, other, pending], null)
+    const anchor = { path: file.path, hunk: hunkA.header }
+
+    expect(blocks.some(b => b.key === noteKeyOf('a1'))).toBe(false)
+    expect(blocks.some(b => b.key === noteKeyOf('a2'))).toBe(false)
+    expect(blocks.find(b => b.key === addressedKeyOf(anchor))).toMatchObject({
+      item: { kind: 'addressed', count: 2 },
+    })
+    expect(blocks.find(b => b.key === noteKeyOf('p1'))).toMatchObject({
+      item: { kind: 'note', comment: pending },
+    })
+  })
+
+  test('an outdated anchor with only addressed comments also collapses', () => {
+    const addressed = commentOf({ id: 'a1', hunk: hunkB.header, status: 'addressed' })
+    const blocks = blocksOf(file, [hunkA], [addressed], null)
+    expect(
+      blocks.find(b => b.key === addressedKeyOf({ path: file.path, hunk: hunkB.header })),
+    ).toMatchObject({
+      item: { kind: 'addressed', count: 1 },
+    })
   })
 })

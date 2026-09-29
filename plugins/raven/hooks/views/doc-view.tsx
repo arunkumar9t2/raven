@@ -6,6 +6,7 @@ import type { RenderElement } from 'claude-code'
 import type { Host } from '../core/host'
 import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
+import { docLinksOf, resolveDocLink } from './doc-links'
 import { baseName } from './icons'
 import { markdownChunksOf } from './markdown-chunks'
 
@@ -25,6 +26,9 @@ export type DocView = View & {
 const HISTORY_LIMIT = 10
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
+const isImage = (path: string) => /\.(png|jpe?g|gif|webp)$/i.test(path)
+/** The one image format an `Image` reads straight from a file. */
+const isPng = (path: string) => /\.png$/i.test(path)
 
 const keyOf = (doc: Doc) => (doc.kind === 'file' ? `file:${doc.path}` : `note:${doc.title ?? ''}`)
 const titleOf = (doc: Doc) => doc.title ?? (doc.kind === 'file' ? baseName(doc.path) : 'Note')
@@ -35,6 +39,7 @@ export function createDocView(host: Host): DocView {
 
   async function read(doc: Doc): Promise<Pick<Shown, 'text' | 'error'>> {
     if (doc.kind === 'note') return { text: doc.markdown }
+    if (isImage(doc.path)) return { text: '' }
     try {
       return { text: await host.readFile(doc.path) }
     } catch (error) {
@@ -59,14 +64,41 @@ export function createDocView(host: Host): DocView {
   }
 
   function body(kit: Kit, shown: Shown): RenderElement {
-    const { Box, Text, Markdown, Code } = kit.ui
+    const { Box, Text, Markdown, Code, Image } = kit.ui
+    if (shown.doc.kind === 'file' && isImage(shown.doc.path)) {
+      const path = shown.doc.path
+      if (!Image || !isPng(path)) return <Text dimColor>{path}</Text>
+      const columns = Math.max(1, Math.min(kit.columns, 60))
+      const rows = Math.max(1, Math.round(columns / 2))
+      return (
+        <Image
+          source={{ file: path, format: 'png' }}
+          columns={columns}
+          rows={rows}
+          alt={baseName(path)}
+        />
+      )
+    }
     if (shown.text === null) return <Text color="red">Could not read: {shown.error}</Text>
     if (shown.doc.kind === 'note' || isMarkdown(shown.doc.path)) {
+      const doc = shown.doc
       return (
         <Box flexDirection="column">
-          {markdownChunksOf(shown.text).map((chunk, index) => (
-            <Markdown key={`md:${index}`} text={chunk} />
-          ))}
+          {markdownChunksOf(shown.text).map((chunk, index) =>
+            doc.kind === 'file' ? (
+              <Markdown
+                key={`md:${index}`}
+                text={chunk}
+                pressableLinks={docLinksOf(doc.path, chunk)}
+                onLinkPress={link => {
+                  const target = resolveDocLink(doc.path, link.href)
+                  if (target) void show({ kind: 'file', path: target })
+                }}
+              />
+            ) : (
+              <Markdown key={`md:${index}`} text={chunk} />
+            ),
+          )}
         </Box>
       )
     }

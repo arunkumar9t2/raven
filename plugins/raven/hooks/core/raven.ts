@@ -1,6 +1,7 @@
-import type { RenderElement, Timer } from 'claude-code'
+import type { RenderElement, Timer, TurnCompleteInput } from 'claude-code'
 
-import { reviewTextOf } from '../review/comments'
+import { addressedIdsOf, reviewTextOf } from '../review/comments'
+import { resolvePromptOf } from '../review/resolve'
 import { createReview } from '../review/review'
 import { createDiffView } from '../views/diff-view'
 import { createDocView, type Doc } from '../views/doc-view'
@@ -22,6 +23,8 @@ export type Raven = {
   runTool: (input: unknown) => Promise<string>
   /** Hidden context the next prompt carries: the pending review, which it consumes. */
   takePromptContext: () => string | undefined
+  /** Reacts to a finished main-loop turn: forks once to learn which sent comments it addressed. */
+  turnCompleted: (turn: TurnCompleteInput) => Promise<void>
   render: (paneId: string, kit: Kit) => RenderElement | null
   /** Moves a pane's own scroll by `by` rows; true when its view handled the move. */
   scroll: (paneId: string, by: number) => boolean
@@ -47,8 +50,33 @@ export function createRaven(host: Host, now: () => number): Raven {
   let refreshTimer: Timer | null = null
   let hasAutoOpened = false
   let hasOpenedTasks = false
+  // Guards the fork below from re-entering itself and caps it at one per sent batch.
+  let isResolving = false
 
   const takeReviewText = () => reviewTextOf(review.take())
+
+  /** Forks once to ask which sent comments the finished turn addressed, then marks them. */
+  async function resolveSent(): Promise<void> {
+    const sent = review.sent()
+    if (sent.length === 0 || isResolving) return
+    isResolving = true
+    try {
+      const reply = await host.fork(resolvePromptOf(sent))
+      // No bracketed array in the reply means it was unparseable, not "nothing addressed"; leave
+      // the comments sent rather than bouncing every one of them to 'open'.
+      if (reply !== null && /\[[\s\S]*\]/.test(reply)) {
+        review.markAddressed(
+          addressedIdsOf(
+            reply,
+            sent.map(comment => comment.id),
+          ),
+        )
+        host.redraw()
+      }
+    } finally {
+      isResolving = false
+    }
+  }
 
   function cancelRefresh() {
     refreshTimer?.cancel()
@@ -218,6 +246,7 @@ export function createRaven(host: Host, now: () => number): Raven {
       return runDirective(await resolveDirective(directive))
     },
     takePromptContext: takeReviewText,
+    turnCompleted: () => resolveSent(),
     render: (paneId, kit) => {
       const view = views.find(each => each.pane.id === paneId)
       if (!view) return null

@@ -1,6 +1,6 @@
-import type { CommandRunInput, On } from 'claude-code'
-import { describe, expect, mock, test, tier } from 'claude-code/testing'
-import { NAME, toolNameOf } from '../hooks/names'
+import type { CommandRunInput, On, TurnCompleteInput } from 'claude-code'
+import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
+import { commentsStoreKeyOf, DIFF_PANE, NAME, toolNameOf } from '../hooks/names'
 
 tier('user')
 
@@ -112,5 +112,133 @@ describe('register', () => {
 
     const result = await $.command.run(ravenCommand('tasks'))
     expect(result.text).toBe('Raven tasks shown')
+  })
+})
+
+const REPO = '/work'
+const USAGE = {
+  input_tokens: 0,
+  output_tokens: 0,
+  cache_read_input_tokens: 0,
+  cache_creation_input_tokens: 0,
+}
+
+const mainLoopTurn = (answer: string): TurnCompleteInput => ({
+  answer,
+  durationMs: 1,
+  isAborted: false,
+  turnId: 't1',
+  reason: 'answer',
+})
+
+const PANE_PROPS = {
+  title: 'Diff',
+  isFocused: false,
+  bodyColumns: 100,
+  placement: 'dock' as const,
+  scroll: { offset: 0, bodyRows: 30 },
+  view: {},
+}
+
+const mountDiff = ($: Engine) =>
+  $.ui.mount({
+    plugin: NAME,
+    surface: 'terminal',
+    component: 'Pane',
+    props: PANE_PROPS,
+    requestId: DIFF_PANE.id,
+  })
+
+/**
+ * A world inside a git repository with one modified file (`a.ts`, no hunks), so a file-level
+ * comment on it draws without needing a hunk fixture; `review.load` runs against a real toplevel.
+ */
+function gitWorld(on: On, storeEntries: Record<string, unknown>, forkText: string | null) {
+  mock.clock(on)
+  mock.store(on, storeEntries)
+  on('session.start', ($, e) => ({ cwd: e.cwd }))
+  on('command.register', ($, e) => ({ value: { command: e.name } }))
+  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  on('process.run', ($, e) => {
+    const [cmd, sub] = e.argv
+    if (cmd === 'git' && sub === 'rev-parse') {
+      return { value: { exitCode: 0, stdout: REPO, stderr: '' } }
+    }
+    if (cmd === 'git' && sub === 'status') {
+      return { value: { exitCode: 0, stdout: ' M a.ts\0', stderr: '' } }
+    }
+    if (cmd === 'git' && e.argv.includes('--numstat')) {
+      return { value: { exitCode: 0, stdout: '1\t1\ta.ts\0', stderr: '' } }
+    }
+    // loadHunks: no hunks, which is fine for a file-level comment.
+    return { value: { exitCode: 0, stdout: '', stderr: '' } }
+  })
+  on('model.fork', () => ({
+    value:
+      forkText === null
+        ? { isAnswered: false, reason: 'nothing-to-fork' }
+        : { isAnswered: true, text: forkText, usage: USAGE },
+  }))
+  on('turn.complete', ($, e) => ({ text: e.answer }))
+
+  const shown = new Set<string>()
+  on('ui.open', ($, e) => {
+    shown.add(e.id)
+    return { value: { isPlaced: true } }
+  })
+  on('ui.close', ($, e) => {
+    shown.delete(e.id)
+    return { value: undefined }
+  })
+  on('ui.panes', () => ({
+    value: [...shown].map(id => ({
+      id,
+      title: id,
+      isShown: true,
+      isFocused: false,
+      isPlaced: true,
+    })),
+  }))
+  on('ui.focus', () => ({}))
+}
+
+describe('turn.complete resolves sent comments', () => {
+  test('a mocked fork naming the id moves a sent comment to addressed', async ($, on) => {
+    const sent = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'sent', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [sent] }, '["c1"]')
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.turn.complete(mainLoopTurn('done'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: /1 addressed/ })).toBeDefined()
+    expect(await ui.find({ text: 'fix this' })).toBeUndefined()
+  })
+
+  test('a null fork reply leaves the comment sent', async ($, on) => {
+    const sent = { id: 'c2', path: 'a.ts', text: 'fix this', status: 'sent', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [sent] }, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.turn.complete(mainLoopTurn('done'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: /addressed/ })).toBeUndefined()
+    expect(await ui.find({ text: /fix this/ })).toBeDefined()
+  })
+
+  test('an agent turn does not fork', async ($, on) => {
+    const sent = { id: 'c3', path: 'a.ts', text: 'fix this', status: 'sent', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [sent] }, '["c3"]')
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.turn.complete({ ...mainLoopTurn('done'), agentId: 'sub-1' })
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: /addressed/ })).toBeUndefined()
+    expect(await ui.find({ text: /fix this/ })).toBeDefined()
   })
 })

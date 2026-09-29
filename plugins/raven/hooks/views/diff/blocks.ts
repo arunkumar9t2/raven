@@ -1,20 +1,28 @@
 import type { ChangedFile } from '../../git/changes'
 import type { Hunk } from '../../git/hunks'
 import type { Comment, Comments } from '../../review/comments'
-import { commentsOn } from '../../review/comments'
-import { type Anchor, commentBoxKeyOf, noteKeyOf, sameAnchor } from './anchor'
+import { groupByAnchor } from '../../review/comments'
+import { type Anchor, addressedKeyOf, commentBoxKeyOf, noteKeyOf, sameAnchor } from './anchor'
 import type { Block } from './layout'
 
-export { commentBoxKeyOf, noteKeyOf } from './anchor'
+export { addressedKeyOf, commentBoxKeyOf, noteKeyOf } from './anchor'
 
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
+export const OUTDATED_TITLE_KEY = 'outdated-title'
+
+/** The compose box's rows with no line picker (an Input and a cancel button). */
+const COMPOSE_ROWS = 2
+/** The compose box's rows on a hunk, where a line-picker Select draws above the Input. */
+const COMPOSE_ROWS_WITH_PICKER = COMPOSE_ROWS + 1
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
   | { kind: 'title'; file: ChangedFile }
   | { kind: 'note'; comment: Comment }
-  | { kind: 'comment-box'; anchor: Anchor }
+  | { kind: 'addressed'; anchor: Anchor; count: number }
+  | { kind: 'outdated-title' }
+  | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk }
   | { kind: 'gap' }
   | { kind: 'status'; text: string }
 
@@ -24,16 +32,28 @@ export const gapKeyOf = (index: number) => `gap:${index}`
 /** The block key of hunk `index`, unique even across hunks sharing a header (e.g. after a slice). */
 export const hunkKeyOf = (index: number, hunk: Hunk) => `hunk:${index}:${hunk.header}`
 
+/** One anchor's notes (addressed ones collapsed to a single row) followed by its comment box. */
 function anchorBlocksOf(
-  comments: Comments,
+  notes: Comments,
   anchor: Anchor,
   composing: Anchor | null,
+  hunk?: Hunk,
 ): Block<BodyItem>[] {
-  const notes = commentsOn(comments, anchor.path, anchor.hunk)
-  const rows = sameAnchor(composing, anchor) ? 2 : 1
+  const addressed = notes.filter(comment => comment.status === 'addressed')
+  const visible = notes.filter(comment => comment.status !== 'addressed')
+  const rows = sameAnchor(composing, anchor) ? (hunk ? COMPOSE_ROWS_WITH_PICKER : COMPOSE_ROWS) : 1
 
-  return [
-    ...notes.map(
+  const blocks: Block<BodyItem>[] = []
+  if (addressed.length > 0) {
+    blocks.push({
+      kind: 'fixed',
+      key: addressedKeyOf(anchor),
+      rows: 1,
+      item: { kind: 'addressed', anchor, count: addressed.length },
+    })
+  }
+  blocks.push(
+    ...visible.map(
       (comment): Block<BodyItem> => ({
         kind: 'fixed',
         key: noteKeyOf(comment.id),
@@ -41,15 +61,61 @@ function anchorBlocksOf(
         item: { kind: 'note', comment },
       }),
     ),
-    { kind: 'fixed', key: commentBoxKeyOf(anchor), rows, item: { kind: 'comment-box', anchor } },
+  )
+  blocks.push({
+    kind: 'fixed',
+    key: commentBoxKeyOf(anchor),
+    rows,
+    item: { kind: 'comment-box', anchor, hunk },
+  })
+  return blocks
+}
+
+/** The outdated group: a dim title row, then each stale anchor's notes (no comment box). */
+function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
+  if (outdated.length === 0) return []
+
+  const byHunk = new Map<string | undefined, Comment[]>()
+  for (const comment of outdated) {
+    const group = byHunk.get(comment.hunk)
+    if (group) group.push(comment)
+    else byHunk.set(comment.hunk, [comment])
+  }
+
+  const blocks: Block<BodyItem>[] = [
+    { kind: 'fixed', key: OUTDATED_TITLE_KEY, rows: 1, item: { kind: 'outdated-title' } },
   ]
+  for (const [hunk, group] of byHunk) {
+    const anchor: Anchor = { path: group[0]?.path ?? '', hunk }
+    const addressed = group.filter(comment => comment.status === 'addressed')
+    const visible = group.filter(comment => comment.status !== 'addressed')
+    if (addressed.length > 0) {
+      blocks.push({
+        kind: 'fixed',
+        key: addressedKeyOf(anchor),
+        rows: 1,
+        item: { kind: 'addressed', anchor, count: addressed.length },
+      })
+    }
+    blocks.push(
+      ...visible.map(
+        (comment): Block<BodyItem> => ({
+          kind: 'fixed',
+          key: noteKeyOf(comment.id),
+          rows: 1,
+          item: { kind: 'note', comment },
+        }),
+      ),
+    )
+  }
+  return blocks
 }
 
 /**
  * The selected file's body as fixed-height and hunk blocks, top to bottom: the title, the
  * file-level notes and comment box, then each hunk with its own notes and comment box, one blank
- * row between hunks. A file with no hunks (loading, binary, or no textual changes) ends with one
- * status row instead.
+ * row between hunks, then an "Outdated" group for comments whose hunk no longer exists. A file
+ * with no hunks (loading, binary, or no textual changes) ends with one status row instead.
  */
 export function blocksOf(
   file: ChangedFile,
@@ -58,10 +124,11 @@ export function blocksOf(
   composing: Anchor | null,
 ): Block<BodyItem>[] {
   const fileAnchor: Anchor = { path: file.path }
+  const grouped = groupByAnchor(comments, hunks?.map(hunk => hunk.header) ?? [])
 
   const blocks: Block<BodyItem>[] = [
     { kind: 'fixed', key: TITLE_KEY, rows: 1, item: { kind: 'title', file } },
-    ...anchorBlocksOf(comments, fileAnchor, composing),
+    ...anchorBlocksOf(grouped.file, fileAnchor, composing),
   ]
 
   if (hunks === undefined || hunks.length === 0) {
@@ -77,8 +144,10 @@ export function blocksOf(
     }
     const anchor: Anchor = { path: file.path, hunk: hunk.header }
     blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
-    blocks.push(...anchorBlocksOf(comments, anchor, composing))
+    blocks.push(...anchorBlocksOf(grouped.byHunk.get(hunk.header) ?? [], anchor, composing, hunk))
   })
+
+  blocks.push(...outdatedBlocksOf(grouped.outdated))
 
   return blocks
 }
