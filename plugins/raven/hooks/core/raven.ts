@@ -22,17 +22,23 @@ export type Raven = {
 }
 
 const REFRESH_DEBOUNCE_MS = 300
-const SEND_PROMPT = 'Please address my review comments on the diff.'
 
 export function createRaven(host: Host, now: () => number): Raven {
   const review = createReview(host, now)
-  const diff = createDiffView(host, review, () => void host.submitPrompt(SEND_PROMPT))
+  const diff = createDiffView(host, review, () => void sendReview())
   const doc = createDocView(host)
   const views: readonly View[] = [diff, doc]
 
   const open = new Set<string>()
   let refreshTimer: Timer | null = null
   let hasAutoOpened = false
+
+  /** Submits the pending review as a visible prompt, so the person sees what Claude was asked. */
+  async function sendReview(): Promise<boolean> {
+    const text = reviewTextOf(review.take())
+    if (text !== undefined) await host.submitPrompt(text)
+    return text !== undefined
+  }
 
   async function openPane(view: View): Promise<boolean> {
     const isPlaced = await host.openPane({
@@ -134,9 +140,7 @@ export function createRaven(host: Host, now: () => number): Raven {
           ? 'Raven doc shown'
           : 'Widen the terminal to dock the Raven pane'
       case 'send':
-        if (review.comments().length === 0) return 'No review comments to send'
-        await host.submitPrompt(SEND_PROMPT)
-        return 'Review sent'
+        return (await sendReview()) ? 'Review sent' : 'No review comments to send'
       default:
         return 'Usage: /raven [diff|doc|send]'
     }

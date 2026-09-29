@@ -19,7 +19,7 @@ plugins/raven/
   hooks/core/                     controller, Host, View contract, triggers, directive parser
   hooks/views/                    one file per pane (diff, doc) + icons
   hooks/git/  hooks/review/       pure logic: git parsing/loading, review comments
-  skills/raven/SKILL.md           when/how Claude runs the CLI
+  skills/preview/SKILL.md         when/how Claude runs the CLI
   bin/raven                       shim: dist/raven if built, else `bun cli/src/main.ts`
   tests/unit/                     bun tests of the pure modules
 cli/                              the `raven` CLI source + tests

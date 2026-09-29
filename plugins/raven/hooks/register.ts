@@ -27,6 +27,9 @@ export function register(on: On) {
       redraw: () => $.ui.invalidate('ui.render'),
       openPane: async pane => (await $.ui.open(pane)).isPlaced,
       closePane: id => $.ui.close({ id }),
+      focus: async (paneId, key) => {
+        await $.ui.focus({ requestId: paneId, key })
+      },
       status: text => $.ui.status(text),
       toast: text => $.ui.toast(text),
       storeGet: key => $.store.get(key),
