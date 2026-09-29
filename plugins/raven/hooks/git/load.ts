@@ -7,6 +7,11 @@ import { applyArgvOf } from './patch'
 
 export type Run = (argv: readonly string[], stdin?: string) => Promise<RunResult>
 
+/** A run's trimmed stdout when it exits 0, else null. */
+export function outputOf(result: RunResult): string | null {
+  return result.exitCode === 0 ? result.stdout.trim() : null
+}
+
 /** What the working tree is diffed against: `HEAD`, or a specific commit (a session start or a merge-base). */
 export type Base = { kind: 'head' } | { kind: 'commit'; sha: string }
 
@@ -23,7 +28,8 @@ export async function loadChanges(
   base: Base,
 ): Promise<{ toplevel: string; files: ChangedFile[] } | null> {
   const top = await run(['git', 'rev-parse', '--show-toplevel'])
-  if (top.exitCode !== 0) return null
+  const toplevel = outputOf(top)
+  if (toplevel === null) return null
   const [status, diff] = await Promise.all([
     run(['git', 'status', '--porcelain=v1', '-z', '--untracked-files=all']),
     run(['git', 'diff', refOf(base), '--numstat', '-z']),
@@ -31,7 +37,7 @@ export async function loadChanges(
   const numstat = diff.exitCode === 0 ? numstatOf(diff.stdout) : new Map()
   const entries = statusEntriesOf(status.stdout)
   const files = changedFilesOf(entries, numstat, await untrackedLinesOf(run, entries))
-  return { toplevel: top.stdout.trim(), files }
+  return { toplevel, files }
 }
 
 /** Past this many new files the list shows +0 for them rather than spawning a git per file. */

@@ -5,10 +5,19 @@ import type { RenderElement } from 'claude-code'
 
 import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
-import { loadChanges } from '../git/load'
+import { loadChanges, outputOf } from '../git/load'
 import { TREE_PANE } from '../names'
+import { clampTop } from './diff/layout'
 import { iconOf, statusMarkOf } from './icons'
-import { changedDirsOf, pathsOf, rowsOf, type TreeNode, type TreeRow, treeOf } from './tree/tree'
+import {
+  changedDirsOf,
+  listingKeyOf,
+  pathsOf,
+  rowsOf,
+  type TreeNode,
+  type TreeRow,
+  treeOf,
+} from './tree/tree'
 
 /** What the tree view asks of the controller when a file row is pressed. */
 export type TreeActions = {
@@ -16,7 +25,8 @@ export type TreeActions = {
 }
 
 export type TreeView = View & {
-  refresh: () => Promise<void>
+  /** `force` re-lists even when the change set can't explain a new file appearing. */
+  refresh: (options?: { force?: boolean }) => Promise<void>
 }
 
 type Model = {
@@ -29,11 +39,6 @@ type Model = {
 }
 
 type Row = { kind: 'node'; row: TreeRow } | { kind: 'capped' }
-
-const clampTop = (top: number, total: number, rows: number): number => {
-  const max = Math.max(0, total - rows)
-  return Math.min(Math.max(0, top), max)
-}
 
 function rowsFor(model: Model): Row[] {
   if (!model.root) return []
@@ -57,26 +62,56 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
   // Bumped by each refresh, so a slow read that lands after a newer one is dropped.
   let generation = 0
 
+  // The last `git ls-files` listing, kept so an unchanged file set can skip re-listing; null until
+  // the first successful listing.
+  let listing: { toplevel: string; paths: string[]; isCapped: boolean; key: string } | null = null
+
   const update = (patch: Partial<Model>) => {
     model = { ...model, ...patch }
     host.redraw()
   }
 
-  async function refresh(): Promise<void> {
+  const listFiles = () =>
+    host.run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z'])
+
+  async function refresh(options?: { force?: boolean }): Promise<void> {
     const started = ++generation
-    const top = await host.run(['git', 'rev-parse', '--show-toplevel'])
-    if (top.exitCode !== 0) {
+    const toplevel = outputOf(await host.run(['git', 'rev-parse', '--show-toplevel']))
+    if (toplevel === null) {
       if (started === generation) update({ isLoaded: true, toplevel: null, root: null })
       return
     }
-    const toplevel = top.stdout.trim()
-    const [ls, changes] = await Promise.all([
-      host.run(['git', 'ls-files', '--cached', '--others', '--exclude-standard', '-z']),
-      loadChanges(host.run, { kind: 'head' }).catch(() => null),
-    ])
-    if (started !== generation) return
+    const mustList = options?.force === true || listing === null || listing.toplevel !== toplevel
 
-    const { paths, isCapped } = pathsOf(ls.stdout)
+    let paths: string[]
+    let isCapped: boolean
+    let changes: Awaited<ReturnType<typeof loadChanges>>
+    let key: string
+
+    if (mustList) {
+      const [ls, loaded] = await Promise.all([
+        listFiles(),
+        loadChanges(host.run, { kind: 'head' }).catch(() => null),
+      ])
+      if (started !== generation) return
+      ;({ paths, isCapped } = pathsOf(ls.stdout))
+      changes = loaded
+      key = listingKeyOf(changes?.files ?? [])
+    } else {
+      changes = await loadChanges(host.run, { kind: 'head' }).catch(() => null)
+      if (started !== generation) return
+      key = listingKeyOf(changes?.files ?? [])
+      if (key === listing?.key) {
+        ;({ paths, isCapped } = listing)
+      } else {
+        const ls = await listFiles()
+        if (started !== generation) return
+        ;({ paths, isCapped } = pathsOf(ls.stdout))
+      }
+    }
+
+    listing = { toplevel, paths, isCapped, key }
+
     const changed = new Map((changes?.files ?? []).map(file => [file.path, file.status]))
     const root = treeOf(paths, changed)
     const expanded = hasExpandedOnce ? model.expanded : changedDirsOf(root)

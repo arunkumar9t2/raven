@@ -3,6 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement, SelectOption } from 'claude-code'
 
+import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 
@@ -37,9 +38,7 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
 
   return (
     <Box flexDirection="row" gap={2}>
-      <Text bold>
-        {files.length} {files.length === 1 ? 'file' : 'files'}
-      </Text>
+      <Text bold>{countOf(files.length, 'file')}</Text>
       <Text color="green">+{adds}</Text>
       <Text color="red">−{dels}</Text>
       <Select
@@ -65,7 +64,7 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
           <Button
             key="send"
             hotkey="s"
-            label={`Send ${pending} ${pending === 1 ? 'comment' : 'comments'} to Claude`}
+            label={`Send ${countOf(pending, 'comment')} to Claude`}
             onPress={props.onSend}
           />
         </>

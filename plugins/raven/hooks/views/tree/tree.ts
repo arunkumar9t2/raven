@@ -116,3 +116,17 @@ export function pathsOf(z: string, limit = 5000): { paths: string[]; isCapped: b
   const isCapped = all.length > limit
   return { paths: isCapped ? all.slice(0, limit) : all, isCapped }
 }
+
+/** Statuses `git ls-files` would need re-running to see: a path appeared, vanished, or moved. */
+const LISTING_STATUSES: readonly ChangeStatus[] = ['added', 'deleted', 'untracked', 'renamed']
+
+/** A key over a change set's listing-affecting entries; equal keys mean the same file set. */
+export function listingKeyOf(
+  files: readonly { path: string; oldPath?: string; status: ChangeStatus }[],
+): string {
+  return files
+    .filter(file => LISTING_STATUSES.includes(file.status))
+    .map(file => `${file.status}:${file.path}${file.oldPath ? `<-${file.oldPath}` : ''}`)
+    .sort()
+    .join('\n')
+}

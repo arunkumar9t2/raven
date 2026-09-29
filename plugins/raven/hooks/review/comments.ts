@@ -1,5 +1,5 @@
 import { isRecord } from '../core/is-record'
-import { bodyLinesOf, parseHeader } from '../git/hunks'
+import { bodyLinesOf, lineKindOf, parseHeader } from '../git/hunks'
 
 /** A single diff line a comment anchors to, inside its `hunk`. */
 export type CommentLine = { number: number; side: 'old' | 'new'; text: string }
@@ -91,14 +91,15 @@ export function changedLinesOf(hunk: { header: string; text: string }): CommentL
   let newLine = parsed.newStart
 
   const result: CommentLine[] = []
-  // A line starting with '\' is the '\ No newline at end of file' marker for the line above it
-  // and advances neither counter.
   for (const line of bodyLinesOf(hunk)) {
-    if (line === '' || line.startsWith('\\')) continue
-    if (line.startsWith('+')) {
+    const kind = lineKindOf(line)
+    // A line starting with '\' is the '\ No newline at end of file' marker for the line above it
+    // and advances neither counter.
+    if (kind === null) continue
+    if (kind === 'add') {
       result.push({ number: newLine, side: 'new', text: line.slice(1) })
       newLine += 1
-    } else if (line.startsWith('-')) {
+    } else if (kind === 'del') {
       result.push({ number: oldLine, side: 'old', text: line.slice(1) })
       oldLine += 1
     } else {

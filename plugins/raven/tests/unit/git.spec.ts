@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { changedFilesOf, numstatOf, statusEntriesOf } from '../../hooks/git/changes'
-import { clampHunk, hunksOf } from '../../hooks/git/hunks'
+import { clampHunk, hunksOf, lineKindOf } from '../../hooks/git/hunks'
 import type { Base, Run } from '../../hooks/git/load'
 import { applyPatch, loadChanges, loadHunks } from '../../hooks/git/load'
 
@@ -136,6 +136,19 @@ describe('hunksOf', () => {
     expect(hunks).toEqual([
       { header: '@@ -0,0 +1,2 @@', text: '@@ -0,0 +1,2 @@\n+hello\n+world\n' },
     ])
+  })
+})
+
+describe('lineKindOf', () => {
+  test('classifies add, del and context lines', () => {
+    expect(lineKindOf('+added')).toBe('add')
+    expect(lineKindOf('-removed')).toBe('del')
+    expect(lineKindOf(' context')).toBe('context')
+  })
+
+  test('treats an empty line and the no-newline marker as neither', () => {
+    expect(lineKindOf('')).toBeNull()
+    expect(lineKindOf('\\ No newline at end of file')).toBeNull()
   })
 })
 

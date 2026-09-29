@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { changedDirsOf, pathsOf, rowsOf, treeOf } from '../../hooks/views/tree/tree'
+import { changedDirsOf, listingKeyOf, pathsOf, rowsOf, treeOf } from '../../hooks/views/tree/tree'
 
 describe('treeOf', () => {
   test('nests dirs before files, sorted by name, propagating changed counts to ancestors', () => {
@@ -101,5 +101,27 @@ describe('pathsOf', () => {
     const { paths, isCapped } = pathsOf(z)
     expect(paths).toHaveLength(5000)
     expect(isCapped).toBe(true)
+  })
+})
+
+describe('listingKeyOf', () => {
+  test('includes added, deleted, untracked, and renamed entries, sorted', () => {
+    const key = listingKeyOf([
+      { path: 'b.ts', status: 'untracked' },
+      { path: 'a.ts', status: 'added' },
+      { path: 'c.ts', oldPath: 'old-c.ts', status: 'renamed' },
+      { path: 'd.ts', status: 'deleted' },
+    ])
+    expect(key).toBe(
+      ['added:a.ts', 'deleted:d.ts', 'renamed:c.ts<-old-c.ts', 'untracked:b.ts'].sort().join('\n'),
+    )
+  })
+
+  test('excludes modified entries, since they cannot change the file set', () => {
+    expect(listingKeyOf([{ path: 'a.ts', status: 'modified' }])).toBe('')
+  })
+
+  test('empty for no files', () => {
+    expect(listingKeyOf([])).toBe('')
   })
 })
