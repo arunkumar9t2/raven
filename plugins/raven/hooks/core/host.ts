@@ -25,4 +25,6 @@ export type Host = {
   cwd: () => Promise<string>
   /** Forks the main thread's last turn with `prompt`; the reply's text, or null when unanswered. */
   fork: (prompt: string) => Promise<string | null>
+  /** Pins `text` as Raven's status line under the prompt; `undefined` clears it. */
+  status: (text: string | undefined) => void
 }

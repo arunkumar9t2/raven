@@ -27,9 +27,15 @@ export type Review = {
   clear: () => void
 }
 
+/** The status line's text; the engine already prefixes it with the plugin's name. */
+export const pendingTextOf = (count: number) =>
+  `${count} review ${count === 1 ? 'comment' : 'comments'} pending`
+
 export function createReview(host: Host, now: () => number): Review {
   let comments: Comments = []
   let scope: string | null = null
+  // -1 so the first save/load, even at zero pending, does not skip clearing a stale status line.
+  let lastPendingCount = -1
 
   /** Moves every comment with status `from` to `to`; `ids` given narrows it to those ids. */
   const moveStatus = (from: Comment['status'], to: Comment['status'], ids?: readonly string[]) => {
@@ -41,8 +47,16 @@ export function createReview(host: Host, now: () => number): Review {
     )
   }
 
+  const notifyStatus = () => {
+    const count = comments.filter(comment => comment.status === 'pending').length
+    if (count === lastPendingCount) return
+    lastPendingCount = count
+    host.status(count > 0 ? pendingTextOf(count) : undefined)
+  }
+
   const save = () => {
     if (scope !== null) void host.storeSet(commentsStoreKeyOf(scope), comments).catch(() => {})
+    notifyStatus()
     host.redraw()
   }
 
@@ -52,6 +66,7 @@ export function createReview(host: Host, now: () => number): Review {
       if (scope === repository) return
       scope = repository
       comments = commentsFrom(await host.storeGet(commentsStoreKeyOf(repository)))
+      notifyStatus()
       host.redraw()
     },
     add: input => {

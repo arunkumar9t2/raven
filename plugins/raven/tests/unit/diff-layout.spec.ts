@@ -8,6 +8,7 @@ import {
   rowOfKey,
   rowsOf,
   sliceHunk,
+  stepFileIndexOf,
   windowOf,
 } from '../../hooks/views/diff/layout'
 
@@ -182,6 +183,33 @@ describe('fileWindowOf', () => {
 
   test('no selection (-1) windows from the front', () => {
     expect(fileWindowOf(20, -1, 8)).toEqual({ start: 0, end: 7, more: 13 })
+  })
+})
+
+describe('stepFileIndexOf', () => {
+  test('steps to the next file', () => {
+    expect(stepFileIndexOf(3, 0, 1)).toBe(1)
+  })
+
+  test('steps to the previous file', () => {
+    expect(stepFileIndexOf(3, 1, -1)).toBe(0)
+  })
+
+  test('clamps at the last file', () => {
+    expect(stepFileIndexOf(3, 2, 1)).toBe(2)
+  })
+
+  test('clamps at the first file', () => {
+    expect(stepFileIndexOf(3, 0, -1)).toBe(0)
+  })
+
+  test('no selection steps from the front', () => {
+    expect(stepFileIndexOf(3, -1, 1)).toBe(0)
+    expect(stepFileIndexOf(3, -1, -1)).toBe(0)
+  })
+
+  test('an empty list has no index', () => {
+    expect(stepFileIndexOf(0, -1, 1)).toBe(-1)
   })
 })
 

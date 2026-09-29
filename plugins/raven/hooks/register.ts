@@ -68,6 +68,7 @@ export function register(on: On) {
         const result = await $.model.fork({ prompt })
         return result.isAnswered ? result.text : null
       },
+      status: text => $.ui.status(text),
     }
 
     const created = createRaven(host, () => Date.now())

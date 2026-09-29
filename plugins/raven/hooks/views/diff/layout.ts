@@ -92,6 +92,15 @@ export function rowOfKey(blocks: readonly Block[], key: string): number | null {
   return null
 }
 
+/**
+ * The file index reached moving `by` steps (1 next, -1 previous) from `index`, clamped to
+ * `[0, count)`; `-1` (nothing selected) steps from just before the front.
+ */
+export function stepFileIndexOf(count: number, index: number, by: number): number {
+  if (count === 0) return -1
+  return Math.max(0, Math.min(count - 1, index + by))
+}
+
 /** A fixed list's window: the items shown, and how many trail past the shown window. */
 export type ListWindow = { start: number; end: number; more: number }
 
