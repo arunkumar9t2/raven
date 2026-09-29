@@ -25,6 +25,7 @@ function world(on: On, stdout: string) {
   on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
   on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a repo' } }))
   on('ui.invalidate', () => ({ value: undefined }))
+  on('ui.status', () => ({ value: undefined }))
   on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout, stderr: '', interrupted: false } }))
 
   const shown = new Set<string>()
@@ -150,10 +151,16 @@ const mountDiff = ($: Engine) =>
   })
 
 /**
- * A world inside a git repository with one modified file (`a.ts`, no hunks), so a file-level
- * comment on it draws without needing a hunk fixture; `review.load` runs against a real toplevel.
+ * A world inside a git repository with modified files (`a.ts` by default, no hunks), so a
+ * file-level comment on one draws without needing a hunk fixture; `review.load` runs against a
+ * real toplevel.
  */
-function gitWorld(on: On, storeEntries: Record<string, unknown>, forkText: string | null) {
+function gitWorld(
+  on: On,
+  storeEntries: Record<string, unknown>,
+  forkText: string | null,
+  files: readonly string[] = ['a.ts'],
+) {
   mock.clock(on)
   mock.store(on, storeEntries)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
@@ -165,10 +172,12 @@ function gitWorld(on: On, storeEntries: Record<string, unknown>, forkText: strin
       return { value: { exitCode: 0, stdout: REPO, stderr: '' } }
     }
     if (cmd === 'git' && sub === 'status') {
-      return { value: { exitCode: 0, stdout: ' M a.ts\0', stderr: '' } }
+      const stdout = files.map(path => ` M ${path}\0`).join('')
+      return { value: { exitCode: 0, stdout, stderr: '' } }
     }
     if (cmd === 'git' && e.argv.includes('--numstat')) {
-      return { value: { exitCode: 0, stdout: '1\t1\ta.ts\0', stderr: '' } }
+      const stdout = files.map(path => `1\t1\t${path}\0`).join('')
+      return { value: { exitCode: 0, stdout, stderr: '' } }
     }
     // loadHunks: no hunks, which is fine for a file-level comment.
     return { value: { exitCode: 0, stdout: '', stderr: '' } }
@@ -201,6 +210,24 @@ function gitWorld(on: On, storeEntries: Record<string, unknown>, forkText: strin
   }))
   on('ui.focus', () => ({}))
 }
+
+describe('diff view keyboard control', () => {
+  test('pressing the next-file button moves the selection to the next file', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'row:a.ts' }))?.text).toContain('❯')
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('❯')
+
+    await ui.press({ key: 'next' })
+
+    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('❯')
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
+  })
+})
 
 describe('turn.complete resolves sent comments', () => {
   test('a mocked fork naming the id moves a sent comment to addressed', async ($, on) => {

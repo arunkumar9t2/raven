@@ -40,6 +40,8 @@ export type CommentBoxProps = {
   /** The line chosen in the picker; null means "whole hunk". */
   line: CommentLine | null
   columns: number
+  /** The "＋ comment" button's hotkey, when this is the anchor it should trigger. */
+  hotkey?: string
   onStart: (anchor: Anchor) => void
   onLineChange: (line: CommentLine | null) => void
   onSubmit: (text: string) => void
@@ -60,6 +62,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
         key={commentButtonKeyOf(anchor)}
         plain
         dimColor
+        hotkey={props.hotkey}
         label={anchor.hunk ? '＋ comment on this hunk' : '＋ comment on this file'}
         onPress={() => props.onStart(anchor)}
       />

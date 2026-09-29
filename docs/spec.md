@@ -71,6 +71,10 @@ trigger is one entry, not a change to `register`.
   caps a `Code` source at 10 000 characters; a longer hunk is truncated with a marker).
 - Refreshes, debounced, after `Edit`/`Write`/`NotebookEdit`/`Bash` calls land; opens on the first
   main-loop edit when the terminal docks panes.
+- Hotkeys, live while the pane holds the keyboard: `j`/`k` select the next/previous file (also
+  plain `↓`/`↑` buttons in the header), `c` opens a comment on the selected file, `s` sends the
+  pending review, `r` refreshes. Submitting or cancelling a comment returns the keyboard to that
+  anchor's comment button, so Esc/Enter flow stays in the pane.
 
 ### Doc view (`raven-doc`)
 
@@ -130,6 +134,11 @@ trigger is one entry, not a change to `register`.
 - `raven comments` returns the pending comments to Claude as the tool result, which delivers them.
 - Comments live in memory for the session and in `$.store` keyed by repository, never in the working
   tree.
+- Raven's status line (`$.ui.status`) reads "N review comments pending" whenever the pending
+  count changes, and clears once it reaches zero.
+- The header's plain `clear` button asks for confirmation: the first press relabels it
+  "clear all? (again)"; the second calls `review.clear()`, dropping every comment regardless of
+  status. Any other action in the pane resets the unconfirmed state.
 
 ## Naming
 

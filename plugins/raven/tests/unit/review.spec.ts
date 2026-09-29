@@ -2,7 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Host } from '../../hooks/core/host'
 import { createReview } from '../../hooks/review/review'
 
-function fakeHost(): Host {
+function fakeHost(onStatus?: (text: string | undefined) => void): Host {
   const store = new Map<string, unknown>()
   return {
     run: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
@@ -20,6 +20,7 @@ function fakeHost(): Host {
     submitPrompt: async () => {},
     cwd: async () => '/repo',
     fork: async () => null,
+    status: text => onStatus?.(text),
   }
 }
 
@@ -76,5 +77,34 @@ describe('createReview state transitions', () => {
     const reviewB = createReview(host, () => 2)
     await reviewB.load('/repo')
     expect(reviewB.comments().map(c => c.text)).toEqual(['persisted'])
+  })
+})
+
+describe('createReview pending status', () => {
+  test('status is set on the first pending comment and cleared once it is taken', () => {
+    const statuses: (string | undefined)[] = []
+    const review = createReview(
+      fakeHost(text => statuses.push(text)),
+      () => 1,
+    )
+
+    review.add({ path: 'a.ts', text: 'x' })
+    review.add({ path: 'b.ts', text: 'y' })
+    review.take()
+
+    expect(statuses).toEqual(['1 review comment pending', '2 review comments pending', undefined])
+  })
+
+  test('a mutation that leaves the pending count unchanged does not re-notify', () => {
+    const statuses: (string | undefined)[] = []
+    const review = createReview(
+      fakeHost(text => statuses.push(text)),
+      () => 1,
+    )
+
+    review.add({ path: 'a.ts', text: 'x' })
+    review.remove('missing-id')
+
+    expect(statuses).toEqual(['1 review comment pending'])
   })
 })

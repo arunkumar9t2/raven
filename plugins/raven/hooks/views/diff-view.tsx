@@ -11,7 +11,7 @@ import { loadChanges, loadHunks } from '../git/load'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { type Anchor, inputKeyOf } from './diff/anchor'
+import { type Anchor, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { type BodyItem, blocksOf } from './diff/blocks'
 import { addressedRow, commentBox, note, outdatedTitle } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
@@ -22,6 +22,7 @@ import {
   contentRowsOf,
   type Placed,
   sliceHunk,
+  stepFileIndexOf,
   windowOf,
 } from './diff/layout'
 
@@ -39,6 +40,8 @@ type Model = {
   /** The line picked in the composing anchor's Select; null is "whole hunk". */
   composingLine: CommentLine | null
   top: number
+  /** Whether the "clear" button is waiting for a confirming second press. */
+  confirmingClear: boolean
 }
 
 /** What the diff view asks of the controller. */
@@ -69,6 +72,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     composing: null,
     composingLine: null,
     top: 0,
+    confirmingClear: false,
   }
 
   // The body rows the most recent render computed, so `scroll` can clamp without recomputing it.
@@ -84,8 +88,10 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     contentRows: number
   } | null = null
 
+  // Any action but a second "clear" press drops the confirm state, so `patch` overrides it only
+  // when the caller means to set it.
   const update = (patch: Partial<Model>) => {
-    model = { ...model, ...patch }
+    model = { ...model, confirmingClear: false, ...patch }
     host.redraw()
   }
 
@@ -128,9 +134,24 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     void loadSelected()
   }
 
+  /** Moves the selection `by` files (1 next, -1 previous); the `j`/`k` hotkeys and ↓/↑ buttons. */
+  function stepSelection(by: number) {
+    const files = model.repository?.files
+    if (!files || files.length === 0) return
+    const from = files.findIndex(file => file.path === model.selected)
+    const file = files[stepFileIndexOf(files.length, from, by)]
+    if (file) select(file.path)
+  }
+
   function startComposing(anchor: Anchor) {
     update({ composing: anchor, composingLine: null })
     actions.focus(inputKeyOf(anchor))
+  }
+
+  /** Closes the compose box and hands the keyboard back to its anchor's comment button. */
+  function stopComposing(anchor: Anchor) {
+    update({ composing: null, composingLine: null })
+    actions.focus(commentButtonKeyOf(anchor))
   }
 
   function submitComment(anchor: Anchor, text: string) {
@@ -138,7 +159,16 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       const line = model.composingLine
       review.add(line ? { ...anchor, line, text: text.trim() } : { ...anchor, text: text.trim() })
     }
-    update({ composing: null, composingLine: null })
+    stopComposing(anchor)
+  }
+
+  function pressClear() {
+    if (model.confirmingClear) {
+      update({ confirmingClear: false })
+      review.clear()
+    } else {
+      update({ confirmingClear: true })
+    }
   }
 
   /** The selected file's blocks and their total row count, cached while its inputs are unchanged. */
@@ -196,10 +226,11 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           hunk: item.hunk,
           line: model.composingLine,
           columns: kit.columns,
+          hotkey: item.anchor.hunk === undefined ? 'c' : undefined,
           onStart: startComposing,
           onLineChange: line => update({ composingLine: line }),
           onSubmit: text => submitComment(item.anchor, text),
-          onCancel: () => update({ composing: null, composingLine: null }),
+          onCancel: () => stopComposing(item.anchor),
         })
     }
   }
@@ -245,8 +276,15 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         {header(kit, {
           files: repository.files,
           pending: review.pending().length,
+          confirmingClear: model.confirmingClear,
           onRefresh: () => void refresh(),
-          onSend: actions.send,
+          onSend: () => {
+            update({})
+            actions.send()
+          },
+          onPrevious: () => stepSelection(-1),
+          onNext: () => stepSelection(1),
+          onClear: pressClear,
         })}
         {fileList(kit, { files: repository.files, selected: model.selected, onSelect: select })}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
