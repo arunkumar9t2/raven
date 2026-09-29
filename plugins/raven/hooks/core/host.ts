@@ -40,3 +40,11 @@ export type Host = {
   /** Whether the session checkpoints Claude's edits, the built-in diff panel's own gate. */
   isCheckpointing: () => Promise<boolean>
 }
+
+/** A `.catch` handler that logs the failure to the debug log and answers `fallback`. */
+export const loggedAs =
+  <T>(host: Pick<Host, 'debug'>, what: string, fallback: T) =>
+  (error: unknown): T => {
+    host.debug(`raven: ${what} failed: ${String(error)}`)
+    return fallback
+  }
