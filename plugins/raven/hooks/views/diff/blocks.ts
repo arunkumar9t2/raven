@@ -26,7 +26,7 @@ const COMPOSE_ROWS_WITH_PICKER = COMPOSE_ROWS + 1
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
-  | { kind: 'title'; file: ChangedFile }
+  | { kind: 'title'; file: ChangedFile; turnIndex?: number }
   | { kind: 'note'; comment: Comment }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
@@ -131,26 +131,41 @@ function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
   return blocks
 }
 
+/** A turn's diff is read-only: no comment boxes, no stage/revert, just the title and hunks. */
+export type BlocksOptions = {
+  hunkState?: HunkState
+  /** Set for a turn source: hides comment/stage/revert controls and titles the file "Turn N". */
+  turnIndex?: number
+}
+
 /**
  * The selected file's body as fixed-height and hunk blocks, top to bottom: the title, the
  * file-level notes and comment box, then each hunk with its own notes, comment box and
  * stage/revert row, one blank row between hunks, then an "Outdated" group for comments whose
  * hunk no longer exists. A file with no hunks (loading, binary, or no textual changes) ends with
- * one status row instead.
+ * one status row instead. A turn source (`options.turnIndex` set) is read-only: no comment boxes,
+ * no stage/revert rows.
  */
 export function blocksOf(
   file: ChangedFile,
   hunks: readonly Hunk[] | undefined,
   comments: Comments,
   composing: Anchor | null,
-  hunkState: HunkState = NO_HUNK_STATE,
+  options: BlocksOptions = {},
 ): Block<BodyItem>[] {
+  const hunkState = options.hunkState ?? NO_HUNK_STATE
+  const isReadOnly = options.turnIndex !== undefined
   const fileAnchor: Anchor = { path: file.path }
   const grouped = groupByAnchor(comments, hunks?.map(hunk => hunk.header) ?? [])
 
   const blocks: Block<BodyItem>[] = [
-    { kind: 'fixed', key: TITLE_KEY, rows: 1, item: { kind: 'title', file } },
-    ...anchorBlocksOf(grouped.file, fileAnchor, composing),
+    {
+      kind: 'fixed',
+      key: TITLE_KEY,
+      rows: 1,
+      item: { kind: 'title', file, turnIndex: options.turnIndex },
+    },
+    ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing)),
   ]
 
   if (hunks === undefined || hunks.length === 0) {
@@ -166,6 +181,7 @@ export function blocksOf(
     }
     const anchor: Anchor = { path: file.path, hunk: hunk.header }
     blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
+    if (isReadOnly) return
     blocks.push(...anchorBlocksOf(grouped.byHunk.get(hunk.header) ?? [], anchor, composing, hunk))
     blocks.push({
       kind: 'fixed',
@@ -181,7 +197,7 @@ export function blocksOf(
     })
   })
 
-  blocks.push(...outdatedBlocksOf(grouped.outdated))
+  if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated))
 
   return blocks
 }

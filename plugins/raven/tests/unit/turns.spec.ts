@@ -1,6 +1,11 @@
 import { describe, expect, test } from 'bun:test'
 import type { SessionMessage } from 'claude-code'
-import { hunkOfChange, turnEditsOf } from '../../hooks/review/turns'
+import {
+  changedFileOfTurnFile,
+  hunkOfChange,
+  turnEditsOf,
+  turnFilesOf,
+} from '../../hooks/review/turns'
 
 type ToolUse = SessionMessage['toolUses'][number]
 
@@ -164,5 +169,40 @@ describe('truncation', () => {
 
     expect(hunk.text.length).toBeLessThanOrEqual(10_000)
     expect(hunk.text).toContain('more lines)')
+  })
+})
+
+describe('turnFilesOf', () => {
+  test('returns the files of the turn with a matching index', () => {
+    const turns = turnEditsOf([
+      promptRow('edit a file'),
+      assistantRow([useOf('Edit', { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' })]),
+      toolResultRow(),
+    ])
+
+    expect(turnFilesOf(turns, 1).map(file => file.path)).toEqual(['/r/a.ts'])
+  })
+
+  test('returns [] for an index no turn carries', () => {
+    expect(turnFilesOf([], 3)).toEqual([])
+  })
+})
+
+describe('changedFileOfTurnFile', () => {
+  test('counts +/- lines across the hunks as adds/dels', () => {
+    const file = {
+      path: '/r/a.ts',
+      hunks: [hunkOfChange('one\ntwo', 'ONE\ntwo\nTHREE')],
+    }
+
+    const changed = changedFileOfTurnFile(file)
+
+    expect(changed).toEqual({
+      path: '/r/a.ts',
+      status: 'modified',
+      adds: 3,
+      dels: 2,
+      isBinary: false,
+    })
   })
 })

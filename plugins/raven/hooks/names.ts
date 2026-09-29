@@ -30,3 +30,6 @@ export const DIRECTIVE_PREFIX = `::${NAME}::`
 
 /** The store key of one repository's pending review comments. */
 export const commentsStoreKeyOf = (repository: string) => `comments:${repository}`
+
+/** The store key of one repository's diff base choice (HEAD, session start, or branch point). */
+export const sourceStoreKeyOf = (repository: string) => `source:${repository}`

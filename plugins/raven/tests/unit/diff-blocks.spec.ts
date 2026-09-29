@@ -229,8 +229,10 @@ describe('blocksOf', () => {
 
   test('hunkState marks the staged hunk and the hunk confirming a revert', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null, {
-      staged: new Set([hunkA.header]),
-      confirmingRevert: `${file.path}|${hunkB.header}`,
+      hunkState: {
+        staged: new Set([hunkA.header]),
+        confirmingRevert: `${file.path}|${hunkB.header}`,
+      },
     })
     const anchorA = { path: file.path, hunk: hunkA.header }
     const anchorB = { path: file.path, hunk: hunkB.header }
@@ -240,5 +242,25 @@ describe('blocksOf', () => {
     expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorB))).toMatchObject({
       item: { isStaged: false, confirmingRevert: true },
     })
+  })
+})
+
+describe('blocksOf for a turn source', () => {
+  test('titles the file with the turn index and drops comment/stage/revert rows', () => {
+    const blocks = blocksOf(file, [hunkA, hunkB], [], null, { turnIndex: 3 })
+
+    expect(blocks[0]).toMatchObject({ item: { kind: 'title', file, turnIndex: 3 } })
+    expect(blocks.some(b => b.key === commentBoxKeyOf({ path: file.path }))).toBe(false)
+    expect(
+      blocks.some(b => b.key === hunkActionsKeyOf({ path: file.path, hunk: hunkA.header })),
+    ).toBe(false)
+    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'hunk', 'fixed', 'hunk'])
+  })
+
+  test('drops outdated comments too, since a turn has none of its own', () => {
+    const stale = commentOf({ hunk: '@@ -99,1 +99,1 @@' })
+    const blocks = blocksOf(file, [hunkA], [stale], null, { turnIndex: 1 })
+
+    expect(blocks.some(b => b.key === OUTDATED_TITLE_KEY)).toBe(false)
   })
 })

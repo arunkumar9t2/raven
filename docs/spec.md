@@ -65,7 +65,17 @@ trigger is one entry, not a change to `register`.
 
 ### Diff view (`raven`)
 
-- Compares the working tree (tracked changes and untracked files) against `HEAD`.
+- Compares the working tree (tracked changes and untracked files) against a chosen source. A
+  `Select` in the header offers `HEAD` (default), `session start` (`HEAD` as it stood at this
+  module instance's first successful load), `branch point` (`HEAD`'s merge-base with the default
+  branch — origin's `HEAD` symref, else `main`, else `master`; hidden when none resolves), and one
+  `turn N — <prompt>` option per turn with edits (newest first, from the session transcript). `HEAD`,
+  `session start` and `branch point` persist per repository across sessions; picking a turn does
+  not. Untracked files show against every source.
+- Picking a turn switches the file list and hunks to that turn's edited files (synthetic hunks
+  built from its `Edit`/`MultiEdit`/`Write`/`NotebookEdit` calls) instead of a git diff; this view
+  is read-only — no comment boxes, no stage/revert — and the selected file's title row reads
+  "Turn N" instead of its path.
 - One row per file: status glyph, file-type icon, path, `+adds −dels`. Clicking a row selects it.
 - The selected file's hunks, each drawn with `Code format="diff"`, one element per hunk (the engine
   caps a `Code` source at 10 000 characters; a longer hunk is truncated with a marker).

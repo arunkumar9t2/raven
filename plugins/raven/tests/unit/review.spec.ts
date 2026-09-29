@@ -23,6 +23,7 @@ function fakeHost(onStatus?: (text: string | undefined) => void): Host {
     status: text => onStatus?.(text),
     fillPrompt: async () => ({ isFilled: true }),
     toast: () => {},
+    messages: async () => [],
   }
 }
 

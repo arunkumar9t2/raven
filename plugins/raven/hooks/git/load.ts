@@ -7,17 +7,26 @@ import { applyArgvOf } from './patch'
 
 export type Run = (argv: readonly string[], stdin?: string) => Promise<RunResult>
 
+/** What the working tree is diffed against: `HEAD`, or a specific commit (a session start or a merge-base). */
+export type Base = { kind: 'head' } | { kind: 'commit'; sha: string }
+
+/** The git revision a base names, for a diff argv. */
+export function refOf(base: Base): string {
+  return base.kind === 'head' ? 'HEAD' : base.sha
+}
+
 /**
- * Reads the working tree's changes against HEAD. Returns null outside a git repo.
+ * Reads the working tree's changes against `base`. Returns null outside a git repo.
  */
 export async function loadChanges(
   run: Run,
+  base: Base,
 ): Promise<{ toplevel: string; files: ChangedFile[] } | null> {
   const top = await run(['git', 'rev-parse', '--show-toplevel'])
   if (top.exitCode !== 0) return null
   const [status, diff] = await Promise.all([
     run(['git', 'status', '--porcelain=v1', '-z', '--untracked-files=all']),
-    run(['git', 'diff', 'HEAD', '--numstat', '-z']),
+    run(['git', 'diff', refOf(base), '--numstat', '-z']),
   ])
   const numstat = diff.exitCode === 0 ? numstatOf(diff.stdout) : new Map()
   const entries = statusEntriesOf(status.stdout)
@@ -46,12 +55,12 @@ async function untrackedLinesOf(
   return new Map(counts)
 }
 
-/** One file's hunks: tracked files diff against HEAD, untracked files diff against /dev/null. */
-export async function loadHunks(run: Run, file: ChangedFile): Promise<Hunk[]> {
+/** One file's hunks: tracked files diff against `base`, untracked files diff against /dev/null. */
+export async function loadHunks(run: Run, file: ChangedFile, base: Base): Promise<Hunk[]> {
   const argv =
     file.status === 'untracked'
       ? ['git', 'diff', '--no-index', '--', '/dev/null', file.path]
-      : ['git', 'diff', 'HEAD', '--', file.path]
+      : ['git', 'diff', refOf(base), '--', file.path]
   const result = await run(argv)
   return hunksOf(result.stdout)
 }
