@@ -5,7 +5,8 @@ Working title **Raven** (rename pending). Live-preview side pane for Claude Code
 
 ## Resume here
 
-M0–M5 are done and verified. Nothing is in flight: pick from "Next ideas" only when the user asks.
+M6 in progress: `docs/superpowers/plans/2026-09-29-raven-m6.md` (gitignored; the plan's
+"Execution order" section is authoritative). Current task: **1** (harness). Done: —
 
 ## Milestones
 

@@ -40,9 +40,9 @@ bun run validate     # claude plugin validate --strict, marketplace + plugin
 
 ## Closed loop
 
-`scripts/cc.sh start` opens a throwaway git repo in tmux running Claude Code (Haiku by default, via
-`--model`, never `/model`, which rewrites the user's default) with this plugin and function hooks on,
-and file checkpointing off so the native diff panel does not take the dock. `RAVEN_CLAUDE_ARGS`
+`scripts/cc.sh start` opens a throwaway git repo in tmux running Claude Code with the default model
+(never `/model`: it rewrites the user's default) and the plugin as `bun run setup:local` loads it,
+with file checkpointing off so the native diff panel does not take the dock. `RAVEN_CLAUDE_ARGS`
 passes extra flags (e.g. `--allowedTools 'Bash(raven:*)' Write`).
 `cc.sh type "/raven"`, `cc.sh click <col> <row>` (SGR mouse, presses Buttons and focuses Inputs),
 `cc.sh keys …`, `cc.sh cap`, `cc.sh stop`. Prefer zero-token checks: edit files from the shell and
