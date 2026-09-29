@@ -145,15 +145,20 @@ describe('clampHunk', () => {
     expect(clampHunk(hunk, 10000)).toBe(hunk)
   })
 
-  test('cuts at a line boundary and reports the remaining line count', () => {
-    const hunk = {
-      header: '@@ -1,5 +1,5 @@',
-      text: '@@ -1,5 +1,5 @@\nline1\nline2\nline3\nline4\nline5\n',
-    }
-    expect(clampHunk(hunk, 20)).toEqual({
-      header: '@@ -1,5 +1,5 @@',
-      text: '@@ -1,5 +1,5 @@\n … (5 more lines)\n',
-    })
+  test('cuts at a line boundary, stays under the cap and counts the rest', () => {
+    const lines = Array.from({ length: 10 }, (_, i) => `+line ${i}`)
+    const hunk = { header: '@@ -0,0 +1,10 @@', text: `@@ -0,0 +1,10 @@\n${lines.join('\n')}\n` }
+    const { text } = clampHunk(hunk, 80)
+    const kept = text.split('\n').filter(line => line.startsWith('+line')).length
+
+    expect(text.length).toBeLessThanOrEqual(80)
+    expect(text.startsWith('@@ -0,0 +1,10 @@\n')).toBe(true)
+    expect(text.endsWith(` … (${10 - kept} more lines)\n`)).toBe(true)
+  })
+
+  test('keeps the header even when the cap is tiny', () => {
+    const hunk = { header: '@@ -1,2 +1,2 @@', text: '@@ -1,2 +1,2 @@\n-a\n+b\n' }
+    expect(clampHunk(hunk, 20).text).toBe('@@ -1,2 +1,2 @@\n … (2 more lines)\n')
   })
 })
 

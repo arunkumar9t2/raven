@@ -21,4 +21,6 @@ export type Host = {
   storeGet: (key: string) => Promise<unknown>
   storeSet: (key: string, value: unknown) => Promise<void>
   submitPrompt: (text: string) => Promise<void>
+  /** The session's working directory, absolute; relative tool paths resolve against it. */
+  cwd: () => Promise<string>
 }

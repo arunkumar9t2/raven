@@ -31,7 +31,8 @@ const MARKER_ROOM = 32
 export function clampHunk(hunk: Hunk, max = ELEMENT_TEXT_LIMIT): Hunk {
   if (hunk.text.length <= max) return hunk
   // Leave room for the marker line, which counts against the same cap.
-  const cut = hunk.text.lastIndexOf('\n', max - MARKER_ROOM)
+  const headerEnd = hunk.text.indexOf('\n')
+  const cut = Math.max(headerEnd, hunk.text.lastIndexOf('\n', max - MARKER_ROOM))
   const kept = cut >= 0 ? hunk.text.slice(0, cut + 1) : ''
   const rest = cut >= 0 ? hunk.text.slice(cut + 1) : hunk.text
   const more = rest.split('\n').length - 1

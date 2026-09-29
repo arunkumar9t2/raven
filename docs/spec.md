@@ -8,20 +8,27 @@ It ships as one Claude Code plugin with three layers:
 
 | Layer | Lives in | Runs | Owns |
 | --- | --- | --- | --- |
-| **Mod** (deterministic) | `plugins/raven/hooks/` | inside Claude Code, as function hooks | every pixel, every reaction to an engine event, in-session state, prompt injection |
-| **CLI** (agentic entry) | `plugins/raven/cli/` → `plugins/raven/bin/raven` | as a process Claude starts through Bash | argument parsing, path resolution against the shell's cwd, file validation, the directive it prints |
-| **Skill** (agentic guidance) | `plugins/raven/skills/preview/` | in the model's context, on demand | when and how Claude should reach for the CLI |
+| **Mod** (deterministic) | `plugins/raven/hooks/` | inside Claude Code, as function hooks | every pixel, every reaction to an engine event, in-session state, prompt injection, the `show` tool |
+| **CLI** (agentic fallback) | `plugins/raven/cli/` → `plugins/raven/bin/raven` | as a process Claude starts through Bash | argument parsing, path resolution against the shell's cwd, file validation, the directive it prints |
+| **Skill** (agentic guidance) | `plugins/raven/skills/preview/` | in the model's context, on demand | when and how Claude should reach for the `show` tool, or the CLI when it is absent |
 
 ## The boundary
 
 The mod runs in a sandbox with no Node, no process and no inbound channel. Nothing outside the
-engine can call into it. The CLI therefore never talks to the mod directly: it prints one
-**directive** line, and the mod reads it from the Bash tool's result as that call returns.
+engine can call into it. Claude's primary entry is the native `mcp__<plugin>__show` tool the mod
+registers at `session.start` and serves directly, with no process in between. The CLI remains for
+humans at a shell and for sessions without function hooks, where no tool is there to call: it never
+talks to the mod directly, and instead prints one **directive** line the mod reads from the Bash
+tool's result as that call returns.
 
 ```
-Claude ──Bash──▶ raven show docs/plan.md ──stdout──▶ ::raven::{"op":"show","path":"/abs/docs/plan.md"}
+Claude ──tool call──▶ mcp__raven__show {op:"show", path:"docs/plan.md"}      (function hooks on)
                                                            │
-                        mod: on('tool.call', {tool:'Bash'}) ◀┘  parses, acts, rewrites the result text
+                        mod: on('tool.call', {tool: /show$/}) ◀┘  resolves path, acts, answers directly
+
+Claude ──Bash──▶ raven show docs/plan.md ──stdout──▶ ::raven::{"op":"show","path":"/abs/docs/plan.md"}
+                                                           │                      (function hooks off,
+                        mod: on('tool.call', {tool:'Bash'}) ◀┘  parses, acts, rewrites the result text    or the tool unlisted)
 ```
 
 - The CLI is stateless and must stay useful when the mod is absent (function hooks off): after the
@@ -30,18 +37,20 @@ Claude ──Bash──▶ raven show docs/plan.md ──stdout──▶ ::raven
 - The CLI lives inside the plugin (`plugins/raven/cli/`) because an install copies only the plugin
   directory; `bin/raven` runs the compiled `dist/raven` when present, else the source under Bun.
 - Anything that needs the shell's working directory, globbing, or validation belongs in the CLI; the
-  mod does not know where Bash's `cd` left it.
+  mod does not know where Bash's `cd` left it. The tool is the exception: its `path` resolves against
+  the session's own cwd (`$.session.cwd()`), since no shell sits between the model and the mod there.
 - Anything that needs the screen, engine events or session state belongs in the mod.
 
 ## Directive contract
 
-One line per directive, `::raven::` followed by compact JSON. Unknown ops are ignored by the mod.
+The `show` tool's input and a directive line share the same shape (`op`, `path`, `markdown`, `title`);
+one line per directive, `::raven::` followed by compact JSON. Unknown ops are ignored by the mod.
 
 | op | fields | mod action |
 | --- | --- | --- |
-| `show` | `path` (absolute), `title?` | open the doc view on that file (markdown rendered, anything else highlighted by extension) |
+| `show` | `path` (absolute for a directive; resolved against the session cwd for the tool), `title?` | open the doc view on that file (markdown rendered, anything else highlighted by extension) |
 | `note` | `markdown`, `title?` | open the doc view on inline markdown Claude composed |
-| `diff` | `path?` (absolute) | open the diff view, selecting `path` when given |
+| `diff` | `path?` (as above) | open the diff view, selecting `path` when given |
 | `comments` | — | answer with the pending review comments as the tool result text |
 
 ## Views

@@ -7,10 +7,21 @@ description: Show things to the user in the Raven preview pane beside the transc
 
 Raven docks a pane beside the transcript. It already reacts on its own: the diff refreshes as files
 change, and markdown written under `docs/superpowers/`, `.superpowers/` or `~/.claude/plans/` opens
-as it is written. Reach for the `raven` command only for what it cannot see coming.
+as it is written. Reach for the Raven `show` tool only for what it cannot see coming.
 
-`raven` is on your PATH. Run it with Bash; it prints one line the pane consumes, and the tool result
-tells you whether it was shown.
+Prefer the Raven `show` tool when it is listed among your tools: call it with `op` (`show`, `note`,
+`diff` or `comments`), and `path` / `markdown` / `title` as the op needs. A relative `path` resolves
+against the session's working directory.
+
+| Want | Call |
+| --- | --- |
+| Render a markdown file or show any file | `{ op: "show", path, title? }` |
+| Render markdown you compose | `{ op: "note", markdown, title? }` |
+| Open the diff, optionally at one file | `{ op: "diff", path? }` |
+| Read the user's pending review comments | `{ op: "comments" }` |
+
+When the tool is not listed (function hooks off, or an older Raven), fall back to the `raven` CLI: it
+is on your PATH, prints one line the pane consumes, and the tool result tells you whether it was shown.
 
 | Want | Run |
 | --- | --- |
@@ -31,7 +42,8 @@ tells you whether it was shown.
 
 The user can comment on files and hunks in the diff pane. Pending comments ride their next prompt as
 hidden context headed as a review; treat each as a requested change, address it, and say which ones
-you addressed. `raven comments` fetches them on demand (and marks them delivered).
+you addressed. `{ op: "comments" }` (or `raven comments`) fetches them on demand (and marks them
+delivered).
 
 ## When the result says the pane is not active
 

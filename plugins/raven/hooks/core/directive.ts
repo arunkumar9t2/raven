@@ -10,7 +10,8 @@ export type Directive =
 
 const optionalString = (value: unknown) => value === undefined || typeof value === 'string'
 
-function directiveOf(value: unknown): Directive | null {
+/** Parses one directive's payload (a CLI's printed JSON, or the `show` tool's input) or null. */
+export function directiveOf(value: unknown): Directive | null {
   if (!isRecord(value)) return null
   const { op, path, title, markdown } = value
   if (!optionalString(title) || !optionalString(path)) return null
