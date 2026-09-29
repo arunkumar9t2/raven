@@ -94,8 +94,15 @@ export function register(on: On) {
     const drawn = raven.render(e.requestId, {
       ui,
       columns: e.props.bodyColumns,
+      rows: e.props.scroll.bodyRows,
     })
     return drawn ?? next(e)
+  })
+
+  on('ui.scroll', { requestId: PANE_IDS }, ($, e, next) => {
+    if (!raven || e.origin.kind !== 'person' || !raven.scroll(e.requestId, e.by)) return next(e)
+    $.ui.invalidate('ui.render')
+    return {}
   })
 
   on('ui.close', { id: PANE_IDS }, async ($, e, next) => {

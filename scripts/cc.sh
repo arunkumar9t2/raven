@@ -8,6 +8,7 @@
 #   scripts/cc.sh type <text>       type text into the composer and press Enter
 #   scripts/cc.sh keys <key>...     send raw tmux keys (Enter, Escape, Down, C-c …)
 #   scripts/cc.sh click <col> <row> left-click at 1-based screen cell (SGR mouse)
+#   scripts/cc.sh wheel <col> <row> up|down   scroll wheel tick at 1-based screen cell (SGR mouse)
 #   scripts/cc.sh cap               print the visible screen
 #   scripts/cc.sh stop              kill the session
 set -euo pipefail
@@ -44,6 +45,10 @@ case "${1:-}" in
   click)
     tmux send-keys -t "$SESSION" -l $'\e[<0;'"$2;$3M" && sleep 0.1
     tmux send-keys -t "$SESSION" -l $'\e[<0;'"$2;$3m"
+    ;;
+  wheel)
+    button=$([[ "$4" == "up" ]] && echo 64 || echo 65)
+    tmux send-keys -t "$SESSION" -l $'\e[<'"$button;$2;$3M"
     ;;
   keys) shift; tmux send-keys -t "$SESSION" "$@" ;;
   cap) tmux capture-pane -t "$SESSION" -p | sed -e 's/[[:space:]]*$//' | cat -s ;;

@@ -104,3 +104,19 @@ export function rowOfKey(blocks: readonly Block[], key: string): number | null {
   }
   return null
 }
+
+/** A fixed list's window: the items shown, and how many trail past the shown window. */
+export type ListWindow = { start: number; end: number; more: number }
+
+/**
+ * A window of at most `max` rows over a list of `count` items: every item when they fit; else
+ * `max - 1` items centered on `selectedIndex` (clamped to the list) plus a trailing "more" count.
+ */
+export function fileWindowOf(count: number, selectedIndex: number, max: number): ListWindow {
+  if (count <= max) return { start: 0, end: count, more: 0 }
+  const visible = Math.max(1, max - 1)
+  const index = Math.max(0, selectedIndex)
+  const start = Math.max(0, Math.min(count - visible, index - Math.floor(visible / 2)))
+  const end = start + visible
+  return { start, end, more: count - end }
+}

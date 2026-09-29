@@ -21,6 +21,8 @@ export type Raven = {
   /** Hidden context the next prompt carries: the pending review, which it consumes. */
   takePromptContext: () => string | undefined
   render: (paneId: string, kit: Kit) => RenderElement | null
+  /** Moves a pane's own scroll by `by` rows; true when its view handled the move. */
+  scroll: (paneId: string, by: number) => boolean
   paneClosed: (paneId: string) => void
 }
 
@@ -189,6 +191,7 @@ export function createRaven(host: Host, now: () => number): Raven {
     },
     takePromptContext: () => reviewTextOf(review.take()),
     render: (paneId, kit) => views.find(view => view.pane.id === paneId)?.render(kit) ?? null,
+    scroll: (paneId, by) => views.find(view => view.pane.id === paneId)?.scroll?.(by) ?? false,
     paneClosed: paneId => {
       open.delete(paneId)
     },
