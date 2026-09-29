@@ -1,3 +1,4 @@
+import { ELEMENT_TEXT_LIMIT } from '../core/view'
 export type Hunk = { header: string; text: string }
 
 /**
@@ -24,9 +25,13 @@ export function hunksOf(diff: string): Hunk[] {
  * Truncates a hunk's text to at most `max` chars (default 10000, the engine's Code cap) at a line
  * boundary, appending a ' … (N more lines)' marker when cut.
  */
-export function clampHunk(hunk: Hunk, max = 10000): Hunk {
+/** Enough for ` … (N more lines)` with any realistic N. */
+const MARKER_ROOM = 32
+
+export function clampHunk(hunk: Hunk, max = ELEMENT_TEXT_LIMIT): Hunk {
   if (hunk.text.length <= max) return hunk
-  const cut = hunk.text.lastIndexOf('\n', max)
+  // Leave room for the marker line, which counts against the same cap.
+  const cut = hunk.text.lastIndexOf('\n', max - MARKER_ROOM)
   const kept = cut >= 0 ? hunk.text.slice(0, cut + 1) : ''
   const rest = cut >= 0 ? hunk.text.slice(cut + 1) : hunk.text
   const more = rest.split('\n').length - 1

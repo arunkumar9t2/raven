@@ -6,6 +6,9 @@ export type Ui = Pick<
   'Box' | 'Text' | 'Button' | 'Input' | 'Select' | 'Code' | 'Markdown'
 >
 
+/** The engine refuses a `Markdown`, `Code` or `Text` element whose text is longer than this. */
+export const ELEMENT_TEXT_LIMIT = 10_000
+
 /** What a view's render is handed: the elements and the pane body's width in cells. */
 export type Kit = { ui: Ui; columns: number }
 
