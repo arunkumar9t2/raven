@@ -1,7 +1,7 @@
 import type { SessionMessage } from 'claude-code'
 import { isRecord } from '../core/is-record'
 import type { ChangedFile } from '../git/changes'
-import { bodyLinesOf, clampHunk, type Hunk, hunkFrom } from '../git/hunks'
+import { bodyLinesOf, clampHunk, type Hunk, hunkFrom, lineKindOf } from '../git/hunks'
 
 /** One edited file: its path and the hunks left by the turn's tool uses, in call order. */
 export type TurnFile = { path: string; hunks: Hunk[] }
@@ -113,8 +113,9 @@ export function changedFileOfTurnFile(file: TurnFile): ChangedFile {
   let dels = 0
   for (const hunk of file.hunks) {
     for (const line of bodyLinesOf(hunk)) {
-      if (line.startsWith('+')) adds++
-      else if (line.startsWith('-')) dels++
+      const kind = lineKindOf(line)
+      if (kind === 'add') adds++
+      else if (kind === 'del') dels++
     }
   }
   return { path: file.path, status: 'modified', adds, dels, isBinary: false }

@@ -5,15 +5,13 @@ import type { RenderElement } from 'claude-code'
 
 import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
-import { branchPointOf } from '../git/base'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
-import { applyPatch, type Base, loadChanges, loadHunks } from '../git/load'
+import { applyPatch, loadChanges, loadHunks, refOf } from '../git/load'
 import { patchOf } from '../git/patch'
-import { DIFF_PANE, sourceStoreKeyOf } from '../names'
+import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { changedFileOfTurnFile, type TurnEdits, turnEditsOf, turnFilesOf } from '../review/turns'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { type BodyItem, blocksOf, type HunkState } from './diff/blocks'
 import { addressedRow, commentBox, hunkActionsRow, note, outdatedTitle } from './diff/comment-box'
@@ -28,7 +26,8 @@ import {
   stepFileIndexOf,
   windowOf,
 } from './diff/layout'
-import { isPersistable, type Source, sourceOf, sourceOptionsOf, sourceValueOf } from './diff/source'
+import { sourceValueOf } from './diff/source'
+import { createSourceController } from './diff/source-controller'
 
 const HEADER_ROWS = 1
 const RULE_ROWS = 1
@@ -51,14 +50,6 @@ type Model = {
   stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
   /** The anchor key of the hunk whose "revert" is waiting for a confirming second press. */
   confirmingRevert: string | null
-  /** What the diff is shown against; persisted per repository except a turn, which never is. */
-  source: Source
-  /** HEAD's sha at this module instance's first successful load; null until captured. */
-  sessionStartSha: string | null
-  /** HEAD's merge-base with the default branch, refreshed alongside the repository; null when unresolvable. */
-  branchPointSha: string | null
-  /** Each turn with edits, recomputed on every refresh; oldest first, as `turnEditsOf` returns them. */
-  turns: readonly TurnEdits[]
 }
 
 /** What the diff view asks of the controller. */
@@ -94,11 +85,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     confirmingClear: false,
     stagedHunks: new Map(),
     confirmingRevert: null,
-    source: { kind: 'head' },
-    sessionStartSha: null,
-    branchPointSha: null,
-    turns: [],
   }
+
+  const sourceController = createSourceController(host)
 
   // The body rows the most recent render computed, so `scroll` can clamp without recomputing it.
   let lastBodyRows = 0
@@ -112,45 +101,14 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     staged: ReadonlySet<string>
     confirmingRevert: string | null
     turnIndex: number | undefined
+    readOnly: boolean
     blocks: Block<BodyItem>[]
     contentRows: number
   } | null = null
 
-  // Read once, at the first refresh; a store lookup needs the repository's toplevel, so a plain
-  // `git rev-parse --show-toplevel` runs ahead of `loadChanges` rather than duplicating its work.
-  let hasReadStoredSource = false
-
-  /** The base the current source names, falling back to HEAD while its sha is not yet known. */
-  function currentBase(): Base {
-    if (model.source.kind === 'session' && model.sessionStartSha !== null) {
-      return { kind: 'commit', sha: model.sessionStartSha }
-    }
-    if (model.source.kind === 'branch-point' && model.branchPointSha !== null) {
-      return { kind: 'commit', sha: model.branchPointSha }
-    }
-    return { kind: 'head' }
-  }
-
-  function turnHunksFrom(turns: readonly TurnEdits[], index: number): Map<string, readonly Hunk[]> {
-    return new Map(turnFilesOf(turns, index).map(file => [file.path, file.hunks]))
-  }
-
   /** The files the current source shows: the repository's, or one turn's edited files. */
   function filesOf(): readonly ChangedFile[] {
-    return model.source.kind === 'turn'
-      ? turnFilesOf(model.turns, model.source.index).map(changedFileOfTurnFile)
-      : (model.repository?.files ?? [])
-  }
-
-  async function resolveStoredSource(): Promise<void> {
-    if (hasReadStoredSource) return
-    hasReadStoredSource = true
-    const top = await host.run(['git', 'rev-parse', '--show-toplevel']).catch(() => null)
-    if (top?.exitCode !== 0) return
-    const stored = await host.storeGet(sourceStoreKeyOf(top.stdout.trim()))
-    if (typeof stored !== 'string') return
-    const source = sourceOf(stored)
-    if (isPersistable(source)) model = { ...model, source }
+    return sourceController.files(model.repository)
   }
 
   // Any action but a second "clear"/"revert" press drops those confirm states, so `patch`
@@ -179,13 +137,13 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       : new Map(model.stagedHunks).set(path, kept)
   }
 
-  /** No-op for a turn source: its hunks are already known, set whole when the source is chosen. */
+  /** No-op for a turn source: its hunks are already known, read straight off the controller. */
   async function loadSelected() {
-    if (model.source.kind === 'turn') return
+    if (sourceController.isReadOnly()) return
     const file = selectedFile()
     if (!file) return
     const started = generation
-    const hunks = await loadHunks(host.run, file, currentBase()).catch((): Hunk[] => [])
+    const hunks = await loadHunks(host.run, file, sourceController.base()).catch((): Hunk[] => [])
     const isCurrent = started === generation && model.selected === file.path
     if (isCurrent) {
       update({
@@ -196,41 +154,30 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   async function refresh() {
-    await resolveStoredSource()
+    await sourceController.resolveStoredSource()
     const started = ++generation
-    const [repository, branchPointSha, messages] = await Promise.all([
-      loadChanges(host.run, currentBase()).catch(() => null),
-      branchPointOf(host.run).catch(() => null),
-      host.messages().catch(() => []),
-    ])
+    const read = () => loadChanges(host.run, sourceController.base()).catch(() => null)
+    const baseRead = refOf(sourceController.base())
+    let repository = await read()
     if (started !== generation) return
 
-    if (repository && model.sessionStartSha === null) {
-      const head = await host.run(['git', 'rev-parse', 'HEAD']).catch(() => null)
-      if (started === generation && head && head.exitCode === 0) {
-        model = { ...model, sessionStartSha: head.stdout.trim() }
-      }
-    }
+    await sourceController.refresh(repository)
+    // Resolving the sources can move the base (the branch point is known only now): read again.
+    if (refOf(sourceController.base()) !== baseRead) repository = await read()
+    if (started !== generation) return
 
-    const turns = turnEditsOf(messages)
-    const source = model.source
-    const files =
-      source.kind === 'turn'
-        ? turnFilesOf(turns, source.index).map(changedFileOfTurnFile)
-        : (repository?.files ?? [])
+    const files = sourceController.files(repository)
     const isKept = files.some(file => file.path === model.selected)
 
     update({
       repository,
-      branchPointSha,
-      turns,
       isLoaded: true,
-      hunks: source.kind === 'turn' ? turnHunksFrom(turns, source.index) : new Map(),
+      hunks: new Map(),
       selected: isKept ? model.selected : (files[0]?.path ?? null),
     })
 
     if (repository) await review.load(repository.toplevel)
-    if (source.kind !== 'turn') await loadSelected()
+    if (!sourceController.isReadOnly()) await loadSelected()
   }
 
   function select(path: string) {
@@ -248,24 +195,14 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     if (file) select(file.path)
   }
 
-  /** Switches the source; a turn's files/hunks are set at once, a git base triggers a reload. */
+  /** Switches the source; a turn's files are already known, a git base triggers a reload. */
   function selectSource(value: string) {
-    const source = sourceOf(value)
-    const toplevel = model.repository?.toplevel
-    if (isPersistable(source) && toplevel) void host.storeSet(sourceStoreKeyOf(toplevel), value)
+    sourceController.select(value)
+    update({ top: 0, composing: null })
 
-    model = {
-      ...model,
-      source,
-      top: 0,
-      composing: null,
-      confirmingClear: false,
-      confirmingRevert: null,
-    }
-
-    if (source.kind === 'turn') {
-      const files = turnFilesOf(model.turns, source.index).map(changedFileOfTurnFile)
-      update({ hunks: turnHunksFrom(model.turns, source.index), selected: files[0]?.path ?? null })
+    if (sourceController.isReadOnly()) {
+      const files = filesOf()
+      update({ selected: files[0]?.path ?? null })
       return
     }
 
@@ -345,10 +282,12 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       return { file: null, blocks: [], contentRows: 0 }
     }
 
-    const hunks = model.hunks.get(file.path)
+    const source = sourceController.source()
+    const hunks = sourceController.hunksFor(file) ?? model.hunks.get(file.path)
     const comments = review.comments()
     const staged = model.stagedHunks.get(file.path) ?? EMPTY_STAGED
-    const turnIndex = model.source.kind === 'turn' ? model.source.index : undefined
+    const turnIndex = source.kind === 'turn' ? source.index : undefined
+    const readOnly = sourceController.isReadOnly()
 
     if (
       cache &&
@@ -358,13 +297,18 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       cache.composing === model.composing &&
       cache.staged === staged &&
       cache.confirmingRevert === model.confirmingRevert &&
-      cache.turnIndex === turnIndex
+      cache.turnIndex === turnIndex &&
+      cache.readOnly === readOnly
     ) {
       return { file, blocks: cache.blocks, contentRows: cache.contentRows }
     }
 
     const hunkState: HunkState = { staged, confirmingRevert: model.confirmingRevert }
-    const blocks = blocksOf(file, hunks, comments, model.composing, { hunkState, turnIndex })
+    const blocks = blocksOf(file, hunks, comments, model.composing, {
+      hunkState,
+      turnIndex,
+      readOnly,
+    })
     const contentRows = contentRowsOf(blocks)
     cache = {
       file,
@@ -374,6 +318,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       staged,
       confirmingRevert: model.confirmingRevert,
       turnIndex,
+      readOnly,
       blocks,
       contentRows,
     }
@@ -448,14 +393,15 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
 
   function render(kit: Kit): RenderElement {
     const { Box, Text } = kit.ui
-    const { repository, source } = model
+    const { repository } = model
+    const isReadOnly = sourceController.isReadOnly()
 
     if (!model.isLoaded) return <Text dimColor>Reading the repository…</Text>
-    if (source.kind !== 'turn' && !repository) return <Text dimColor>Not in a git repository.</Text>
+    if (!isReadOnly && !repository) return <Text dimColor>Not in a git repository.</Text>
 
     const files = filesOf()
     if (files.length === 0) {
-      const text = source.kind === 'turn' ? 'This turn edited no files.' : 'No uncommitted changes.'
+      const text = isReadOnly ? 'This turn edited no files.' : 'No uncommitted changes.'
       return <Text dimColor>{text}</Text>
     }
 
@@ -474,11 +420,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           files,
           pending: review.pending().length,
           confirmingClear: model.confirmingClear,
-          sourceValue: sourceValueOf(source),
-          sourceOptions: sourceOptionsOf({
-            hasBranchPoint: model.branchPointSha !== null,
-            turns: model.turns,
-          }),
+          sourceValue: sourceValueOf(sourceController.source()),
+          sourceOptions: sourceController.options(),
           onSourceChange: selectSource,
           onRefresh: () => void refresh(),
           onSend: () => {

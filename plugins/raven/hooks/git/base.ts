@@ -1,13 +1,12 @@
-import type { Run } from './load'
+import { outputOf, type Run } from './load'
 
 const CANDIDATE_BRANCHES = ['main', 'master']
 
 /** The repository's default branch: origin's HEAD symref, else the first of `main`/`master` that exists. */
 async function defaultBranchOf(run: Run): Promise<string | null> {
-  const symref = await run(['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD'])
-  if (symref.exitCode === 0) {
-    const name = symref.stdout.trim()
-    const branch = name.startsWith('origin/') ? name.slice('origin/'.length) : name
+  const symref = outputOf(await run(['git', 'symbolic-ref', '--short', 'refs/remotes/origin/HEAD']))
+  if (symref !== null) {
+    const branch = symref.startsWith('origin/') ? symref.slice('origin/'.length) : symref
     if (branch !== '') return branch
   }
   for (const candidate of CANDIDATE_BRANCHES) {
@@ -21,6 +20,5 @@ async function defaultBranchOf(run: Run): Promise<string | null> {
 export async function branchPointOf(run: Run): Promise<string | null> {
   const branch = await defaultBranchOf(run)
   if (branch === null) return null
-  const result = await run(['git', 'merge-base', 'HEAD', branch])
-  return result.exitCode === 0 ? result.stdout.trim() : null
+  return outputOf(await run(['git', 'merge-base', 'HEAD', branch]))
 }

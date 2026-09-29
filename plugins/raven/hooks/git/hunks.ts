@@ -22,6 +22,14 @@ export function parseHeader(header: string): {
   }
 }
 
+/** A hunk body line's kind; null for '' and the '\ No newline at end of file' marker. */
+export function lineKindOf(line: string): 'add' | 'del' | 'context' | null {
+  if (line === '' || line.startsWith('\\')) return null
+  if (line.startsWith('+')) return 'add'
+  if (line.startsWith('-')) return 'del'
+  return 'context'
+}
+
 const bodyLinesCache = new WeakMap<Hunk, readonly string[]>()
 
 /** A hunk's body lines (header dropped, trailing '\n''s empty tail dropped), memoized per hunk. */

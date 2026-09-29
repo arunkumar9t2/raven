@@ -35,6 +35,11 @@ const REFRESH_DEBOUNCE_MS = 300
 const SEND = 'send'
 const NARROW_TEXT = 'Widen the terminal to dock the Raven pane'
 
+const REFUSAL_TEXTS: Record<'no_composer' | 'dialog', string> = {
+  no_composer: 'no prompt box in this session',
+  dialog: 'a dialog has the keyboard',
+}
+
 export function createRaven(host: Host, now: () => number): Raven {
   const review = createReview(host, now)
   const diff = createDiffView(host, review, {
@@ -92,11 +97,7 @@ export function createRaven(host: Host, now: () => number): Raven {
   }
 
   const refusalTextOf = (refusal: 'no_composer' | 'dialog' | undefined) =>
-    refusal === 'no_composer'
-      ? 'no prompt box in this session'
-      : refusal === 'dialog'
-        ? 'a dialog has the keyboard'
-        : 'the fill was refused'
+    (refusal && REFUSAL_TEXTS[refusal]) ?? 'the fill was refused'
 
   /** Fills the prompt box with the pending review so the person can edit it before sending. */
   async function editAndSend(): Promise<void> {
@@ -162,7 +163,7 @@ export function createRaven(host: Host, now: () => number): Raven {
   }
 
   async function showTree() {
-    await tree.refresh()
+    await tree.refresh({ force: true })
     return show(tree)
   }
 

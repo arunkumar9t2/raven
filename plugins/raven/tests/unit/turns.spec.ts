@@ -205,4 +205,24 @@ describe('changedFileOfTurnFile', () => {
       isBinary: false,
     })
   })
+
+  test('does not count a "\\ No newline at end of file" marker line', () => {
+    const file = {
+      path: '/r/a.ts',
+      hunks: [
+        {
+          header: '@@ -1,1 +1,1 @@',
+          text: '@@ -1,1 +1,1 @@\n-a\n\\ No newline at end of file\n+b\n\\ No newline at end of file\n',
+        },
+      ],
+    }
+
+    expect(changedFileOfTurnFile(file)).toEqual({
+      path: '/r/a.ts',
+      status: 'modified',
+      adds: 1,
+      dels: 1,
+      isBinary: false,
+    })
+  })
 })

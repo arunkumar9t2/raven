@@ -247,7 +247,7 @@ describe('blocksOf', () => {
 
 describe('blocksOf for a turn source', () => {
   test('titles the file with the turn index and drops comment/stage/revert rows', () => {
-    const blocks = blocksOf(file, [hunkA, hunkB], [], null, { turnIndex: 3 })
+    const blocks = blocksOf(file, [hunkA, hunkB], [], null, { turnIndex: 3, readOnly: true })
 
     expect(blocks[0]).toMatchObject({ item: { kind: 'title', file, turnIndex: 3 } })
     expect(blocks.some(b => b.key === commentBoxKeyOf({ path: file.path }))).toBe(false)
@@ -259,7 +259,7 @@ describe('blocksOf for a turn source', () => {
 
   test('drops outdated comments too, since a turn has none of its own', () => {
     const stale = commentOf({ hunk: '@@ -99,1 +99,1 @@' })
-    const blocks = blocksOf(file, [hunkA], [stale], null, { turnIndex: 1 })
+    const blocks = blocksOf(file, [hunkA], [stale], null, { turnIndex: 1, readOnly: true })
 
     expect(blocks.some(b => b.key === OUTDATED_TITLE_KEY)).toBe(false)
   })

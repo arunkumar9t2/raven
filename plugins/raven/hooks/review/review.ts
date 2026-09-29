@@ -1,3 +1,4 @@
+import { countOf } from '../core/format'
 import type { Host } from '../core/host'
 import { commentsStoreKeyOf } from '../names'
 import { addComment, type Comment, type Comments, commentsFrom, removeComment } from './comments'
@@ -30,8 +31,7 @@ export type Review = {
 }
 
 /** The status line's text; the engine already prefixes it with the plugin's name. */
-export const pendingTextOf = (count: number) =>
-  `${count} review ${count === 1 ? 'comment' : 'comments'} pending`
+export const pendingTextOf = (count: number) => `${countOf(count, 'review comment')} pending`
 
 export function createReview(host: Host, now: () => number): Review {
   let comments: Comments = []
@@ -49,8 +49,11 @@ export function createReview(host: Host, now: () => number): Review {
     )
   }
 
+  const byStatus = (status: Comment['status']) =>
+    comments.filter(comment => comment.status === status)
+
   const notifyStatus = () => {
-    const count = comments.filter(comment => comment.status === 'pending').length
+    const count = byStatus('pending').length
     if (count === lastPendingCount) return
     lastPendingCount = count
     host.status(count > 0 ? pendingTextOf(count) : undefined)
@@ -80,7 +83,7 @@ export function createReview(host: Host, now: () => number): Review {
       save()
     },
     take: () => {
-      const taken = comments.filter(comment => comment.status === 'pending')
+      const taken = byStatus('pending')
       if (taken.length > 0) {
         moveStatus('pending', 'sent')
         save()
@@ -91,8 +94,8 @@ export function createReview(host: Host, now: () => number): Review {
       moveStatus('sent', 'pending', ids)
       save()
     },
-    pending: () => comments.filter(comment => comment.status === 'pending'),
-    sent: () => comments.filter(comment => comment.status === 'sent'),
+    pending: () => byStatus('pending'),
+    sent: () => byStatus('sent'),
     markAddressed: ids => {
       moveStatus('sent', 'addressed', ids)
       moveStatus('sent', 'open')
