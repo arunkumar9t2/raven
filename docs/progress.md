@@ -14,7 +14,7 @@ Check `TaskList` / this log's latest entry, then continue with the next unchecke
 - [x] M2 doc view: auto-show markdown written to plan/spec dirs (superpowers, ~/.claude/plans)
 - [x] M3 review comments: comment on file/hunk, ride next prompt / Send button
 - [x] M4 CLI + skill: `raven show|diff|comments`, directive bridge via Bash result intercept
-- [ ] M5 simplify, review, validate, e2e
+- [x] M5 simplify, review, validate, e2e
 
 ## Decisions
 
@@ -33,4 +33,14 @@ Check `TaskList` / this log's latest entry, then continue with the next unchecke
 - 2026-09-29 The native built-in diff panel (not a plugin pane in this build) auto-opens on the first checkpointed edit and takes the dock over Raven. It obeys the `diffSidebarOpen` global preference (closing it once sets false). The harness runs with `CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1` rather than touching the user's config.
 - 2026-09-29 The engine writes current types to `plugins/raven/.claude-plugin/types/` on load; `bun run types:sync` copies them to `types/`.
 - 2026-09-29 The mod hot-reloads when its sources change during a session.
-- 2026-09-29 Open follow-ups: untracked files show +0; some Nerd Font glyphs render blank; simplify + review pass; more `claude plugin test` coverage.
+- 2026-09-29 Simplify pass (4 Sonnet reviewers): views declare their `/raven` subcommand; triggers emit `reload-doc` and `main-loop-edit`; focus goes through the controller; the CLI imports names and the Directive type from the mod at build time.
+- 2026-09-29 Correctness review: a Bash call that printed a directive keeps its other output (only directive/fallback lines give way to the ack); only composer prompts carry the hidden review; diff refreshes carry a generation so a stale read never lands; `raven comments` consuming the comments is intended (they reach Claude as the tool result). Skipped: serializing overlapping `show()` of one view.
+- 2026-09-29 Nerd Font glyphs are emitted correctly (U+E628 etc. present in the output); a plain `tmux capture-pane` view just doesn't draw them.
+
+## Next ideas
+
+- Pinned header/file list with the engine's `ui.scroll` (the built-in diff mod's approach) for long diffs.
+- Base selection (HEAD / merge-base with the default branch), per-turn diffs from `$.session.messages()`.
+- `ExitPlanMode` plans into the Doc pane; a file-tree view; render `raven show` images via `Image`.
+- Line-level comments (the `Code` element has no line hit-testing; would need a per-line Button layout).
+- Publish: a release workflow that builds `dist/raven` per platform.

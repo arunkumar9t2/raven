@@ -1,4 +1,5 @@
 import type { On } from 'claude-code'
+import { withoutDirectives } from './core/directive'
 import type { Host } from './core/host'
 import { isRecord } from './core/is-record'
 import { createRaven, type Raven } from './core/raven'
@@ -46,9 +47,11 @@ export function register(on: On) {
     return next(e)
   })
 
-  on('command.run', { command: COMMAND }, async ($, e, next) =>
-    raven ? { text: await raven.command(e.args) } : next(e),
-  )
+  on('command.run', { command: COMMAND }, async ($, e, next) => {
+    if (!raven) return next(e)
+    const text = await raven.command(e.args).catch(error => `Raven failed: ${String(error)}`)
+    return { text }
+  })
 
   on('ui.render', { component: 'Pane' }, async ($, e, next) => {
     if (!raven || !PANE_IDS.includes(e.requestId)) return next(e)
@@ -80,12 +83,16 @@ export function register(on: On) {
       stdout: typeof output.stdout === 'string' ? output.stdout : undefined,
     }
 
-    const text = await raven.afterTool(event).catch(() => undefined)
-    return text !== undefined && isLanded ? { ...result, text } : result
+    const ack = await raven.afterTool(event).catch(() => undefined)
+    if (ack === undefined || !isLanded) return result
+    // Keep whatever else the command printed; only the CLI's own lines give way to the ack.
+    const rest = withoutDirectives(result.text ?? event.stdout ?? '')
+    return { ...result, text: rest === '' ? ack : `${rest}\n${ack}` }
   })
 
+  // Only a prompt the person typed carries the review; bridged, scheduled and plugin prompts do not.
   on('prompt.submit', ($, e, next) => {
-    const review = raven?.takePromptContext()
+    const review = e.origin.kind === 'composer' ? raven?.takePromptContext() : undefined
     return review ? next({ ...e, context: [...(e.context ?? []), review] }) : next(e)
   })
 }

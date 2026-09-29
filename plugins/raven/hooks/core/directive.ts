@@ -1,4 +1,4 @@
-import { DIRECTIVE_PREFIX } from '../names'
+import { DIRECTIVE_PREFIX, FALLBACK_PREFIX } from '../names'
 import { isRecord } from './is-record'
 
 /** What the CLI asks of the pane; see docs/spec.md "Directive contract". */
@@ -40,3 +40,11 @@ export function directivesIn(stdout: string): Directive[] {
     }
   })
 }
+
+/** A command's output with the CLI's directive and fallback lines removed, keeping everything else. */
+export const withoutDirectives = (output: string) =>
+  output
+    .split('\n')
+    .filter(line => !line.startsWith(DIRECTIVE_PREFIX) && !line.startsWith(FALLBACK_PREFIX))
+    .join('\n')
+    .trim()
