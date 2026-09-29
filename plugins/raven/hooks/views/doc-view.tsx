@@ -115,6 +115,27 @@ export function createDocView(host: Host): DocView {
     )
   }
 
+  /** The last 3 docs as plain buttons, for a surface with no `Select` to pick a history entry. */
+  function historyButtons(kit: Kit, shown: Shown): RenderElement {
+    const { Box, Button } = kit.ui
+    return (
+      <Box key="history" flexDirection="row" gap={1}>
+        {history.slice(0, 3).map(each => (
+          <Button
+            key={`history:${each.key}`}
+            plain
+            dimColor={each.key !== shown.key}
+            label={each.title}
+            onPress={() => {
+              current = each.key
+              host.redraw()
+            }}
+          />
+        ))}
+      </Box>
+    )
+  }
+
   function render(kit: Kit): RenderElement {
     const { Box, Text, Select } = kit.ui
     const shown = history.find(each => each.key === current)
@@ -122,20 +143,25 @@ export function createDocView(host: Host): DocView {
     if (!shown)
       return <Text dimColor>Nothing shown yet. Plans and docs Claude writes open here.</Text>
 
+    const picker =
+      history.length <= 1 ? null : Select ? (
+        <Select
+          key="history"
+          label="Documents"
+          value={shown.key}
+          options={history.map(each => ({ value: each.key, label: each.title }))}
+          onSelect={value => {
+            current = value
+            host.redraw()
+          }}
+        />
+      ) : (
+        historyButtons(kit, shown)
+      )
+
     return (
       <Box flexDirection="column" gap={1}>
-        {history.length > 1 ? (
-          <Select
-            key="history"
-            label="Documents"
-            value={shown.key}
-            options={history.map(each => ({ value: each.key, label: each.title }))}
-            onSelect={value => {
-              current = value
-              host.redraw()
-            }}
-          />
-        ) : null}
+        {picker}
         <Box flexDirection="column">
           <Text bold>{shown.title}</Text>
           {shown.doc.kind === 'file' ? <Text dimColor>{shown.doc.path}</Text> : null}

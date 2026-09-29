@@ -1,3 +1,4 @@
+import type { Capabilities } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import type { Hunk } from '../../git/hunks'
 import type { Comment, Comments } from '../../review/comments'
@@ -29,6 +30,9 @@ export function fixedRowsOf(fileCount: number, maxListRows: number): number {
 const COMPOSE_ROWS = 2
 /** The compose box's rows on a hunk, where a line-picker Select draws above the Input. */
 const COMPOSE_ROWS_WITH_PICKER = COMPOSE_ROWS + 1
+
+/** Every surface has `Input` and `Select`, so a caller can skip `capabilities`. */
+const FULL_CAPABILITIES: Capabilities = { canType: true, canPick: true }
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
@@ -74,16 +78,28 @@ function notesBlocksOf(notes: Comments, anchor: Anchor): Block<BodyItem>[] {
   return blocks
 }
 
-/** One anchor's notes followed by its comment box. */
+/**
+ * One anchor's notes followed by its comment box; no `Input` drops the box entirely (no controls
+ * to draw), and no `Select` drops the line picker's row from a hunk box (whole-hunk comments only).
+ */
 function anchorBlocksOf(
   notes: Comments,
   anchor: Anchor,
   composing: Anchor | null,
+  capabilities: Capabilities,
   hunk?: Hunk,
 ): Block<BodyItem>[] {
-  const rows = sameAnchor(composing, anchor) ? (hunk ? COMPOSE_ROWS_WITH_PICKER : COMPOSE_ROWS) : 1
+  const notesBlocks = notesBlocksOf(notes, anchor)
+  if (!capabilities.canType) return notesBlocks
+
+  const hasPicker = hunk !== undefined && capabilities.canPick
+  const rows = sameAnchor(composing, anchor)
+    ? hasPicker
+      ? COMPOSE_ROWS_WITH_PICKER
+      : COMPOSE_ROWS
+    : 1
   return [
-    ...notesBlocksOf(notes, anchor),
+    ...notesBlocks,
     {
       kind: 'fixed',
       key: commentBoxKeyOf(anchor),
@@ -118,6 +134,8 @@ export type BlocksOptions = {
   turnIndex?: number
   /** A turn's diff is read-only: no comment boxes, no stage/revert, just the title and hunks. */
   readOnly?: boolean
+  /** The surface's `Input`/`Select`; every surface has both when omitted. */
+  capabilities?: Capabilities
 }
 
 /**
@@ -135,6 +153,7 @@ export function blocksOf(
   options: BlocksOptions = {},
 ): Block<BodyItem>[] {
   const isReadOnly = options.readOnly ?? false
+  const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const fileAnchor: Anchor = { path: file.path }
   const grouped = groupByAnchor(comments, hunks?.map(hunk => hunk.header) ?? [])
 
@@ -145,7 +164,7 @@ export function blocksOf(
       rows: 1,
       item: { kind: 'title', file, turnIndex: options.turnIndex },
     },
-    ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing)),
+    ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities)),
   ]
 
   if (hunks === undefined || hunks.length === 0) {
@@ -162,7 +181,15 @@ export function blocksOf(
     const anchor: Anchor = { path: file.path, hunk: hunk.header }
     blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
     if (isReadOnly) return
-    blocks.push(...anchorBlocksOf(grouped.byHunk.get(hunk.header) ?? [], anchor, composing, hunk))
+    blocks.push(
+      ...anchorBlocksOf(
+        grouped.byHunk.get(hunk.header) ?? [],
+        anchor,
+        composing,
+        capabilities,
+        hunk,
+      ),
+    )
     blocks.push({
       kind: 'fixed',
       key: hunkActionsKeyOf(anchor),

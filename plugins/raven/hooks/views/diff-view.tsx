@@ -4,7 +4,7 @@
 import type { RenderElement } from 'claude-code'
 
 import { type Host, loggedAs } from '../core/host'
-import type { Kit, View } from '../core/view'
+import { type Capabilities, capabilitiesOf, type Kit, type View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
 import { applyPatch, loadChanges, loadHunks, refOf } from '../git/load'
@@ -85,6 +85,10 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   // The body rows the most recent render computed, so `scroll` can clamp without recomputing it.
   let lastBodyRows = 0
 
+  // The capabilities the most recent render read off `kit.ui`, so `scroll` (which has no kit) can
+  // recompute the same blocks; fixed for the drawing's lifetime since a surface's table doesn't change.
+  let lastCapabilities: Capabilities = { canType: true, canPick: true }
+
   // The last blocksOf() result, valid while its inputs are reference-equal to these.
   let cache: {
     file: ChangedFile
@@ -93,6 +97,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     composing: Anchor | null
     turnIndex: number | undefined
     readOnly: boolean
+    capabilities: Capabilities
     blocks: Block<BodyItem>[]
     contentRows: number
   } | null = null
@@ -267,7 +272,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   /** The selected file's blocks and their total row count, cached while its inputs are unchanged. */
-  function blocksForSelected(): {
+  function blocksForSelected(capabilities: Capabilities): {
     file: ChangedFile | null
     blocks: Block<BodyItem>[]
     contentRows: number
@@ -291,12 +296,18 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       cache.comments === comments &&
       cache.composing === model.composing &&
       cache.turnIndex === turnIndex &&
-      cache.readOnly === readOnly
+      cache.readOnly === readOnly &&
+      cache.capabilities.canType === capabilities.canType &&
+      cache.capabilities.canPick === capabilities.canPick
     ) {
       return { file, blocks: cache.blocks, contentRows: cache.contentRows }
     }
 
-    const blocks = blocksOf(file, hunks, comments, model.composing, { turnIndex, readOnly })
+    const blocks = blocksOf(file, hunks, comments, model.composing, {
+      turnIndex,
+      readOnly,
+      capabilities,
+    })
     const contentRows = contentRowsOf(blocks)
     cache = {
       file,
@@ -305,6 +316,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       composing: model.composing,
       turnIndex,
       readOnly,
+      capabilities,
       blocks,
       contentRows,
     }
@@ -389,7 +401,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       return <Text dimColor>{text}</Text>
     }
 
-    const { file, blocks, contentRows } = blocksForSelected()
+    lastCapabilities = capabilitiesOf(kit.ui)
+    const { file, blocks, contentRows } = blocksForSelected(lastCapabilities)
 
     const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS))
     lastBodyRows = bodyRows
@@ -428,7 +441,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   function scroll(by: number): boolean {
-    const { file, contentRows } = blocksForSelected()
+    const { file, contentRows } = blocksForSelected(lastCapabilities)
     if (!file) return false
     const bodyRows = lastBodyRows
     const size = Math.abs(by)

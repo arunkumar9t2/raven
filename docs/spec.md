@@ -127,6 +127,17 @@ trigger is one entry, not a change to `register`.
 - Opens itself, as a background tab, the first time a task list becomes non-empty, but only if no
   Raven pane is open yet; it never steals focus.
 
+## Surfaces
+
+Every surface draws `Box`, `Text`, `Button`, `Code` and `Markdown`; `Image`, `Input` and `Select`
+are optional per surface's element table, and every view checks for each before drawing one rather
+than assume it. Without `Input`, a comment control draws nothing at all — no button, no compose
+box — while its anchor's existing notes still show. Without `Select`, the diff source picker and
+the doc history picker fall back to a row of plain buttons (HEAD, session start, branch point for
+the diff; the 3 most recent docs for history — a turn source has no name short enough for a button
+and is left off), and a hunk's compose box drops its line picker, so every comment on that surface
+is a whole-hunk comment.
+
 ## Review comments
 
 - The selected file and each of its hunks carry a comment control. On a hunk, composing shows a
@@ -163,6 +174,23 @@ trigger is one entry, not a change to `register`.
 - The header's plain `clear` button asks for confirmation: the first press relabels it
   "clear all? (again)"; the second calls `review.clear()`, dropping every comment regardless of
   status. Any other action in the pane resets the unconfirmed state.
+
+## Status band
+
+- Above the prompt (`AbovePrompt`), one row — `raven · N comments pending · plan updated` — draws
+  only while something is pending (pending review comments, or a doc/plan shown since the pane was
+  last visible) and no Raven pane is currently visible (closed, or open behind another tab);
+  otherwise the hook passes with `next(e)`. It never draws while a survey holds the band, and sizes
+  itself to `bodyColumns` with `wrap="truncate-end"`.
+- Plain `open` (brings the diff forward when comments are pending, else the doc) and, only while
+  comments are pending, `send` (submits the review, as `/raven send` does) sit beside the text.
+- A doc/plan counts as unseen from the moment it is shown until its pane is actually drawn again;
+  a change to either count invalidates the render so the band updates without a keystroke.
+
+## `/raven` command output
+
+The `CommandOutput` row for `/raven` draws the same reply text Claude reads, behind a leading
+glyph: `◆` for a pane shown, `◇` for one hidden, `!` for a narrow terminal or an error.
 
 ## Naming
 

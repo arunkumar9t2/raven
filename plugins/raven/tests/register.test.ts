@@ -394,6 +394,74 @@ function configWorld(on: On, stdout: string, globalConfig: unknown) {
   return toasts
 }
 
+const ABOVE_PROMPT_PROPS = {
+  hasSurvey: false,
+  isWorking: false,
+  maxRows: 5,
+  bodyColumns: 100,
+  scroll: { offset: 0, bodyRows: 5 },
+  view: {},
+}
+
+const mountBand = ($: Engine) =>
+  $.ui.mount({
+    plugin: NAME,
+    surface: 'terminal',
+    component: 'AbovePrompt',
+    props: ABOVE_PROMPT_PROPS,
+  })
+
+describe('the AbovePrompt status band', () => {
+  test('shows pending comments when no Raven pane is open', async ($, on) => {
+    const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
+
+    await $.session.start(SESSION)
+
+    const ui = await mountBand($)
+    expect(await ui.find({ text: /comments? pending/ })).toBeDefined()
+  })
+
+  test('draws nothing while the diff pane is open and shown', async ($, on) => {
+    const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
+    // Stands in for the engine's own drawing once Raven passes with `next(e)`.
+    on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', children: [''] }))
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountBand($)
+    expect(await ui.find({ text: /pending/ })).toBeUndefined()
+  })
+})
+
+const COMMAND_OUTPUT_PROPS = {
+  command: 'raven',
+  args: '',
+  text: 'Raven diff hidden',
+  isErrored: false,
+}
+
+const mountCommandOutput = ($: Engine) =>
+  $.ui.mount({
+    plugin: NAME,
+    surface: 'terminal',
+    component: 'CommandOutput',
+    props: COMMAND_OUTPUT_PROPS,
+  })
+
+describe('the /raven command output row', () => {
+  test('draws the reply behind a hidden glyph', async ($, on) => {
+    world(on, '')
+
+    await $.session.start(SESSION)
+
+    const ui = await mountCommandOutput($)
+    expect(await ui.find({ text: '◇ Raven diff hidden' })).toBeDefined()
+  })
+})
+
 describe('the built-in diff panel warning', () => {
   test('the first /raven toasts once when the sidebar is open and checkpointing is on', async ($, on) => {
     const toasts = configWorld(on, '', { diffSidebarOpen: true })
