@@ -1,4 +1,5 @@
 import type { SelectOption } from 'claude-code'
+import type { Hunk } from '../../git/hunks'
 import type { TurnEdits } from '../../review/turns'
 
 /** What the diff is shown against: `HEAD`, the session's start, the branch point, or one turn. */
@@ -43,6 +44,20 @@ export function sourceOf(value: string): Source {
     if (Number.isInteger(index)) return { kind: 'turn', index }
   }
   return { kind: 'head' }
+}
+
+/**
+ * The selected file's hunks. A turn source's come only from the controller's own `turnHunks`: a
+ * turn file with none (still loading, or genuinely none) must show that, not `modelHunks` — stale
+ * working-tree data the diff view loaded for an unrelated source, which happens to share the same
+ * path.
+ */
+export function selectedHunksOf(
+  source: Source,
+  turnHunks: readonly Hunk[] | undefined,
+  modelHunks: readonly Hunk[] | undefined,
+): readonly Hunk[] | undefined {
+  return source.kind === 'turn' ? turnHunks : modelHunks
 }
 
 export type SourceOptionsArgs = {

@@ -27,9 +27,16 @@ describe('patchOf', () => {
     )
   })
 
-  test('builds a renamed-file header from the new path', () => {
+  test('a renamed file with no oldPath falls back to a same-path header', () => {
     expect(patchOf(fileOf('renamed'), HUNK)).toBe(
       `diff --git a/foo.txt b/foo.txt\n--- a/foo.txt\n+++ b/foo.txt\n${HUNK.text}`,
+    )
+  })
+
+  test('a renamed file with oldPath carries rename from/to lines and both paths', () => {
+    const file: ChangedFile = { ...fileOf('renamed', 'bar.txt'), oldPath: 'foo.txt' }
+    expect(patchOf(file, HUNK)).toBe(
+      `diff --git a/foo.txt b/bar.txt\nrename from foo.txt\nrename to bar.txt\n--- a/foo.txt\n+++ b/bar.txt\n${HUNK.text}`,
     )
   })
 
@@ -150,5 +157,40 @@ describe('patchOf + applyArgvOf integration', () => {
     const working = await Bun.file(join(dir, 'foo.txt')).text()
     expect(working).not.toContain('line 2 changed')
     expect(working).toContain('line 18 changed')
+  })
+
+  test('stages a hunk of a renamed-and-edited file, rename included', async () => {
+    dir = await mkdtemp(join(tmpdir(), 'raven-patch-'))
+    await run(['git', 'init', '-q'], dir)
+    await run(['git', 'config', 'user.email', 'test@test.com'], dir)
+    await run(['git', 'config', 'user.name', 'test'], dir)
+
+    const original = Array.from({ length: 20 }, (_, i) => `line ${i + 1}`)
+    await writeFile(join(dir, 'foo.txt'), `${original.join('\n')}\n`)
+    await run(['git', 'add', 'foo.txt'], dir)
+    await run(['git', 'commit', '-q', '-m', 'init'], dir)
+
+    await run(['git', 'mv', 'foo.txt', 'bar.txt'], dir)
+    const modified = [...original]
+    modified[1] = 'line 2 changed'
+    await writeFile(join(dir, 'bar.txt'), `${modified.join('\n')}\n`)
+
+    const diff = await run(['git', 'diff', '-M', '-U1', 'HEAD', '--', 'foo.txt', 'bar.txt'], dir)
+    expect(diff).toContain('rename from foo.txt')
+    const hunks = hunksOf(diff)
+    expect(hunks).toHaveLength(1)
+
+    // Undo the `git mv`'s own staging so the patch below is the only thing that stages anything.
+    await run(['git', 'reset', '-q'], dir)
+
+    const file: ChangedFile = { ...fileOf('renamed', 'bar.txt'), oldPath: 'foo.txt' }
+    const patch = patchOf(file, hunks[0]!)
+    await runWithStdin(applyArgvOf('stage'), dir, patch)
+
+    const status = await run(['git', 'status', '--porcelain=v1'], dir)
+    expect(status).toContain('R  foo.txt -> bar.txt')
+
+    const staged = await run(['git', 'diff', '--cached'], dir)
+    expect(staged).toContain('line 2 changed')
   })
 })

@@ -26,7 +26,7 @@ import {
   stepFileIndexOf,
   windowOf,
 } from './diff/layout'
-import { sourceValueOf } from './diff/source'
+import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
@@ -241,8 +241,28 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     }
   }
 
-  /** Runs `git apply` for one hunk's patch; marks it staged on success, reloads hunks either way. */
+  /**
+   * Runs `git apply` for one hunk's patch; marks it staged on success, reloads hunks either way.
+   * Re-reads the file's current hunks first: `hunk` was captured at the last render, and the
+   * working tree may have moved under it since (an edit, a stage/revert from elsewhere). Applying
+   * a patch built from a header that no longer matches the file risks silently touching the wrong
+   * lines, so an exact header+text match is required before `git apply` ever runs.
+   */
   async function applyHunk(file: ChangedFile, hunk: Hunk, mode: 'stage' | 'revert') {
+    const current = await loadHunks(host.run, file, sourceController.base()).catch(
+      loggedAs<Hunk[]>(host, 'loading hunks', []),
+    )
+    const stillPresent = current.some(
+      candidate => candidate.header === hunk.header && candidate.text === hunk.text,
+    )
+    if (!stillPresent) {
+      host.toast('The hunk changed — refreshed, try again')
+      update({
+        hunks: new Map(model.hunks).set(file.path, current),
+        stagedHunks: prunedStaged(file.path, current),
+      })
+      return
+    }
     const result = await applyPatch(host.run, patchOf(file, hunk), mode)
     if (!result.ok) {
       host.toast(
@@ -283,7 +303,11 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     }
 
     const source = sourceController.source()
-    const hunks = sourceController.hunksFor(file) ?? model.hunks.get(file.path)
+    const hunks = selectedHunksOf(
+      source,
+      sourceController.hunksFor(file),
+      model.hunks.get(file.path),
+    )
     const comments = review.comments()
     const turnIndex = source.kind === 'turn' ? source.index : undefined
     const readOnly = sourceController.isReadOnly()

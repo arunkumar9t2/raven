@@ -258,6 +258,25 @@ describe('loadHunks', () => {
       { header: '@@ -0,0 +1,2 @@', text: '@@ -0,0 +1,2 @@\n+hello\n+world\n' },
     ])
   })
+
+  test('diffs a renamed file with rename detection against both its old and new path', async () => {
+    const run = runOf({ 'git diff -M HEAD -- old.txt foo.txt': { stdout: MODIFIED_DIFF } })
+    const file = {
+      path: 'foo.txt',
+      oldPath: 'old.txt',
+      status: 'renamed' as const,
+      adds: 1,
+      dels: 1,
+      isBinary: false,
+    }
+    expect(await loadHunks(run, file, HEAD)).toHaveLength(2)
+  })
+
+  test('a renamed file with no oldPath falls back to diffing the new path alone', async () => {
+    const run = runOf({ 'git diff HEAD -- foo.txt': { stdout: MODIFIED_DIFF } })
+    const file = { path: 'foo.txt', status: 'renamed' as const, adds: 1, dels: 1, isBinary: false }
+    expect(await loadHunks(run, file, HEAD)).toHaveLength(2)
+  })
 })
 
 describe('applyPatch', () => {

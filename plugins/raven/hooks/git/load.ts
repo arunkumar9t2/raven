@@ -61,12 +61,18 @@ async function untrackedLinesOf(
   return new Map(counts)
 }
 
-/** One file's hunks: tracked files diff against `base`, untracked files diff against /dev/null. */
+/**
+ * One file's hunks: tracked files diff against `base`, untracked files diff against /dev/null, and
+ * a renamed file diffs with rename detection (`-M`) against both its old and new path — diffing
+ * the new path alone would compare it against nothing at `base` and show the whole file as added.
+ */
 export async function loadHunks(run: Run, file: ChangedFile, base: Base): Promise<Hunk[]> {
   const argv =
     file.status === 'untracked'
       ? ['git', 'diff', '--no-index', '--', '/dev/null', file.path]
-      : ['git', 'diff', refOf(base), '--', file.path]
+      : file.status === 'renamed' && file.oldPath
+        ? ['git', 'diff', '-M', refOf(base), '--', file.oldPath, file.path]
+        : ['git', 'diff', refOf(base), '--', file.path]
   const result = await run(argv)
   return hunksOf(result.stdout)
 }

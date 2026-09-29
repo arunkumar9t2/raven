@@ -78,7 +78,9 @@ trigger is one entry, not a change to `register`.
   "Turn N" instead of its path.
 - One row per file: status glyph, file-type icon, path, `+adds −dels`. Clicking a row selects it.
 - The selected file's hunks, each drawn with `Code format="diff"`, one element per hunk (the engine
-  caps a `Code` source at 10 000 characters; a longer hunk is truncated with a marker).
+  caps a `Code` source at 10 000 characters; a longer hunk is truncated with a marker). A renamed
+  file's hunks come from a rename-detecting diff (`git diff -M`) against both its old and new path,
+  so a rename carrying a content edit still shows the edit rather than the whole file as new.
 - Refreshes, debounced, after `Edit`/`Write`/`NotebookEdit`/`Bash` calls land; opens on the first
   main-loop edit when the terminal docks panes, the `autoOpen` setting is on (the default), and the
   last known terminal width is at least `autoOpenColumns` — unmeasured counts as wide enough.
@@ -88,13 +90,18 @@ trigger is one entry, not a change to `register`.
   plain `↓`/`↑` buttons in the header), `c` opens a comment on the selected file, `s` sends the
   pending review, `r` refreshes. Submitting or cancelling a comment returns the keyboard to that
   anchor's comment button, so Esc/Enter flow stays in the pane.
-- Each hunk carries a `stage`/`revert` row under its comment box. `stage` runs
-  `git apply --cached` on that hunk's own patch; once it succeeds the button reads `staged ✓` and
-  stops responding until a refresh changes the hunk. `revert` runs `git apply -R` on it, restoring
-  the working tree; the first press relabels it "revert? (again)" and any other action in the pane
-  resets that, so a second, deliberate press is what applies it. The diff compares the working
-  tree against `HEAD`, so a staged hunk still shows here — `staged ✓` is the only sign it moved to
-  the index.
+- Each hunk carries a `stage`/`revert` row under its comment box. Before either runs, Raven
+  re-reads the file's current hunks and requires an exact match (same header and text) against the
+  one the button was drawn for; a mismatch — the working tree moved since the last render — toasts
+  "The hunk changed — refreshed, try again", refreshes the view with the current hunks, and applies
+  nothing. Otherwise `stage` runs `git apply --cached` on that hunk's own patch; once it succeeds
+  the button reads `staged ✓` and stops responding until a refresh changes the hunk. `revert` runs
+  `git apply -R` on it, restoring the working tree; the first press relabels it "revert? (again)"
+  and any other action in the pane resets that, so a second, deliberate press is what applies it.
+  The diff compares the working tree against `HEAD`, so a staged hunk still shows here —
+  `staged ✓` is the only sign it moved to the index. A renamed file's patch carries `rename
+  from`/`rename to` lines alongside its old and new paths, so `git apply` stages or reverts the
+  rename together with the hunk's content change.
 
 ### Doc view (`raven-doc`)
 
@@ -164,10 +171,12 @@ is a whole-hunk comment.
   fill (no composer in this session, or a dialog holds the keyboard), the comments return to
   pending and a toast names the reason.
 - Once the main loop's turn finishes answering with comments sent, Raven forks the conversation
-  once with a prompt listing each sent comment (`[id] path Lnn: text`) asking for a JSON array of
-  the ids it addressed; a named id becomes `addressed`, every other sent comment becomes `open`. A
-  null or unparseable reply leaves them `sent`. Only one fork runs per sent batch, and an agent's
-  own turn (not the main loop's) never forks.
+  once with a prompt listing that batch's sent comments (`[id] path Lnn: text`) asking for a JSON
+  array of the ids it addressed; a named id becomes `addressed`, every other id in that same batch
+  becomes `open`. Comments outside the batch — a newer one sent while this fork is still in
+  flight — are untouched, whatever their status. A null or unparseable reply, or a fork that
+  rejects, leaves the batch `sent`. Only one fork runs per sent batch, and an agent's own turn (not
+  the main loop's) never forks.
 - `raven comments` returns the pending comments to Claude as the tool result, which delivers them.
 - Comments live in memory for the session and in `$.store` keyed by repository, never in the working
   tree.

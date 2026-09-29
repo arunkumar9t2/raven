@@ -1,6 +1,8 @@
 import { describe, expect, test } from 'bun:test'
+import type { Hunk } from '../../hooks/git/hunks'
 import type { TurnEdits } from '../../hooks/review/turns'
 import {
+  selectedHunksOf,
   sourceOf,
   sourceOptionsOf,
   sourceValueOf,
@@ -33,6 +35,26 @@ describe('sourceOf / sourceValueOf', () => {
   test('an unrecognized value falls back to head', () => {
     expect(sourceOf('nonsense')).toEqual({ kind: 'head' })
     expect(sourceOf('turn:not-a-number')).toEqual({ kind: 'head' })
+  })
+})
+
+describe('selectedHunksOf', () => {
+  const TURN_HUNK: Hunk = { header: '@@ -1,1 +1,1 @@', text: '@@ -1,1 +1,1 @@\n-a\n+b\n' }
+  const MODEL_HUNK: Hunk = { header: '@@ -2,1 +2,1 @@', text: '@@ -2,1 +2,1 @@\n-x\n+y\n' }
+
+  test('a turn source with no hunks stays undefined, never falling back to model.hunks', () => {
+    expect(selectedHunksOf({ kind: 'turn', index: 1 }, undefined, [MODEL_HUNK])).toBeUndefined()
+  })
+
+  test("a turn source with hunks uses the turn's own, ignoring model.hunks", () => {
+    expect(selectedHunksOf({ kind: 'turn', index: 1 }, [TURN_HUNK], [MODEL_HUNK])).toEqual([
+      TURN_HUNK,
+    ])
+  })
+
+  test('a non-turn source always uses model.hunks', () => {
+    expect(selectedHunksOf({ kind: 'head' }, undefined, [MODEL_HUNK])).toEqual([MODEL_HUNK])
+    expect(selectedHunksOf({ kind: 'head' }, undefined, undefined)).toBeUndefined()
   })
 })
 
