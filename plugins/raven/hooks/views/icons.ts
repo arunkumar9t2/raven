@@ -54,8 +54,11 @@ const GENERIC_ICON: Glyph = { glyph: '\u{f0214}', color: '#6d8086' } // nf-md-fi
 const LOCK_SUFFIXES = ['.lock', '-lock.json', '.lockb']
 
 /** A file-type glyph for a path, from Nerd Font (the user's terminal font is a Nerd Font). */
+/** The last segment of a slash-separated path. */
+export const baseName = (path: string) => path.slice(path.lastIndexOf('/') + 1)
+
 export function iconOf(path: string): Glyph {
-  const base = (path.split('/').pop() ?? path).toLowerCase()
+  const base = baseName(path).toLowerCase()
   const nameMatch = NAME_ICONS[base]
   if (nameMatch) return nameMatch
 

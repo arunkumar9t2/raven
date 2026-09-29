@@ -6,8 +6,8 @@ export type Ui = Pick<
   'Box' | 'Text' | 'Button' | 'Input' | 'Select' | 'Code' | 'Markdown'
 >
 
-/** What a view's render is handed: the elements and the pane body's size in cells. */
-export type Kit = { ui: Ui; columns: number; rows: number }
+/** What a view's render is handed: the elements and the pane body's width in cells. */
+export type Kit = { ui: Ui; columns: number }
 
 /**
  * One engine pane Raven draws. The engine shows one pane at a time and tabs the rest, so each
@@ -15,5 +15,7 @@ export type Kit = { ui: Ui; columns: number; rows: number }
  */
 export type View = {
   readonly pane: { readonly id: string; readonly title: string }
+  /** The `/raven <subcommand>` that toggles it. */
+  readonly subcommand: string
   render: (kit: Kit) => RenderElement
 }

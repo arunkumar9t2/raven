@@ -18,8 +18,6 @@ export type Host = {
   isShown: (id: string) => Promise<boolean>
   /** Moves keyboard focus to the element drawn under `key` in pane `paneId`. */
   focus: (paneId: string, key: string) => Promise<void>
-  status: (text: string | undefined) => void
-  toast: (text: string) => void
   storeGet: (key: string) => Promise<unknown>
   storeSet: (key: string, value: unknown) => Promise<void>
   submitPrompt: (text: string) => Promise<void>

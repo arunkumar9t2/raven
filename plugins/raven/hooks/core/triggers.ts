@@ -12,8 +12,11 @@ export type ToolEvent = {
 }
 
 export type Action =
-  | { kind: 'refresh-diff'; isEdit: boolean }
+  | { kind: 'refresh-diff' }
+  /** The main loop's edit landed: the controller opens the diff on the first of these. */
+  | { kind: 'main-loop-edit' }
   | { kind: 'show-doc'; path: string }
+  | { kind: 'reload-doc'; path: string }
   | { kind: 'directive'; directive: Directive }
 
 export type Trigger = (event: ToolEvent) => readonly Action[]
@@ -28,22 +31,28 @@ const WATCHED_DOC_PATHS = [
   /\/\.claude\/plans\/[^/]+\.md$/,
 ]
 
+/** The file a landed edit wrote, or null for any other call. */
 const editedPathOf = (event: ToolEvent) => {
+  if (!event.isLanded || !EDIT_TOOLS.includes(event.tool)) return null
   const path = event.input.file_path ?? event.input.notebook_path
   return typeof path === 'string' ? path : null
 }
 
-const onEdit: Trigger = event =>
-  EDIT_TOOLS.includes(event.tool) && event.isLanded ? [{ kind: 'refresh-diff', isEdit: true }] : []
+const onEdit: Trigger = event => {
+  const path = editedPathOf(event)
+  if (path === null) return []
+  const actions: Action[] = [{ kind: 'refresh-diff' }, { kind: 'reload-doc', path }]
+  if (event.agentId === undefined) actions.push({ kind: 'main-loop-edit' })
+  return actions
+}
 
 // A failed or interrupted command may still have written files, so any shell call refreshes.
 const onShell: Trigger = event =>
-  SHELL_TOOLS.includes(event.tool) ? [{ kind: 'refresh-diff', isEdit: false }] : []
+  SHELL_TOOLS.includes(event.tool) ? [{ kind: 'refresh-diff' }] : []
 
 const onWatchedDoc: Trigger = event => {
   const path = editedPathOf(event)
-  const isWatched = path !== null && WATCHED_DOC_PATHS.some(pattern => pattern.test(path))
-  return event.isLanded && isWatched && EDIT_TOOLS.includes(event.tool)
+  return path !== null && WATCHED_DOC_PATHS.some(pattern => pattern.test(path))
     ? [{ kind: 'show-doc', path }]
     : []
 }

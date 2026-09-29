@@ -24,16 +24,23 @@ type Model = {
   composing: Anchor | null
 }
 
+/** What the diff view asks of the controller. */
+export type DiffActions = {
+  /** Submits the pending review to Claude. */
+  send: () => void
+  /** Gives the keyboard to the element drawn under `key`. */
+  focus: (key: string) => void
+}
+
 export type DiffView = View & {
   refresh: () => Promise<void>
-  select: (path: string | null) => void
-  /** The repository's top level, once a refresh has found one. */
-  toplevel: () => string | null
+  /** Selects the file at an absolute path, when it is among the changes. */
+  reveal: (path: string) => void
 }
 
 const sameAnchor = (a: Anchor | null, b: Anchor) => a?.path === b.path && a?.hunk === b.hunk
 
-export function createDiffView(host: Host, review: Review, onSend: () => void): DiffView {
+export function createDiffView(host: Host, review: Review, actions: DiffActions): DiffView {
   let model: Model = {
     repository: null,
     isLoaded: false,
@@ -73,7 +80,7 @@ export function createDiffView(host: Host, review: Review, onSend: () => void): 
     await loadSelected()
   }
 
-  function select(path: string | null) {
+  function select(path: string) {
     if (path === model.selected) return
     update({ selected: path, composing: null })
     void loadSelected()
@@ -83,12 +90,7 @@ export function createDiffView(host: Host, review: Review, onSend: () => void): 
 
   function startComposing(anchor: Anchor) {
     update({ composing: anchor })
-    // The keyboard is the person's: a pane gets it only by asking to be focused, and only then
-    // can the new Input take it (`autoFocus` alone leaves it in the composer).
-    void host
-      .openPane({ ...DIFF_PANE, holdToasts: true, focus: true })
-      .then(() => host.focus(DIFF_PANE.id, inputKeyOf(anchor)))
-      .catch(() => {})
+    actions.focus(inputKeyOf(anchor))
   }
 
   function commentBox(kit: Kit, anchor: Anchor): RenderElement {
@@ -214,7 +216,7 @@ export function createDiffView(host: Host, review: Review, onSend: () => void): 
           <Button
             key="send"
             label={`Send ${pending} ${pending === 1 ? 'comment' : 'comments'} to Claude`}
-            onPress={onSend}
+            onPress={actions.send}
           />
         ) : null}
       </Box>
@@ -241,11 +243,10 @@ export function createDiffView(host: Host, review: Review, onSend: () => void): 
     )
   }
 
-  return {
-    pane: DIFF_PANE,
-    render,
-    refresh,
-    select,
-    toplevel: () => model.repository?.toplevel ?? null,
+  function reveal(path: string) {
+    const toplevel = model.repository?.toplevel
+    if (toplevel && path.startsWith(`${toplevel}/`)) select(path.slice(toplevel.length + 1))
   }
+
+  return { pane: DIFF_PANE, subcommand: 'diff', render, refresh, reveal }
 }
