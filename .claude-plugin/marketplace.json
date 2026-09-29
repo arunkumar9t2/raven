@@ -1,0 +1,16 @@
+{
+  "name": "raven",
+  "owner": {
+    "name": "Arunkumar"
+  },
+  "metadata": {
+    "description": "Raven: a live preview pane for Claude Code."
+  },
+  "plugins": [
+    {
+      "name": "raven",
+      "source": "./plugins/raven",
+      "description": "A live preview pane beside the transcript: the session's diff with review comments, and rendered plans and docs as Claude writes them."
+    }
+  ]
+}

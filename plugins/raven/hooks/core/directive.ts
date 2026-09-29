@@ -1,0 +1,44 @@
+import { DIRECTIVE_PREFIX } from '../names'
+
+/** What the CLI asks of the pane; see docs/spec.md "Directive contract". */
+export type Directive =
+  | { op: 'show'; path: string; title?: string }
+  | { op: 'note'; markdown: string; title?: string }
+  | { op: 'diff'; path?: string }
+  | { op: 'comments' }
+
+const isRecord = (value: unknown): value is Record<string, unknown> =>
+  typeof value === 'object' && value !== null
+
+const optionalString = (value: unknown) => value === undefined || typeof value === 'string'
+
+function directiveOf(value: unknown): Directive | null {
+  if (!isRecord(value)) return null
+  const { op, path, title, markdown } = value
+  if (!optionalString(title) || !optionalString(path)) return null
+
+  switch (op) {
+    case 'show':
+      return typeof path === 'string' ? (value as Directive) : null
+    case 'note':
+      return typeof markdown === 'string' ? (value as Directive) : null
+    case 'diff':
+    case 'comments':
+      return value as Directive
+    default:
+      return null
+  }
+}
+
+/** The directives in a command's stdout, in order; malformed and unknown lines are skipped. */
+export function directivesIn(stdout: string): Directive[] {
+  return stdout.split('\n').flatMap(line => {
+    if (!line.startsWith(DIRECTIVE_PREFIX)) return []
+    try {
+      const directive = directiveOf(JSON.parse(line.slice(DIRECTIVE_PREFIX.length)))
+      return directive ? [directive] : []
+    } catch {
+      return []
+    }
+  })
+}

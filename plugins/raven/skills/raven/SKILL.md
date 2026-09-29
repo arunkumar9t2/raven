@@ -1,0 +1,40 @@
+---
+name: raven
+description: Show things to the user in the Raven preview pane beside the transcript — a rendered markdown document, a file, an inline summary, or the diff — and read the review comments they left on the diff. Use when the user asks to see, preview, open or render a plan, spec, doc or file; when you finish a plan or design they should read; when a visual explanation (a table, a checklist, a summary of changes) reads better rendered than in chat; or when the user mentions comments or review feedback on the diff.
+---
+
+# Raven preview pane
+
+Raven docks a pane beside the transcript. It already reacts on its own: the diff refreshes as files
+change, and markdown written under `docs/superpowers/`, `.superpowers/` or `~/.claude/plans/` opens
+as it is written. Reach for the `raven` command only for what it cannot see coming.
+
+`raven` is on your PATH. Run it with Bash; it prints one line the pane consumes, and the tool result
+tells you whether it was shown.
+
+| Want | Run |
+| --- | --- |
+| Render a markdown file or show any file | `raven show <path> [--title "…"]` |
+| Render markdown you compose | `raven note --title "…" <<'EOF'` … `EOF` |
+| Open the diff, optionally at one file | `raven diff [<path>]` |
+| Read the user's pending review comments | `raven comments` |
+
+## When to use it
+
+- The user asks to see, open, preview or render something: show it instead of pasting it into chat.
+- You wrote a plan or spec outside the watched folders: `raven show` it so the user reads it rendered.
+- A comparison, checklist or summary is easier to read rendered: compose it with `raven note` and keep
+  the chat reply to one line pointing at the pane.
+- You finished a batch of edits and want the user's eyes on one file: `raven diff <path>`.
+
+## Review comments
+
+The user can comment on files and hunks in the diff pane. Pending comments ride their next prompt as
+hidden context headed as a review; treat each as a requested change, address it, and say which ones
+you addressed. `raven comments` fetches them on demand (and marks them delivered).
+
+## When the result says the pane is not active
+
+Raven's pane needs Claude Code's function hooks (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`) and a wide
+fullscreen terminal. If the result says it was not shown, tell the user once and fall back to
+answering in chat; do not retry.
