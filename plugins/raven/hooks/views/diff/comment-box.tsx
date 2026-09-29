@@ -3,6 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
+import { COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import type { Hunk } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf } from '../../review/comments'
@@ -125,7 +126,7 @@ export function note(
 
   return (
     <Box key={noteKeyOf(comment.id)} flexDirection="row" gap={1}>
-      <Text color={isDim ? undefined : '#e0af68'} dimColor={isDim} wrap="truncate-end">
+      <Text color={isDim ? undefined : COLORS.suggestion} dimColor={isDim} wrap="truncate-end">
         ▍ {prefix}
         {lineLabel}
         {comment.text}

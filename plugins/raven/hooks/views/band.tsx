@@ -2,6 +2,7 @@
 /* @jsx h */
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
+import { COLORS } from '../core/colors'
 import { countOf } from '../core/format'
 import type { Kit } from '../core/view'
 import { NAME } from '../names'
@@ -45,7 +46,7 @@ export function commandOutputRow(
 ): RenderElement {
   const { Text } = kit.ui
   return (
-    <Text color={props.isErrored ? 'red' : undefined} wrap="truncate-end">
+    <Text color={props.isErrored ? COLORS.error : undefined} wrap="truncate-end">
       {props.glyph} {props.text}
     </Text>
   )
