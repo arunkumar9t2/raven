@@ -42,10 +42,9 @@ function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
 }
 
 /**
- * Two fixed rows, neither ever wraps: counts and the source picker (a Select, or plain buttons
- * where the surface has none) on top, file navigation, refresh, clear and the send-to-Claude
- * button (plus "edit & send" once pending) below. `j`/`k` walk the file list, `r` refreshes, `s`
- * sends, each only while the pane holds the keyboard.
+ * Two fixed rows, neither ever wraps: counts and the source picker on top; navigation, refresh,
+ * review and clear below. The ↑/↓ buttons answer the person's own chords for the built-in diff
+ * list (`app:diffFileListUp`/`Down`).
  */
 export function header(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text, Button, Select } = kit.ui
@@ -78,16 +77,23 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
         )}
       </Box>
       <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
-        <Button key="previous" plain dimColor hotkey="k" label="↑" onPress={props.onPrevious} />
-        <Button key="next" plain dimColor hotkey="j" label="↓" onPress={props.onNext} />
         <Button
-          key="refresh"
+          key="previous"
           plain
           dimColor
-          hotkey="r"
-          label="↻ refresh"
-          onPress={props.onRefresh}
+          action="app:diffFileListUp"
+          label="↑"
+          onPress={props.onPrevious}
         />
+        <Button
+          key="next"
+          plain
+          dimColor
+          action="app:diffFileListDown"
+          label="↓"
+          onPress={props.onNext}
+        />
+        <Button key="refresh" plain dimColor label="↻ refresh" onPress={props.onRefresh} />
         <Button
           key="clear"
           plain
@@ -101,7 +107,7 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
           <Button key="edit-send" plain dimColor label="edit & send" onPress={props.onEditSend} />
         ) : null}
         {pending > 0 ? (
-          <Button key="send" hotkey="s" label={`send ${pending}`} onPress={props.onSend} />
+          <Button key="send" label={`send ${pending}`} onPress={props.onSend} />
         ) : null}
       </Box>
     </Box>
