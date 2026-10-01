@@ -126,7 +126,8 @@ export type LoadedHunks = {
  * Every changed file's hunks against `base`: one `git diff -M` for all tracked files (no
  * pathspec, so no argv limit), split per file; untracked files one `--no-index` read each, up to
  * `UNTRACKED_COUNT_LIMIT`. Past the 4 MiB output cap the cut file keeps its whole hunks and the
- * files after it are read one by one.
+ * files after it are read together. A non-zero exit from the all-files diff (e.g. a bad
+ * revision) throws rather than silently reading every tracked file as unchanged.
  */
 export async function loadAllHunks(
   run: Run,
@@ -142,6 +143,9 @@ export async function loadAllHunks(
 
   if (tracked.length > 0) {
     const result = await run(['git', '-c', 'core.quotePath=false', 'diff', '-M', refOf(base)])
+    if (result.exitCode !== 0) {
+      throw new Error(`git diff failed: ${result.stderr.trim()}`)
+    }
     const sections = [...diffSectionsOf(result.stdout)]
     sections.forEach(([path, section], index) => {
       const hunks = hunksOf(section)
@@ -149,12 +153,14 @@ export async function loadAllHunks(
       if (isCut) truncatedPath = path
       byPath.set(path, isCut ? hunks.slice(0, -1) : hunks)
     })
-    for (const file of tracked) {
-      if (byPath.has(file.path)) continue
-      byPath.set(
-        file.path,
-        result.isStdoutTruncated ? (await loadHunks(run, file, base)).hunks : [],
+    const missing = tracked.filter(file => !byPath.has(file.path))
+    if (result.isStdoutTruncated && missing.length > 0) {
+      const reread = await Promise.all(
+        missing.map(async file => [file.path, (await loadHunks(run, file, base)).hunks] as const),
       )
+      for (const [path, hunks] of reread) byPath.set(path, hunks)
+    } else {
+      for (const file of missing) byPath.set(file.path, [])
     }
   }
 
