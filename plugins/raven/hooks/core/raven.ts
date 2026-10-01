@@ -12,6 +12,7 @@ import { createBandState } from './band-state'
 import { coversRavenDock } from './checkpointing'
 import { type CommandKind, type CommandResult, NARROW_TEXT } from './command-glyph'
 import { type Directive, directiveOf } from './directive'
+import { countOf } from './format'
 import type { Host } from './host'
 import type { RavenSettings } from './settings'
 import {
@@ -370,7 +371,14 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         throw new Error(`Invalid input for the Raven show tool: ${JSON.stringify(input)}`)
       return runDirective(await resolveDirective(directive))
     },
-    takePromptContext: takeReviewText,
+    takePromptContext: () => {
+      const taken = review.take()
+      const text = reviewTextOf(taken)
+      if (text !== undefined) {
+        host.toast(`Raven: ${countOf(taken.length, 'review comment')} sent with this prompt`)
+      }
+      return text
+    },
     turnCompleted: () => resolveSent(),
     render: (paneId, kit) => {
       const view = views.find(each => each.pane.id === paneId)
