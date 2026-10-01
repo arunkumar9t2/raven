@@ -94,7 +94,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     hunks: ReadonlyMap<string, readonly Hunk[]>
     comments: Comments
     composing: Anchor | null
-    turnIndex: number | undefined
     readOnly: boolean
     capabilities: Capabilities
     isLoaded: boolean
@@ -329,7 +328,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   function streamFor(capabilities: Capabilities): Stream {
     const files = filesOf()
     const source = sourceController.source()
-    const turnIndex = source.kind === 'turn' ? source.index : undefined
     const readOnly = sourceController.isReadOnly()
     const comments = review.comments()
 
@@ -339,7 +337,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       cache.hunks === model.hunks &&
       cache.comments === comments &&
       cache.composing === model.composing &&
-      cache.turnIndex === turnIndex &&
       cache.readOnly === readOnly &&
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick &&
@@ -354,7 +351,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       comments,
       model.composing,
       {
-        turnIndex,
         readOnly,
         capabilities,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
@@ -367,7 +363,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       hunks: model.hunks,
       comments,
       composing: model.composing,
-      turnIndex,
       readOnly,
       capabilities,
       isLoaded: model.isLoaded,
@@ -387,9 +382,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           <Box flexDirection="row" gap={1}>
             <Text color={mark.color}>{mark.glyph}</Text>
             <Text color={icon.color}>{icon.glyph}</Text>
-            <Text bold>
-              {item.turnIndex !== undefined ? `Turn ${item.turnIndex}` : item.file.path}
-            </Text>
+            <Text bold>{item.file.path}</Text>
             <Text color={COLORS.added}>+{item.file.adds}</Text>
             <Text color={COLORS.removed}>−{item.file.dels}</Text>
           </Box>

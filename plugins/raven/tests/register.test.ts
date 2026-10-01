@@ -620,7 +620,8 @@ describe('switching the diff source to a turn', () => {
     await ui.select({ key: SOURCE_SELECT_KEY, value: turnValueOf(1) })
 
     expect(await ui.find({ key: 'row:/work/util.ts' })).toBeDefined()
-    expect(await ui.find({ text: 'Turn 1' })).toBeDefined()
+    // The header's source picker already names the turn; the stream heading names its file.
+    expect((await ui.find({ key: '/work/util.ts#title' }))?.text).toContain('/work/util.ts')
   })
 })
 
