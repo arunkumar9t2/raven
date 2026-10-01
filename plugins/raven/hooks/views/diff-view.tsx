@@ -48,9 +48,19 @@ type Model = {
    * of the refresh that will add it); `render` jumps to it once `streamFor` places it.
    */
   pendingReveal: string | null
-  /** Relative paths of files a main-loop edit touched this turn; cleared on `turnEnded`. */
+  /** Relative paths of files an edit touched this turn; cleared on `turnEnded`. */
   edited: ReadonlySet<string>
-  /** The absolute path `reveal`-ed once the refresh it is waiting on completes; null when idle. */
+  /**
+   * Absolute paths an edit touched before a refresh had yet loaded the repository (so no
+   * toplevel was known to make them relative); a later refresh resolves and folds them into
+   * `edited`, or drops them if they turn out to lie outside the repository.
+   */
+  pendingEdited: ReadonlySet<string>
+  /**
+   * The absolute path to reveal once the refresh it is waiting on completes and lands against a
+   * freshly computed stream; null when idle. Left set (not dropped) while a compose box is open,
+   * so the jump still happens once the box closes and a later refresh runs.
+   */
   followPath: string | null
   /** False once the person scrolls the stream this turn; a further edit then leaves the view put. */
   isFollowing: boolean
@@ -91,6 +101,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     confirming: null,
     pendingReveal: null,
     edited: EMPTY_EDITED,
+    pendingEdited: EMPTY_EDITED,
     followPath: null,
     isFollowing: true,
   }
@@ -224,16 +235,35 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         host.toast(`${loaded.truncatedPath}: diff too large, its last hunk is not shown`)
     }
 
+    // An edit noted before this refresh learned the toplevel (e.g. the session's very first edit,
+    // ahead of the auto-open refresh that first loads the repository) sat in `pendingEdited`
+    // absolute; resolve it against the toplevel this refresh now knows, same as `relativeOf` does
+    // for a fresh edit. While the toplevel is still unknown (no repository yet), every entry stays
+    // pending; once it is known, one that turns out to lie outside the repository is dropped.
+    const toplevel = repository?.toplevel
+    const stillPending: string[] = []
+    const newlyResolved: string[] = []
+    for (const abs of model.pendingEdited) {
+      if (toplevel === undefined) stillPending.push(abs)
+      else if (abs.startsWith(`${toplevel}/`)) newlyResolved.push(abs.slice(toplevel.length + 1))
+    }
+    const edited =
+      newlyResolved.length === 0 ? model.edited : new Set([...model.edited, ...newlyResolved])
+    const pendingEdited =
+      stillPending.length === model.pendingEdited.size ? model.pendingEdited : new Set(stillPending)
+
     update({
       repository,
       isLoaded: true,
       hunks,
       stagedHunks,
       selected: isKept ? model.selected : (files[0]?.path ?? null),
+      edited,
+      pendingEdited,
     })
 
     if (repository) await review.load(repository.toplevel)
-    if (model.followPath) reveal(model.followPath)
+    followIfDue()
   }
 
   /**
@@ -535,11 +565,22 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     const step = size >= bodyRows ? size : size * WHEEL_ROWS
     const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows)
     if (top !== model.top) {
-      update({ top, selected: fileAtRow(lastTitleRows, top) ?? model.selected, isFollowing: false })
+      update({
+        top,
+        selected: fileAtRow(lastTitleRows, top) ?? model.selected,
+        isFollowing: false,
+        followPath: null,
+      })
     } else if (model.isFollowing) {
-      update({ isFollowing: false })
+      update({ isFollowing: false, followPath: null })
     }
     return true
+  }
+
+  /** `abs`, relative to the repository's toplevel; null when the toplevel is unknown or `abs` lies outside it. */
+  function relativeOf(abs: string): string | null {
+    const toplevel = model.repository?.toplevel
+    return toplevel && abs.startsWith(`${toplevel}/`) ? abs.slice(toplevel.length + 1) : null
   }
 
   /**
@@ -548,9 +589,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
    * `pendingReveal` rather than left at the view's current `top`.
    */
   function reveal(path: string) {
-    const toplevel = model.repository?.toplevel
-    if (!toplevel || !path.startsWith(`${toplevel}/`)) return
-    const relative = path.slice(toplevel.length + 1)
+    const relative = relativeOf(path)
+    if (relative === null) return
     if (lastTitleRows.has(relative)) {
       select(relative)
     } else {
@@ -559,21 +599,48 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   }
 
   /**
-   * Marks `abs` edited this turn (by its path relative to the repository, ignored outside it);
-   * while still following (no person scroll this turn), it becomes the next refresh's follow
-   * target, replacing whichever earlier edit this turn was following.
+   * Applies `model.followPath`, once a refresh completes, as a `pendingReveal` rather than an
+   * immediate `select` — unlike `reveal`, so the jump always lands against the stream `render`
+   * computes fresh this time, never a possibly-stale `lastTitleRows` from before this refresh.
+   * Only while still following (no person scroll this turn dropped it already); a compose box
+   * open keeps the target rather than applying or dropping it, so the jump still happens once the
+   * box closes and a later refresh runs.
+   */
+  function followIfDue() {
+    if (!model.isFollowing || model.followPath === null) return
+    const relative = relativeOf(model.followPath)
+    if (relative === null) {
+      update({ followPath: null })
+    } else if (model.composing === null) {
+      update({ selected: relative, composing: null, pendingReveal: relative, followPath: null })
+    }
+  }
+
+  /**
+   * Marks `abs` edited this turn; while still following (no person scroll this turn), it becomes
+   * the next refresh's follow target, replacing whichever earlier edit this turn was following.
+   * Resolved to a path relative to the repository when the toplevel is already known; otherwise
+   * queued in `pendingEdited` absolute, for `refresh` to resolve once it learns the toplevel (the
+   * session's very first edit can land before the auto-open refresh that first loads it).
    */
   function noteEdited(abs: string) {
-    const toplevel = model.repository?.toplevel
-    if (!toplevel || !abs.startsWith(`${toplevel}/`)) return
-    const relative = abs.slice(toplevel.length + 1)
-    const edited = new Set(model.edited).add(relative)
-    update({ edited, followPath: model.isFollowing ? abs : model.followPath })
+    const relative = relativeOf(abs)
+    const followPath = model.isFollowing ? abs : model.followPath
+    if (relative === null) {
+      update({ pendingEdited: new Set(model.pendingEdited).add(abs), followPath })
+    } else {
+      update({ edited: new Set(model.edited).add(relative), followPath })
+    }
   }
 
   /** Clears this turn's edited marks and resumes following, for the next turn. */
   function turnEnded() {
-    update({ edited: EMPTY_EDITED, followPath: null, isFollowing: true })
+    update({
+      edited: EMPTY_EDITED,
+      pendingEdited: EMPTY_EDITED,
+      followPath: null,
+      isFollowing: true,
+    })
   }
 
   return {
