@@ -47,7 +47,7 @@ type NumstatEntry = { adds: number; dels: number; isBinary: boolean }
 
 /**
  * Parses `git diff HEAD --numstat -z` output into a map path → {adds, dels, isBinary}.
- * A rename record carries an empty path field followed by the new and old paths as separate
+ * A rename record carries an empty path field followed by the old and new paths as separate
  * NUL-terminated fields; "-\t-" in the count fields means a binary file.
  */
 export function numstatOf(z: string): Map<string, NumstatEntry> {
@@ -62,8 +62,8 @@ export function numstatOf(z: string): Map<string, NumstatEntry> {
     const adds = isBinary ? 0 : Number(addsField)
     const dels = isBinary ? 0 : Number(delsField)
     if (path === '') {
-      const newPath = tokens[i] as string
-      i += 2 // new path, then old path
+      const newPath = tokens[i + 1] as string
+      i += 2 // old path, then new path
       map.set(newPath, { adds, dels, isBinary })
     } else {
       map.set(path as string, { adds, dels, isBinary })
