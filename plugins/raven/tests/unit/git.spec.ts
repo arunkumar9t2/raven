@@ -459,4 +459,17 @@ describe('loadAllHunks', () => {
       'git diff failed: bad revision',
     )
   })
+
+  test('one untracked file whose read rejects leaves only itself unread', async () => {
+    const good = { path: 'ok.txt', status: 'untracked' as const, adds: 1, dels: 0, isBinary: false }
+    const bad = { path: 'bad.txt', status: 'untracked' as const, adds: 1, dels: 0, isBinary: false }
+    // `runOf` throws for any argv with no fixture; `bad.txt`'s read gets none, simulating a
+    // rejected read (e.g. the file vanished between `git status` and this diff).
+    const run = runOf({
+      'git diff --no-index -- /dev/null ok.txt': { exitCode: 1, stdout: NEW_FILE_DIFF },
+    })
+    const loaded = await loadAllHunks(run, [good, bad], HEAD)
+    expect(loaded.byPath.get('ok.txt')).toHaveLength(1)
+    expect(loaded.byPath.has('bad.txt')).toBe(false)
+  })
 })

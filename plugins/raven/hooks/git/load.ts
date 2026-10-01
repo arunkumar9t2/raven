@@ -122,6 +122,19 @@ export type LoadedHunks = {
   truncatedPath: string | null
 }
 
+/** One file's `[path, hunks]` entry for `loadAllHunks`'s per-file reads; null on a rejected read, so one bad file leaves only itself unread rather than failing the whole call. */
+async function oneHunksEntryOf(
+  run: Run,
+  file: ChangedFile,
+  base: Base,
+): Promise<readonly [string, readonly Hunk[]] | null> {
+  try {
+    return [file.path, (await loadHunks(run, file, base)).hunks]
+  } catch {
+    return null
+  }
+}
+
 /**
  * Every changed file's hunks against `base`: one `git diff -M` for all tracked files (no
  * pathspec, so no argv limit), split per file; untracked files one `--no-index` read each, up to
@@ -155,19 +168,15 @@ export async function loadAllHunks(
     })
     const missing = tracked.filter(file => !byPath.has(file.path))
     if (result.isStdoutTruncated && missing.length > 0) {
-      const reread = await Promise.all(
-        missing.map(async file => [file.path, (await loadHunks(run, file, base)).hunks] as const),
-      )
-      for (const [path, hunks] of reread) byPath.set(path, hunks)
+      const reread = await Promise.all(missing.map(file => oneHunksEntryOf(run, file, base)))
+      for (const entry of reread) if (entry) byPath.set(entry[0], entry[1])
     } else {
       for (const file of missing) byPath.set(file.path, [])
     }
   }
 
-  const read = await Promise.all(
-    untracked.map(async file => [file.path, (await loadHunks(run, file, base)).hunks] as const),
-  )
-  for (const [path, hunks] of read) byPath.set(path, hunks)
+  const read = await Promise.all(untracked.map(file => oneHunksEntryOf(run, file, base)))
+  for (const entry of read) if (entry) byPath.set(entry[0], entry[1])
   return { byPath, truncatedPath }
 }
 
