@@ -8,7 +8,14 @@ import {
   hunkActionsKeyOf,
   noteKeyOf,
 } from '../../hooks/views/diff/anchor'
-import { blocksOf, OUTDATED_TITLE_KEY, STATUS_KEY, TITLE_KEY } from '../../hooks/views/diff/blocks'
+import {
+  blocksOf,
+  fileAtRow,
+  OUTDATED_TITLE_KEY,
+  STATUS_KEY,
+  streamOf,
+  TITLE_KEY,
+} from '../../hooks/views/diff/blocks'
 import { contentRowsOf } from '../../hooks/views/diff/layout'
 
 const file: ChangedFile = {
@@ -299,5 +306,43 @@ describe('blocksOf for a turn source', () => {
     const blocks = blocksOf(file, [hunkA], [stale], null, { turnIndex: 1, readOnly: true })
 
     expect(blocks.some(b => b.key === OUTDATED_TITLE_KEY)).toBe(false)
+  })
+})
+
+describe('streamOf', () => {
+  const b = { ...file, path: 'b.ts' }
+
+  test('lays the files out one after another with path-prefixed keys', () => {
+    const stream = streamOf([file, b], () => [hunkA], [], null)
+    const keys = stream.blocks.map(block => block.key)
+    expect(new Set(keys).size).toBe(keys.length)
+    expect(keys[0]).toBe(`${file.path}#${TITLE_KEY}`)
+    expect(keys).toContain(`b.ts#${TITLE_KEY}`)
+  })
+
+  test('records each file title row and the total', () => {
+    const stream = streamOf([file, b], () => [hunkA], [], null)
+    expect(stream.titleRows.get(file.path)).toBe(0)
+    const bRow = stream.titleRows.get('b.ts') ?? -1
+    expect(bRow).toBeGreaterThan(0)
+    expect(stream.contentRows).toBeGreaterThan(bRow)
+  })
+
+  test('fileAtRow names the file whose section holds the row', () => {
+    const stream = streamOf([file, b], () => [hunkA], [], null)
+    const bRow = stream.titleRows.get('b.ts') ?? 0
+    expect(fileAtRow(stream.titleRows, 0)).toBe(file.path)
+    expect(fileAtRow(stream.titleRows, bRow - 1)).toBe(file.path)
+    expect(fileAtRow(stream.titleRows, bRow)).toBe('b.ts')
+    expect(fileAtRow(new Map(), 0)).toBeNull()
+  })
+
+  test('an unread file says why instead of Loading…', () => {
+    const stream = streamOf([file], () => undefined, [], null, {
+      unreadText: 'Not read: too many new files',
+    })
+    expect(stream.blocks.at(-1)).toMatchObject({
+      item: { kind: 'status', text: 'Not read: too many new files' },
+    })
   })
 })
