@@ -17,12 +17,14 @@ plugins/raven/
   hooks/hooks.json                names the module: ./register.ts
   hooks/register.ts               binds `$` into a Host, forwards engine events to core/raven
   hooks/core/                     controller, Host, View contract, triggers, directive parser
-  hooks/views/                    one file per pane (diff, doc) + icons
+  hooks/views/                    one view per pane (diff, doc, tree = Files, tasks) + the status band;
+                                  diff/ and tree/ hold their sub-parts
   hooks/git/  hooks/review/       pure logic: git parsing/loading, review comments
   skills/preview/SKILL.md         when/how Claude runs the CLI
   bin/raven                       shim: dist/raven if built, else `bun cli/src/main.ts`
-  tests/unit/                     bun tests of the pure modules
-cli/                              the `raven` CLI source + tests
+  tests/unit/*.spec.ts            bun tests of the pure modules
+  tests/*.test.ts                 mod-kit tests run in the hooks sandbox (`bun run test:mod`)
+  cli/                            the `raven` CLI source + tests
 scripts/cc.sh                     drives a real Claude Code session in tmux (closed-loop checks)
 types/claude-code.d.ts            the mod API declarations (from /plugin-types)
 ```
@@ -36,7 +38,12 @@ bun run lint:fix     # biome
 bun run test         # CLI + pure-module unit tests (plain `bun test` also picks up the mod-kit tests and fails)
 bun run build        # compiles the CLI to plugins/raven/dist/raven (gitignored)
 bun run validate     # claude plugin validate --strict, marketplace + plugin
+bun test ./plugins/raven/tests/unit/<file>.spec.ts   # one unit test file
+bun run test:mod     # mod-kit tests (claude plugin test; takes a folder, not a single file)
+bun run setup:local  # load this checkout's plugin folder in every local session
 ```
+
+`*.spec.ts` files are for bun and `*.test.ts` files are for the mod kit; keep new tests to that split.
 
 ## Closed loop
 
@@ -47,6 +54,9 @@ passes extra flags (e.g. `--allowedTools 'Bash(raven:*)' Write`).
 `cc.sh type "/raven"`, `cc.sh click <col> <row>` (SGR mouse, presses Buttons and focuses Inputs),
 `cc.sh keys …`, `cc.sh cap`, `cc.sh stop`. Prefer zero-token checks: edit files from the shell and
 use `/raven` rather than prompting the model.
+
+This checkout is what every local session loads (`CLAUDE_CODE_PLUGIN_DIRS`), and the mod hot-reloads
+on save, so a broken `hooks/` edit breaks Raven in the session making it too.
 
 ## Rules for the mod code
 
