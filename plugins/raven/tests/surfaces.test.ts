@@ -5,7 +5,9 @@ import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPane
 
 tier('user')
 
-/** A world inside a git repo with one modified file, no hunks: enough to draw the diff pane. */
+const HUNK_TEXT = '@@ -1,2 +1,2 @@\n a\n-b\n+c\n'
+
+/** A world inside a git repo with one modified file carrying one hunk, so stage draws. */
 function world(on: On) {
   baseWorld(on)
   on('session.messages', () => ({ value: [] }))
@@ -16,6 +18,11 @@ function world(on: On) {
     }
     if (cmd === 'git' && sub === 'status') return ran(0, ' M a.ts\0')
     if (cmd === 'git' && e.argv.includes('--numstat')) return ran(0, '1\t1\ta.ts\0')
+    // The all-files bulk diff `loadAllHunks` issues (refresh): a real multi-file diff, sectioned
+    // by `diff --git` lines, so `diffSectionsOf` can find a.ts's section.
+    if (cmd === 'git' && e.argv.includes('-c')) {
+      return ran(0, `diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n${HUNK_TEXT}`)
+    }
     return ran(1)
   })
 
@@ -43,6 +50,8 @@ describe('surface safety', () => {
 
       if (surface === 'mobile') {
         expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
+        expect(await ui.findAll({ type: 'Button', text: /＋ note/ })).toHaveLength(0)
+        expect(await ui.find({ text: 'stage' })).toBeDefined()
       }
 
       await ui.unmount()

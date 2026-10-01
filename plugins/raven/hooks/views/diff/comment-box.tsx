@@ -17,7 +17,6 @@ import {
   noteKeyOf,
   resendKeyOf,
   revertKeyOf,
-  sameAnchor,
   selectKeyOf,
   stageKeyOf,
 } from './anchor'
@@ -37,39 +36,26 @@ function truncate(text: string, max: number): string {
 
 export type CommentBoxProps = {
   anchor: Anchor
-  composing: Anchor | null
   inputKey: string
   /** The anchor's hunk; present only for a hunk anchor, drives the line-picker Select. */
   hunk?: Hunk
   /** The line chosen in the picker; null means "whole hunk". */
   line: CommentLine | null
   columns: number
-  onStart: (anchor: Anchor) => void
   onLineChange: (line: CommentLine | null) => void
   onSubmit: (text: string) => void
   onCancel: () => void
 }
 
 /**
- * The "＋ comment" button, swapped for a line picker (on a hunk, when the surface has `Select`)
- * plus an Input+cancel pair once this anchor is being composed. Never drawn without `Input`:
- * `blocksOf` drops the whole box in that case, so this only ever runs where composing is possible.
+ * The compose state for an anchor being written to: a line picker (on a hunk, when the surface
+ * has `Select`) plus an Input+cancel pair. `blocksOf` emits this block only while the anchor is
+ * being composed, so this always runs in that state; the idle "＋ note" control is `noteButton`,
+ * drawn by the heading or the hunk's actions row instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Button, Input, Select } = kit.ui
   const { anchor } = props
-
-  if (!sameAnchor(props.composing, anchor)) {
-    return (
-      <Button
-        key={commentButtonKeyOf(anchor)}
-        plain
-        dimColor
-        label={anchor.hunk ? '＋ note on hunk' : '＋ note on file'}
-        onPress={() => props.onStart(anchor)}
-      />
-    )
-  }
 
   if (!Input) return <Box />
 
@@ -142,20 +128,51 @@ export function note(
   )
 }
 
+/**
+ * The idle "＋ note" control: the one place that builds the button and its key, drawn by a
+ * file's heading row or a hunk's actions row. Never drawn for an anchor already being composed —
+ * its caller omits this in that case, leaving room for the compose box below.
+ */
+export function noteButton(
+  kit: Kit,
+  anchor: Anchor,
+  label: string,
+  onStart: (anchor: Anchor) => void,
+): RenderElement {
+  const { Button } = kit.ui
+  return (
+    <Button
+      key={commentButtonKeyOf(anchor)}
+      plain
+      dimColor
+      label={label}
+      onPress={() => onStart(anchor)}
+    />
+  )
+}
+
 export type HunkActionsProps = {
   anchor: Anchor
+  /** Whether the "＋ note on hunk" control draws: the surface can type and this hunk isn't being composed. */
+  canNote: boolean
   isStaged: boolean
   confirmingRevert: boolean
+  onStartNote: (anchor: Anchor) => void
   onStage: () => void
   onRevert: () => void
 }
 
-/** A hunk's stage/revert row: staging is a no-op once staged, revert confirms on a second press. */
+/**
+ * A hunk's one row of controls: ＋ note on hunk (when it can draw), stage, revert — each pair
+ * separated by a dim `·`. Staging is a no-op once staged, revert confirms on a second press.
+ */
 export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement {
-  const { Box, Button } = kit.ui
+  const { Box, Text, Button } = kit.ui
   const { anchor } = props
   return (
     <Box key={hunkActionsKeyOf(anchor)} flexDirection="row" gap={1}>
+      {props.canNote ? noteButton(kit, anchor, '＋ note on hunk', props.onStartNote) : null}
+      {props.canNote ? <Text dimColor>·</Text> : null}
       <Button
         key={stageKeyOf(anchor)}
         plain
@@ -163,6 +180,7 @@ export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement
         label={props.isStaged ? 'staged ✓' : 'stage'}
         onPress={props.isStaged ? () => {} : props.onStage}
       />
+      <Text dimColor>·</Text>
       {props.confirmingRevert ? (
         <Button
           key={revertKeyOf(anchor)}

@@ -37,6 +37,7 @@ const KIT = {
   ui: { Box, Text, Button, Code, Markdown },
   columns: 100,
   rows: 7,
+  surface: 'terminal',
 } as unknown as Kit
 
 function flatten(children: unknown): unknown[] {

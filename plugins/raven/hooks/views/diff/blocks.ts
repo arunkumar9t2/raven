@@ -34,12 +34,12 @@ const COMPOSE_ROWS_WITH_PICKER = COMPOSE_ROWS + 1
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
-  | { kind: 'title'; file: ChangedFile }
+  | { kind: 'title'; file: ChangedFile; canNote: boolean }
   | { kind: 'note'; comment: Comment }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk }
-  | { kind: 'hunk-actions'; anchor: Anchor; hunk: Hunk }
+  | { kind: 'hunk-actions'; anchor: Anchor; hunk: Hunk; canNote: boolean }
   | { kind: 'gap' }
   | { kind: 'rule' }
   | { kind: 'status'; text: string }
@@ -78,8 +78,10 @@ function notesBlocksOf(notes: Comments, anchor: Anchor): Block<BodyItem>[] {
 }
 
 /**
- * One anchor's notes followed by its comment box; no `Input` drops the box entirely (no controls
- * to draw), and no `Select` drops the line picker's row from a hunk box (whole-hunk comments only).
+ * One anchor's notes followed by its comment box, drawn only while that anchor is being composed
+ * — idle, the "＋ note" control lives on the heading or the hunk's actions row instead, so no
+ * block is emitted at all. No `Input` drops the box entirely (no controls to draw), and no
+ * `Select` drops the line picker's row from a hunk box (whole-hunk comments only).
  */
 function anchorBlocksOf(
   notes: Comments,
@@ -89,14 +91,10 @@ function anchorBlocksOf(
   hunk?: Hunk,
 ): Block<BodyItem>[] {
   const notesBlocks = notesBlocksOf(notes, anchor)
-  if (!capabilities.canType) return notesBlocks
+  if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
 
   const hasPicker = hunk !== undefined && capabilities.canPick
-  const rows = sameAnchor(composing, anchor)
-    ? hasPicker
-      ? COMPOSE_ROWS_WITH_PICKER
-      : COMPOSE_ROWS
-    : 1
+  const rows = hasPicker ? COMPOSE_ROWS_WITH_PICKER : COMPOSE_ROWS
   return [
     ...notesBlocks,
     {
@@ -158,13 +156,14 @@ export function blocksOf(
     comment => comment.path === file.path || comment.path === file.oldPath,
   )
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
+  const canNoteFile = !isReadOnly && capabilities.canType && !sameAnchor(composing, fileAnchor)
 
   const blocks: Block<BodyItem>[] = [
     {
       kind: 'fixed',
       key: TITLE_KEY,
       rows: 1,
-      item: { kind: 'title', file },
+      item: { kind: 'title', file, canNote: canNoteFile },
     },
     ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities)),
   ]
@@ -200,7 +199,12 @@ export function blocksOf(
       kind: 'fixed',
       key: hunkActionsKeyOf(anchor),
       rows: 1,
-      item: { kind: 'hunk-actions', anchor, hunk },
+      item: {
+        kind: 'hunk-actions',
+        anchor,
+        hunk,
+        canNote: capabilities.canType && !sameAnchor(composing, anchor),
+      },
     })
   })
 
