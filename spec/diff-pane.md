@@ -74,11 +74,12 @@ checked.
 
 ## Keys
 
-While the pane holds the keyboard: `j`/`k` (also plain `↓`/`↑` buttons) step the file selection;
-`c` opens a comment box on the *selected file* — hunks have their own comment buttons but no
-shared hotkey; `s` sends the pending review, shown only once a comment is pending; `r` refreshes.
-Submitting or cancelling a comment returns the keyboard to that anchor's comment button, so
-Esc/Enter flow stays inside the pane rather than jumping to the composer.
+No control carries a letter hotkey; every action is reachable by click and by Tab+Enter. The file
+list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
+the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
+file's comment button reads "＋ note on file", a hunk's "＋ note on hunk" — each names what it
+attaches to. Submitting or cancelling a comment returns the keyboard to that anchor's comment
+button, so Esc/Enter flow stays inside the pane rather than jumping to the composer.
 
 ## Stage and revert one hunk
 
@@ -92,9 +93,10 @@ hunks, and applies nothing.
 (`plugins/raven/hooks/git/patch.ts`); once it succeeds the button reads `staged ✓` and stops
 responding until a refresh drops the mark, which happens once the hunk's header no longer appears
 in a fresh load. `revert` runs `git apply -R --recount` on the same patch, restoring the working
-tree; the first press relabels the button "revert? (again)", and any other action anywhere in the
-pane — including a background refresh or a scroll, not only a deliberate one — resets that arming,
-so a second, immediately-following press is what applies it. Reverting an added or untracked file's
+tree; the first press relabels the button "revert? press again", shown at full strength (no colour
+change — `Button` has no colour prop), and any other action anywhere in the pane — including a
+background refresh or a scroll, not only a deliberate one — resets that arming, so a second,
+immediately-following press is what applies it. Reverting an added or untracked file's
 one hunk deletes the file outright: its forward patch is "create this file", so `git apply -R`
 undoes that.
 
