@@ -152,7 +152,8 @@ export function blocksOf(
   const isReadOnly = options.readOnly ?? false
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const fileAnchor: Anchor = { path: file.path }
-  const grouped = groupByAnchor(comments, hunks?.map(hunk => hunk.header) ?? [])
+  const own = comments.filter(comment => comment.path === file.path)
+  const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
 
   const blocks: Block<BodyItem>[] = [
     {
