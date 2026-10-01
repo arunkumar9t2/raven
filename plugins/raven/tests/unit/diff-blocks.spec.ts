@@ -212,6 +212,18 @@ describe('blocksOf', () => {
     })
   })
 
+  test("another file's comments never draw under this file", () => {
+    const elsewhere = {
+      id: 'x1',
+      path: 'other.ts',
+      text: 'not yours',
+      status: 'pending' as const,
+      createdAt: 0,
+    }
+    const blocks = blocksOf(file, [hunkA], [elsewhere], null)
+    expect(blocks.some(block => block.kind === 'fixed' && block.item.kind === 'note')).toBe(false)
+  })
+
   test('a hunk-actions row follows every hunk, carrying its anchor and hunk', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     const anchorA = { path: file.path, hunk: hunkA.header }
