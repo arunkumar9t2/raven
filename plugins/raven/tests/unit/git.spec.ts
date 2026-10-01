@@ -35,13 +35,22 @@ describe('numstatOf', () => {
       '3\t1\tmodified.txt',
       '5\t0\tadded.txt',
       '-\t-\timage.png',
-      '2\t2\t\0new.txt\0old.txt',
+      '2\t2\t\0old.txt\0new.txt',
     ].join('\0')
     const map = numstatOf(z)
     expect(map.get('modified.txt')).toEqual({ adds: 3, dels: 1, isBinary: false })
     expect(map.get('added.txt')).toEqual({ adds: 5, dels: 0, isBinary: false })
     expect(map.get('image.png')).toEqual({ adds: 0, dels: 0, isBinary: true })
     expect(map.get('new.txt')).toEqual({ adds: 2, dels: 2, isBinary: false })
+  })
+
+  test('a rename record is keyed by its new path (git writes old, then new)', () => {
+    // Real `git diff HEAD --numstat -z` output for `git mv old-name.md new-name.md` plus a one-line edit.
+    const z = '1\t1\t\0old-name.md\0new-name.md\0' + '3\t3\tsrc/api.ts\0'
+    const map = numstatOf(z)
+    expect(map.get('new-name.md')).toEqual({ adds: 1, dels: 1, isBinary: false })
+    expect(map.has('old-name.md')).toBe(false)
+    expect(map.get('src/api.ts')).toEqual({ adds: 3, dels: 3, isBinary: false })
   })
 })
 
