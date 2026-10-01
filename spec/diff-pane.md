@@ -8,8 +8,9 @@ Claude to describe what it changed.
 
 ## Layout
 
-Two fixed rows form the header: counts (`N files`, `+adds`, `−dels`) and the source picker on top,
-file navigation (`↑`/`↓`), refresh, clear, and the send buttons below
+Two fixed rows form the header: counts (`N files`, `+adds`, `−dels`) and the source picker on top;
+file navigation (`↑`/`↓`), refresh, then — once a comment is pending — "edit & send" and the
+primary "send N" button (`variant="primary"`, the pane's main action), then clear, below
 (`plugins/raven/hooks/views/diff/header.tsx`). Beneath it sits the file list
 (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
 file gets a row, and beyond it the list shows a window centered on the selected file plus a

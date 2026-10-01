@@ -50,14 +50,14 @@ without also marking it sent.
   (`plugins/raven/hooks/register.ts`). A prompt from any other origin does not trigger this. When it
   does, Raven toasts "Raven: N review comments sent with this prompt" so the carry is never silent
   (`plugins/raven/hooks/core/raven.ts`).
+- **Edit & send** — the header's plain "edit & send" button, shown alongside send whenever comments
+  are pending (header order is [`diff-pane.md`](./diff-pane.md)'s concern), takes the same review
+  text and fills the prompt box with it (`$.prompt.fill`, replacing the draft) so the person can
+  edit before pressing Enter. When the box refuses the fill — no composer in this session, or a
+  dialog holds the keyboard — the comments return to `pending` and a toast names the reason.
 - **Send** — the header's "send N" button, or `/raven send`, submits the review as a *visible*
   prompt (`$.prompt.submit`) instead of hidden context, so the person sees exactly what Claude was
   asked.
-- **Edit & send** — the header's plain "edit & send" button, shown alongside send whenever comments
-  are pending, takes the same review text and fills the prompt box with it
-  (`$.prompt.fill`, replacing the draft) so the person can edit before pressing Enter. When the box
-  refuses the fill — no composer in this session, or a dialog holds the keyboard — the comments
-  return to `pending` and a toast names the reason.
 - **The `show` tool's `comments` op** — `raven comments` (or the directive form) answers with the
   same taken review text as the tool result, which is how it reaches Claude when the CLI or a
   directive asks for it rather than a prompt.
