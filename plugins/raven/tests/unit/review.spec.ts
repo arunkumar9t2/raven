@@ -1,34 +1,17 @@
 import { describe, expect, test } from 'bun:test'
-import type { Host } from '../../hooks/core/host'
 import { createReview } from '../../hooks/review/review'
+import { fakeHost as fakeHostBase } from './fake-host'
 
-function fakeHost(onStatus?: (text: string | undefined) => void): Host {
+/** `fakeHost`, but `storeSet` deep-clones so a later mutation of a loaded comment can't leak back. */
+function fakeHost(onStatus?: (text: string | undefined) => void) {
   const store = new Map<string, unknown>()
-  return {
-    run: async () => ({ exitCode: 0, stdout: '', stderr: '' }),
-    readFile: async () => '',
-    after: () => ({ cancel: () => {} }),
-    redraw: () => {},
-    openPane: async () => true,
-    closePane: async () => {},
-    isShown: async () => true,
-    shownPaneIds: async () => new Set(),
-    focus: async () => {},
+  return fakeHostBase({
     storeGet: async key => store.get(key),
     storeSet: async (key, value) => {
       store.set(key, JSON.parse(JSON.stringify(value)))
     },
-    submitPrompt: async () => {},
-    cwd: async () => '/repo',
-    fork: async () => null,
     status: text => onStatus?.(text),
-    fillPrompt: async () => ({ isFilled: true }),
-    toast: () => {},
-    messages: async () => [],
-    debug: () => {},
-    readGlobalConfig: async () => null,
-    isCheckpointing: async () => true,
-  }
+  })
 }
 
 describe('createReview state transitions', () => {

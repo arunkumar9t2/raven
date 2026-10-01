@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SETTINGS } from '../../hooks/core/settings'
-import { actionsOf, type ToolEvent, triggersOf } from '../../hooks/core/triggers'
+import { actionsOf, planActionsOf, type ToolEvent, triggersOf } from '../../hooks/core/triggers'
 
 const editOf = (path: string): ToolEvent => ({
   tool: 'Write',
@@ -76,5 +76,37 @@ describe('actionsOf main-loop-edit', () => {
   test('a subagent’s edit never raises it', () => {
     const actions = actionsWith()({ ...editOf('/repo/a.ts'), agentId: 'sub-1' })
     expect(actions).not.toContainEqual({ kind: 'main-loop-edit' })
+  })
+})
+
+describe('plan files', () => {
+  const PLAN = '/home/u/.claude/plans/x.md'
+
+  test('a plans-folder path is not guessed', () => {
+    expect(actionsWith()(editOf(PLAN))).not.toContainEqual({ kind: 'show-doc', path: PLAN })
+  })
+
+  test('a plan path plan mode named shows as it is written', () => {
+    const actions = actionsOf(editOf(PLAN), triggersOf(DEFAULT_SETTINGS), new Set([PLAN]))
+    expect(actions).toContainEqual({ kind: 'show-doc', path: PLAN })
+  })
+
+  test('the planning reminder only teaches the path', () => {
+    expect(planActionsOf({ type: 'plan_mode', planFilePath: PLAN, hasPlan: true })).toEqual([])
+  })
+
+  test('leaving plan mode opens the plan when there is one', () => {
+    expect(planActionsOf({ type: 'plan_mode_exit', planFilePath: PLAN, hasPlan: true })).toEqual([
+      { kind: 'show-doc', path: PLAN },
+    ])
+    expect(planActionsOf({ type: 'plan_mode_exit', planFilePath: PLAN, hasPlan: false })).toEqual(
+      [],
+    )
+  })
+
+  test('re-entering plan mode opens the earlier plan', () => {
+    expect(planActionsOf({ type: 'plan_mode_reentry', planFilePath: PLAN })).toEqual([
+      { kind: 'show-doc', path: PLAN },
+    ])
   })
 })

@@ -1,6 +1,12 @@
 import type { PaneOpenArgs, SessionMessage, Timer } from 'claude-code'
 
-export type RunResult = { exitCode: number; stdout: string; stderr: string }
+export type RunResult = {
+  exitCode: number
+  stdout: string
+  stderr: string
+  /** Set when the engine cut `stdout` at its 4 MiB cap; absent from fakes that never cut it. */
+  isStdoutTruncated?: boolean
+}
 
 /**
  * The slice of the engine Raven uses, bound once from `$` at `session.start`. Controllers and
@@ -14,8 +20,6 @@ export type Host = {
   /** Resolves false when the engine left the pane waiting undrawn (too narrow to dock). */
   openPane: (pane: PaneOpenArgs) => Promise<boolean>
   closePane: (id: string) => Promise<void>
-  /** Whether the pane is the one the surface shows, rather than a tab behind it. */
-  isShown: (id: string) => Promise<boolean>
   /** Every pane id the surface currently shows, off one call — for a check over several ids. */
   shownPaneIds: () => Promise<ReadonlySet<string>>
   /** Moves keyboard focus to the element drawn under `key` in pane `paneId`. */

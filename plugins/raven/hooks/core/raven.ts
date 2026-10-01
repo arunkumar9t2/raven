@@ -14,7 +14,14 @@ import { type CommandKind, type CommandResult, NARROW_TEXT } from './command-gly
 import { type Directive, directiveOf } from './directive'
 import type { Host } from './host'
 import type { RavenSettings } from './settings'
-import { type Action, actionsOf, type ToolEvent, triggersOf } from './triggers'
+import {
+  type Action,
+  actionsOf,
+  type PlanNote,
+  planActionsOf,
+  type ToolEvent,
+  triggersOf,
+} from './triggers'
 import type { Kit, View } from './view'
 
 /** The engine-facing surface of Raven; `register` forwards engine events here and nothing else. */
@@ -22,8 +29,16 @@ export type Raven = {
   /** The `/raven` argument hint: each view's subcommand, then `send`. */
   argumentHint: string
   command: (args: string) => Promise<CommandResult>
-  /** Reacts to a finished tool call; returns replacement result text for the model, if any. */
+  /**
+   * Reacts to a finished tool call; returns replacement result text for the model, if any. Never
+   * rejects: a failure goes to the debug log.
+   */
   afterTool: (event: ToolEvent) => Promise<string | undefined>
+  /**
+   * Learns the plan file plan mode named, so its edits render live; opens it on exit/re-entry.
+   * Never rejects: a failure goes to the debug log.
+   */
+  planNoted: (note: PlanNote) => Promise<void>
   /** Runs the `show` tool's input as a directive; throws on input `directiveOf` rejects. */
   runTool: (input: unknown) => Promise<string>
   /** Hidden context the next prompt carries: the pending review, which it consumes. */
@@ -72,6 +87,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   let hasWarnedDiffPanel = false
   // Guards the fork below from re-entering itself and caps it at one per sent batch.
   let isResolving = false
+  const planPaths = new Set<string>()
   const triggers = triggersOf(settings)
   // The kind the most recent `command()` call resolved each reply text to, for a `CommandOutput`
   // row the engine asks Raven to redraw without re-running the command.
@@ -147,7 +163,6 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
 
   /** Fills the prompt box with the pending review so the person can edit it before sending. */
   async function editAndSend(): Promise<void> {
-    if (review.pending().length === 0) return
     const taken = review.take()
     const text = reviewTextOf(taken)
     if (text === undefined) return
@@ -162,9 +177,11 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
    * Shows a view's pane, bringing it forward when it is a tab behind another; false when the
    * terminal is too narrow to dock it.
    */
+  const isPaneShown = async (id: string) => (await host.shownPaneIds()).has(id)
+
   async function show(view: View, focus?: true): Promise<boolean> {
     if (open.has(view.pane.id)) {
-      if (!focus && (await host.isShown(view.pane.id))) return true
+      if (!focus && (await isPaneShown(view.pane.id))) return true
       // Reopening an open id only retitles it; a fresh open brings a background tab forward.
       if (!focus) await host.closePane(view.pane.id)
     }
@@ -212,7 +229,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     await doc.show(shown)
     bandState.noteDocShown(
       shown.kind === 'file' ? shown.path : undefined,
-      await host.isShown(doc.pane.id),
+      await isPaneShown(doc.pane.id),
     )
     return show(doc)
   }
@@ -271,7 +288,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         return undefined
       case 'reload-doc':
         await doc.reload(action.path)
-        bandState.noteDocReloaded(action.path, await host.isShown(doc.pane.id))
+        bandState.noteDocReloaded(action.path, await isPaneShown(doc.pane.id))
         return undefined
       case 'directive':
         return runDirective(action.directive)
@@ -294,7 +311,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
 
   async function toggle(view: View): Promise<CommandResult> {
     const name = `Raven ${view.pane.title.toLowerCase()}`
-    if (open.has(view.pane.id) && (await host.isShown(view.pane.id))) {
+    if (open.has(view.pane.id) && (await isPaneShown(view.pane.id))) {
       await hide(view)
       return resultOf('hidden', `${name} hidden`)
     }
@@ -327,12 +344,25 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     argumentHint,
     command,
     afterTool: async event => {
-      const texts: string[] = []
-      for (const action of actionsOf(event, triggers)) {
-        const text = await runAction(action)
-        if (text !== undefined) texts.push(text)
+      try {
+        const texts: string[] = []
+        for (const action of actionsOf(event, triggers, planPaths)) {
+          const text = await runAction(action)
+          if (text !== undefined) texts.push(text)
+        }
+        return texts.length > 0 ? texts.join('\n') : undefined
+      } catch (error) {
+        host.debug(`raven: afterTool failed: ${String(error)}`)
+        return undefined
       }
-      return texts.length > 0 ? texts.join('\n') : undefined
+    },
+    planNoted: async note => {
+      planPaths.add(note.planFilePath)
+      try {
+        for (const action of planActionsOf(note)) await runAction(action)
+      } catch (error) {
+        host.debug(`raven: planNoted failed: ${String(error)}`)
+      }
     },
     runTool: async input => {
       const directive = directiveOf(input)

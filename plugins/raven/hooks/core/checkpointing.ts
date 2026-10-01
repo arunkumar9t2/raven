@@ -1,4 +1,5 @@
 import type { Settings } from 'claude-code'
+import { isRecord } from './is-record'
 
 /**
  * Whether the session checkpoints Claude's edits, read as the built-in diff panel reads it: the
@@ -10,8 +11,8 @@ export const isCheckpointing = (settings: Settings, disabling: string | undefine
 
 /** Whether `~/.claude.json` leaves the built-in diff sidebar open; undefined when unreadable. */
 export const diffSidebarOpenOf = (globalConfig: unknown): boolean | undefined => {
-  if (typeof globalConfig !== 'object' || globalConfig === null) return undefined
-  const value = (globalConfig as Record<string, unknown>).diffSidebarOpen
+  if (!isRecord(globalConfig)) return undefined
+  const value = globalConfig.diffSidebarOpen
   return typeof value === 'boolean' ? value : undefined
 }
 

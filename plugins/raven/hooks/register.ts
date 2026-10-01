@@ -47,8 +47,6 @@ const TOOL_INPUT_SCHEMA = {
 export function register(on: On, options: PluginOptions) {
   const settings = settingsOf(options)
   let raven: Raven | null = null
-  // Set alongside `raven`, so `afterTool`'s catch below can log without threading `host` through.
-  let host: Host | null = null
 
   /**
    * Notes the viewport off any `ui.render` event and builds its `Kit` around `resolve` (always
@@ -87,7 +85,6 @@ export function register(on: On, options: PluginOptions) {
       closePane: id => $.ui.close({ id }),
       shownPaneIds: async () =>
         new Set((await $.ui.panes()).filter(pane => pane.isShown).map(pane => pane.id)),
-      isShown: async id => (await bound.shownPaneIds()).has(id),
       focus: async (paneId, key) => {
         await $.ui.focus({ requestId: paneId, key })
       },
@@ -137,7 +134,6 @@ export function register(on: On, options: PluginOptions) {
       description: TOOL_DESCRIPTION,
       inputSchema: TOOL_INPUT_SCHEMA,
     })
-    host = bound
     raven = created
 
     return next(e)
@@ -229,10 +225,7 @@ export function register(on: On, options: PluginOptions) {
       result: isLanded ? result.result : undefined,
     }
 
-    const ack = await raven.afterTool(event).catch(error => {
-      host?.debug(`raven: afterTool failed: ${String(error)}`)
-      return undefined
-    })
+    const ack = await raven.afterTool(event)
     if (ack === undefined || !isLanded || !isRecord(result.result)) return result
     // The model reads Bash's result from its `stdout`, so the ack replaces the CLI's lines there;
     // anything else the command printed stays.
@@ -240,6 +233,19 @@ export function register(on: On, options: PluginOptions) {
     const text = rest === '' ? ack : `${rest}\n${ack}`
     return { ...result, result: { ...result.result, stdout: text }, text }
   })
+
+  // Plan mode's notes name the plan file wherever plans are kept; observed, never rewritten.
+  on(
+    'prompt.attachment',
+    { type: ['plan_mode', 'plan_mode_exit', 'plan_mode_reentry'] },
+    async ($, e, next) => {
+      const result = await next(e)
+      if (raven && e.agentId === undefined && e.detail) {
+        await raven.planNoted({ type: e.type, ...e.detail })
+      }
+      return result
+    },
+  )
 
   // Only a prompt the person sent (typed, or through Remote Control) carries the review.
   on('prompt.submit', ($, e, next) => {

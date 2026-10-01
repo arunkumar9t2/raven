@@ -24,16 +24,19 @@ export type Action =
   | { kind: 'directive'; directive: Directive }
   | { kind: 'tasks'; tool: string; input: Readonly<Record<string, unknown>>; result?: unknown }
 
-export type Trigger = (event: ToolEvent) => readonly Action[]
+/** A pure reading of one finished call, given the plan files plan mode has named so far. */
+export type Trigger = (event: ToolEvent, planPaths: ReadonlySet<string>) => readonly Action[]
 
 const EDIT_TOOLS = ['Edit', 'Write', 'NotebookEdit', 'MultiEdit']
 const SHELL_TOOLS = ['Bash', 'PowerShell']
 
-/** Markdown written under these paths opens in the doc view as it is written. */
+/**
+ * Markdown written under these paths opens in the doc view as it is written. Plan mode's own plan
+ * file is not guessed here: its path arrives on plan mode's notes (`PlanNote`).
+ */
 const WATCHED_DOC_PATTERNS = [
   /\/docs\/superpowers\/(plans|specs)\/[^/]+\.md$/,
   /\/\.superpowers\/.+\.md$/,
-  /\/\.claude\/plans\/[^/]+\.md$/,
 ]
 
 /** `fragment` split into its non-empty `/`-separated segments. */
@@ -54,10 +57,15 @@ const containsFragment = (path: string, fragment: string): boolean => {
   return false
 }
 
-const isWatchedDocPath = (path: string, watchedPaths: readonly string[]) =>
-  path.endsWith('.md') &&
-  (WATCHED_DOC_PATTERNS.some(pattern => pattern.test(path)) ||
-    watchedPaths.some(fragment => containsFragment(path, fragment)))
+const isWatchedDocPath = (
+  path: string,
+  watchedPaths: readonly string[],
+  planPaths: ReadonlySet<string>,
+) =>
+  planPaths.has(path) ||
+  (path.endsWith('.md') &&
+    (WATCHED_DOC_PATTERNS.some(pattern => pattern.test(path)) ||
+      watchedPaths.some(fragment => containsFragment(path, fragment))))
 
 /** The file a landed edit wrote, or null for any other call. */
 const editedPathOf = (event: ToolEvent) => {
@@ -80,9 +88,11 @@ const onShell: Trigger = event =>
 
 const onWatchedDocOf =
   (watchedPaths: readonly string[]): Trigger =>
-  event => {
+  (event, planPaths) => {
     const path = editedPathOf(event)
-    return path !== null && isWatchedDocPath(path, watchedPaths) ? [{ kind: 'show-doc', path }] : []
+    return path !== null && isWatchedDocPath(path, watchedPaths, planPaths)
+      ? [{ kind: 'show-doc', path }]
+      : []
   }
 
 const onDirective: Trigger = event =>
@@ -104,5 +114,26 @@ export const triggersOf = (settings: RavenSettings): readonly Trigger[] => [
   onTasks,
 ]
 
-export const actionsOf = (event: ToolEvent, triggers: readonly Trigger[]) =>
-  triggers.flatMap(trigger => trigger(event))
+export const actionsOf = (
+  event: ToolEvent,
+  triggers: readonly Trigger[],
+  planPaths: ReadonlySet<string> = new Set(),
+) => triggers.flatMap(trigger => trigger(event, planPaths))
+
+/**
+ * One of plan mode's notes to the main loop, off `prompt.attachment`: `plan_mode` rides every
+ * request while planning, `plan_mode_exit` and `plan_mode_reentry` mark leaving and re-entering it.
+ * Each names the plan file wherever the session keeps plans.
+ */
+export type PlanNote = {
+  type: 'plan_mode' | 'plan_mode_exit' | 'plan_mode_reentry'
+  planFilePath: string
+  /** Whether the engine found the plan file; a re-entry note is only made when it did. */
+  hasPlan?: boolean
+}
+
+/** Leaving or re-entering plan mode opens the plan, when there is one to read. */
+export const planActionsOf = (note: PlanNote): readonly Action[] =>
+  note.type !== 'plan_mode' && note.hasPlan !== false
+    ? [{ kind: 'show-doc', path: note.planFilePath }]
+    : []

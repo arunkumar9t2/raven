@@ -1,57 +1,28 @@
-import type { CommandRunInput, On, SessionMessage, TurnCompleteInput } from 'claude-code'
+import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
 import { commentsStoreKeyOf, DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
 import { stageKeyOf } from '../hooks/views/diff/anchor'
 import { SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
+import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
 
 tier('user')
 
 const TOOL = toolNameOf(NAME)
 
-const SESSION = { surface: 'terminal', isInteractive: true, cwd: '/work' } as const
 const FALLBACK = 'Raven pane is not active; x was not shown. (Enable function hooks)'
-
-const ravenCommand = (args: string): CommandRunInput => ({
-  command: 'raven',
-  args,
-  origin: { kind: 'composer' },
-  presentation: { isFullscreen: true, columns: 160 },
-})
 
 /** A world outside any git repository, whose Bash calls print `stdout`. */
 function world(on: On, stdout: string, env: Readonly<Record<string, string>> = {}) {
-  mock.clock(on)
-  mock.store(on, {})
+  baseWorld(on)
   mock.env(on, env)
-  on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
-  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a repo' } }))
+  on('process.run', () => ran(128, '', 'not a repo'))
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('settings.read', () => ({ value: {} }))
   on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout, stderr: '', interrupted: false } }))
 
-  const shown = new Set<string>()
-  on('ui.open', ($, e) => {
-    shown.add(e.id)
-    return { value: { isPlaced: true } }
-  })
-  on('ui.close', ($, e) => {
-    shown.delete(e.id)
-    return { value: undefined }
-  })
-  on('ui.panes', () => ({
-    value: [...shown].map(id => ({
-      id,
-      title: id,
-      isShown: true,
-      isFocused: false,
-      isPlaced: true,
-    })),
-  }))
-  on('ui.focus', () => ({}))
+  trackShownPanes(on)
 }
 
 describe('register', () => {
@@ -127,12 +98,8 @@ describe('register', () => {
  */
 function openWorld(on: On) {
   const opened: string[] = []
-  mock.clock(on)
-  mock.store(on, {})
-  on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
-  on('process.run', () => ({ value: { exitCode: 128, stdout: '', stderr: 'not a repo' } }))
+  baseWorld(on)
+  on('process.run', () => ran(128, '', 'not a repo'))
   on('ui.invalidate', () => ({ value: undefined }))
   on('ui.status', () => ({ value: undefined }))
   on('settings.read', () => ({ value: {} }))
@@ -180,7 +147,7 @@ describe('options: watched doc paths, defaults', () => {
     const opened = openWorld(on)
 
     await $.session.start(SESSION)
-    await $.tool.call(editOf('/work/.claude/plans/x.md'))
+    await $.tool.call(editOf('/work/docs/superpowers/plans/x.md'))
 
     expect(opened).toContain(DOC_PANE.id)
   })
@@ -195,7 +162,62 @@ describe('options: watched doc paths, defaults', () => {
   })
 })
 
-const REPO = '/work'
+const PLAN = '/home/u/.claude/plans/x.md'
+
+const planNote = (type: 'plan_mode' | 'plan_mode_exit', hasPlan: boolean, agentId?: string) => ({
+  type,
+  text: '',
+  origin: { kind: 'engine' as const },
+  ...(agentId === undefined ? {} : { agentId }),
+  detail: { reminder: 'full' as const, planFilePath: PLAN, hasPlan },
+})
+
+describe('plan mode', () => {
+  function planWorld(on: On) {
+    const opened = openWorld(on)
+    on('prompt.attachment', ($, e) => ({ text: e.text }))
+    return opened
+  }
+
+  test('an edit to an unguessed path opens nothing before plan mode names it', async ($, on) => {
+    const opened = planWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(PLAN))
+
+    expect(opened).not.toContain(DOC_PANE.id)
+  })
+
+  test('the plan file plan mode names opens in the doc pane as it is written', async ($, on) => {
+    const opened = planWorld(on)
+
+    await $.session.start(SESSION)
+    await $.prompt.attachment(planNote('plan_mode', false))
+    expect(opened).not.toContain(DOC_PANE.id)
+    await $.tool.call(editOf(PLAN))
+
+    expect(opened).toContain(DOC_PANE.id)
+  })
+
+  test('leaving plan mode with a plan opens it', async ($, on) => {
+    const opened = planWorld(on)
+
+    await $.session.start(SESSION)
+    await $.prompt.attachment(planNote('plan_mode_exit', true))
+
+    expect(opened).toContain(DOC_PANE.id)
+  })
+
+  test("a subagent's plan note is ignored", async ($, on) => {
+    const opened = planWorld(on)
+
+    await $.session.start(SESSION)
+    await $.prompt.attachment(planNote('plan_mode_exit', true, 'agent-1'))
+
+    expect(opened).not.toContain(DOC_PANE.id)
+  })
+})
+
 const USAGE = {
   input_tokens: 0,
   output_tokens: 0,
@@ -210,15 +232,6 @@ const mainLoopTurn = (answer: string): TurnCompleteInput => ({
   turnId: 't1',
   reason: 'answer',
 })
-
-const PANE_PROPS = {
-  title: 'Diff',
-  isFocused: false,
-  bodyColumns: 100,
-  placement: 'dock' as const,
-  scroll: { offset: 0, bodyRows: 30 },
-  view: {},
-}
 
 const mountDiff = ($: Engine) =>
   $.ui.mount({
@@ -242,27 +255,21 @@ function gitWorld(
   messages: readonly SessionMessage[] = [],
   extraShownIds: readonly string[] = [],
 ) {
-  mock.clock(on)
-  mock.store(on, storeEntries)
-  on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  baseWorld(on, storeEntries)
   on('session.messages', () => ({ value: [...messages] }))
   on('process.run', ($, e) => {
     const [cmd, sub] = e.argv
     if (cmd === 'git' && sub === 'rev-parse' && e.argv.includes('--show-toplevel')) {
-      return { value: { exitCode: 0, stdout: REPO, stderr: '' } }
+      return ran(0, REPO)
     }
     if (cmd === 'git' && sub === 'status') {
-      const stdout = files.map(path => ` M ${path}\0`).join('')
-      return { value: { exitCode: 0, stdout, stderr: '' } }
+      return ran(0, files.map(path => ` M ${path}\0`).join(''))
     }
     if (cmd === 'git' && e.argv.includes('--numstat')) {
-      const stdout = files.map(path => `1\t1\t${path}\0`).join('')
-      return { value: { exitCode: 0, stdout, stderr: '' } }
+      return ran(0, files.map(path => `1\t1\t${path}\0`).join(''))
     }
     // symbolic-ref/verify/merge-base (branch point) and loadHunks all get the same "nothing here".
-    return { value: { exitCode: 1, stdout: '', stderr: '' } }
+    return ran(1)
   })
   on('model.fork', () => {
     if (forkText instanceof Error) throw forkText
@@ -275,25 +282,7 @@ function gitWorld(
   })
   on('turn.complete', ($, e) => ({ text: e.answer }))
 
-  const shown = new Set<string>()
-  on('ui.open', ($, e) => {
-    shown.add(e.id)
-    return { value: { isPlaced: true } }
-  })
-  on('ui.close', ($, e) => {
-    shown.delete(e.id)
-    return { value: undefined }
-  })
-  on('ui.panes', () => ({
-    value: [...new Set([...shown, ...extraShownIds])].map(id => ({
-      id,
-      title: id,
-      isShown: true,
-      isFocused: false,
-      isPlaced: true,
-    })),
-  }))
-  on('ui.focus', () => ({}))
+  trackShownPanes(on, extraShownIds)
 }
 
 describe('diff view keyboard control', () => {
@@ -377,47 +366,20 @@ function hunkWorld(
   onApply: (argv: readonly string[], stdin: string | undefined) => void,
   diffTextOf: () => string = () => HUNK_TEXT,
 ) {
-  mock.clock(on)
-  mock.store(on, {})
-  on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  baseWorld(on)
   on('process.run', ($, e) => {
     const [cmd, sub] = e.argv
-    if (cmd === 'git' && sub === 'rev-parse')
-      return { value: { exitCode: 0, stdout: REPO, stderr: '' } }
-    if (cmd === 'git' && sub === 'status') {
-      return { value: { exitCode: 0, stdout: ' M a.ts\0', stderr: '' } }
-    }
-    if (cmd === 'git' && e.argv.includes('--numstat')) {
-      return { value: { exitCode: 0, stdout: '1\t1\ta.ts\0', stderr: '' } }
-    }
+    if (cmd === 'git' && sub === 'rev-parse') return ran(0, REPO)
+    if (cmd === 'git' && sub === 'status') return ran(0, ' M a.ts\0')
+    if (cmd === 'git' && e.argv.includes('--numstat')) return ran(0, '1\t1\ta.ts\0')
     if (cmd === 'git' && sub === 'apply') {
       onApply(e.argv, e.init?.stdin)
-      return { value: { exitCode: 0, stdout: '', stderr: '' } }
+      return ran(0)
     }
-    return { value: { exitCode: 0, stdout: diffTextOf(), stderr: '' } }
+    return ran(0, diffTextOf())
   })
 
-  const shown = new Set<string>()
-  on('ui.open', ($, e) => {
-    shown.add(e.id)
-    return { value: { isPlaced: true } }
-  })
-  on('ui.close', ($, e) => {
-    shown.delete(e.id)
-    return { value: undefined }
-  })
-  on('ui.panes', () => ({
-    value: [...shown].map(id => ({
-      id,
-      title: id,
-      isShown: true,
-      isFocused: false,
-      isPlaced: true,
-    })),
-  }))
-  on('ui.focus', () => ({}))
+  trackShownPanes(on)
 }
 
 describe('stage and revert a hunk', () => {

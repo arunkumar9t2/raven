@@ -43,8 +43,11 @@ shown by absolute path still resolves its own relative links correctly.
 
 The Doc view opens itself, as the visible pane, whenever the main loop writes or edits a markdown
 file under a watched path: the built-in plan and spec directories
-(`docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`, `~/.claude/plans/`) or a
-`/`-bounded path segment named in the `watchedPaths` setting.
+(`docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`) or a `/`-bounded path
+segment named in the `watchedPaths` setting. Plan mode's own plan file is not guessed from a
+directory: the engine names it on plan mode's notes (`prompt.attachment` of type `plan_mode`,
+`plan_mode_exit`, `plan_mode_reentry`, main loop only), Raven watches that exact path from then on,
+and leaving plan mode with a plan, or re-entering it, opens the plan.
 [`settings-and-surfaces.md`](./settings-and-surfaces.md) owns that setting's exact matching rule.
 Configurable extras aside, these watched paths are the view's own built-in behavior, not something
 another doc owns.

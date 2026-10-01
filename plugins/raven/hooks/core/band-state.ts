@@ -1,5 +1,5 @@
 import type { RenderElement } from 'claude-code'
-import { outputOf } from '../git/load'
+import { toplevelOf } from '../git/load'
 import { PANE_IDS } from '../names'
 import type { Review } from '../review/review'
 import { band as renderBand } from '../views/band'
@@ -16,15 +16,6 @@ export type BandStateDeps = {
 }
 
 export type BandState = {
-  /**
-   * Loads the review once without opening any pane, so the band and status line see comments a
-   * past session left pending. A failure (no repository) is not retried on every call.
-   */
-  ensureReviewLoaded: () => Promise<void>
-  /** True while some Raven pane is the one the surface shows, not just a tab behind another. */
-  isAnyPaneShown: () => Promise<boolean>
-  /** The band's `open`: the diff while comments are pending, else the doc. */
-  openFromBand: () => Promise<void>
   /**
    * The `AbovePrompt` band: null while a survey holds it, `rows` is too small, nothing is pending,
    * or a Raven pane is already visible (not just open behind another tab).
@@ -59,11 +50,15 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
   // reads as "unknown" and opens anyway rather than staying silent by default.
   let lastViewportColumns: number | undefined
 
+  /**
+   * Loads the review once without opening any pane, so the band and status line see comments a
+   * past session left pending. A failure (no repository) is not retried on every call.
+   */
   async function ensureReviewLoaded(): Promise<void> {
     if (hasLoadedReview) return
     hasLoadedReview = true
     try {
-      const toplevel = outputOf(await host.run(['git', 'rev-parse', '--show-toplevel']))
+      const toplevel = await toplevelOf(host.run)
       if (toplevel !== null) await review.load(toplevel)
     } catch (error) {
       host.debug(`raven: resolving the repository for the review failed: ${String(error)}`)
@@ -79,6 +74,7 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
     return PANE_IDS.some(id => shown.has(id))
   }
 
+  /** The band's `open`: the diff while comments are pending, else the doc. */
   async function openFromBand(): Promise<void> {
     if (review.pending().length > 0) await deps.openDiff()
     else await deps.openDoc()
@@ -91,9 +87,6 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
   }
 
   return {
-    ensureReviewLoaded,
-    isAnyPaneShown,
-    openFromBand,
     band: async (kit, hasSurvey) => {
       if (hasSurvey || kit.rows < 1) return null
       if (!hasLoadedReview) await ensureReviewLoaded()

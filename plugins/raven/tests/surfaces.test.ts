@@ -1,69 +1,25 @@
-import type { CommandRunInput, On } from 'claude-code'
-import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
+import type { On } from 'claude-code'
+import { describe, type Engine, expect, test, tier } from 'claude-code/testing'
 import { DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
+import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
 
 tier('user')
 
-const SESSION = { surface: 'terminal', isInteractive: true, cwd: '/work' } as const
-const REPO = '/work'
-
-const ravenCommand = (args: string): CommandRunInput => ({
-  command: 'raven',
-  args,
-  origin: { kind: 'composer' },
-  presentation: { isFullscreen: true, columns: 160 },
-})
-
 /** A world inside a git repo with one modified file, no hunks: enough to draw the diff pane. */
 function world(on: On) {
-  mock.clock(on)
-  mock.store(on, {})
-  on('session.start', ($, e) => ({ cwd: e.cwd }))
-  on('command.register', ($, e) => ({ value: { command: e.name } }))
-  on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  baseWorld(on)
   on('session.messages', () => ({ value: [] }))
   on('process.run', ($, e) => {
     const [cmd, sub] = e.argv
     if (cmd === 'git' && sub === 'rev-parse' && e.argv.includes('--show-toplevel')) {
-      return { value: { exitCode: 0, stdout: REPO, stderr: '' } }
+      return ran(0, REPO)
     }
-    if (cmd === 'git' && sub === 'status') {
-      return { value: { exitCode: 0, stdout: ' M a.ts\0', stderr: '' } }
-    }
-    if (cmd === 'git' && e.argv.includes('--numstat')) {
-      return { value: { exitCode: 0, stdout: '1\t1\ta.ts\0', stderr: '' } }
-    }
-    return { value: { exitCode: 1, stdout: '', stderr: '' } }
+    if (cmd === 'git' && sub === 'status') return ran(0, ' M a.ts\0')
+    if (cmd === 'git' && e.argv.includes('--numstat')) return ran(0, '1\t1\ta.ts\0')
+    return ran(1)
   })
 
-  const shown = new Set<string>()
-  on('ui.open', ($, e) => {
-    shown.add(e.id)
-    return { value: { isPlaced: true } }
-  })
-  on('ui.close', ($, e) => {
-    shown.delete(e.id)
-    return { value: undefined }
-  })
-  on('ui.panes', () => ({
-    value: [...shown].map(id => ({
-      id,
-      title: id,
-      isShown: true,
-      isFocused: false,
-      isPlaced: true,
-    })),
-  }))
-  on('ui.focus', () => ({}))
-}
-
-const PANE_PROPS = {
-  title: 'Diff',
-  isFocused: false,
-  bodyColumns: 100,
-  placement: 'dock' as const,
-  scroll: { offset: 0, bodyRows: 30 },
-  view: {},
+  trackShownPanes(on)
 }
 
 describe('surface safety', () => {

@@ -1,8 +1,9 @@
 import { describe, expect, test } from 'bun:test'
 import type { SessionMessage } from 'claude-code'
-import type { Host, RunResult } from '../../hooks/core/host'
+import type { RunResult } from '../../hooks/core/host'
 import { turnValueOf } from '../../hooks/views/diff/source'
 import { createSourceController } from '../../hooks/views/diff/source-controller'
+import { fakeHost as fakeHostBase } from './fake-host'
 
 type ToolUse = SessionMessage['toolUses'][number]
 
@@ -25,36 +26,13 @@ const turnMessages: SessionMessage[] = [
   assistantRow([useOf('Edit', { file_path: '/r/a.ts', old_string: 'a', new_string: 'b' })]),
 ]
 
-function fakeHost(overrides: Partial<Host> = {}): Host {
-  const store = new Map<string, unknown>()
-  const run = async (): Promise<RunResult> => ({ exitCode: 0, stdout: 'deadbeef', stderr: '' })
-  return {
-    run,
-    readFile: async () => '',
-    after: () => ({ cancel: () => {} }),
-    redraw: () => {},
-    openPane: async () => true,
-    closePane: async () => {},
-    isShown: async () => true,
-    shownPaneIds: async () => new Set(),
-    focus: async () => {},
-    storeGet: async key => store.get(key),
-    storeSet: async (key, value) => {
-      store.set(key, value)
-    },
-    submitPrompt: async () => {},
-    cwd: async () => '/repo',
-    fork: async () => null,
-    status: () => {},
-    fillPrompt: async () => ({ isFilled: true }),
-    toast: () => {},
+/** `fakeHost`, but `run` answers a git-ish stdout and `messages` carries this spec's fixed turn. */
+const fakeHost = (overrides: Partial<Parameters<typeof fakeHostBase>[0]> = {}) =>
+  fakeHostBase({
+    run: async (): Promise<RunResult> => ({ exitCode: 0, stdout: 'deadbeef', stderr: '' }),
     messages: async () => turnMessages,
-    debug: () => {},
-    readGlobalConfig: async () => null,
-    isCheckpointing: async () => true,
     ...overrides,
-  }
-}
+  })
 
 const repository = { toplevel: '/repo', files: [] }
 
