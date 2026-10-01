@@ -15,7 +15,14 @@ import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { type BodyItem, fileAtRow, fixedRowsOf, type Stream, streamOf } from './diff/blocks'
-import { addressedRow, commentBox, hunkActionsRow, note, outdatedTitle } from './diff/comment-box'
+import {
+  addressedRow,
+  commentBox,
+  hunkActionsRow,
+  note,
+  noteButton,
+  outdatedTitle,
+} from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
 import { clampTop, type Placed, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
@@ -441,6 +448,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
             <Text bold>{item.file.path}</Text>
             <Text color={COLORS.added}>+{item.file.adds}</Text>
             <Text color={COLORS.removed}>−{item.file.dels}</Text>
+            {item.canNote
+              ? noteButton(kit, { path: item.file.path }, '＋ note on file', startComposing)
+              : null}
           </Box>
         )
       }
@@ -459,12 +469,10 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       case 'comment-box':
         return commentBox(kit, {
           anchor: item.anchor,
-          composing: model.composing,
           inputKey: inputKeyOf(item.anchor),
           hunk: item.hunk,
           line: model.composingLine,
           columns: kit.columns,
-          onStart: startComposing,
           onLineChange: line => update({ composingLine: line }),
           onSubmit: text => submitComment(item.anchor, text),
           onCancel: () => stopComposing(item.anchor),
@@ -472,8 +480,10 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       case 'hunk-actions':
         return hunkActionsRow(kit, {
           anchor: item.anchor,
+          canNote: item.canNote,
           isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
           confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
+          onStartNote: startComposing,
           onStage: () => void applyHunk(file, item.hunk, 'stage'),
           onRevert: () => pressRevert(file, item.hunk, item.anchor),
         })
@@ -521,7 +531,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       return <Text dimColor>{text}</Text>
     }
 
-    const stream = streamFor(capabilitiesOf(kit.ui))
+    const stream = streamFor(capabilitiesOf(kit.surface))
     lastTitleRows = stream.titleRows
     lastContentRows = stream.contentRows
 

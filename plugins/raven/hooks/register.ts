@@ -59,6 +59,7 @@ export function register(on: On, options: PluginOptions) {
     resolve: () => unknown,
     columns: number,
     rows: number,
+    surface: Kit['surface'],
   ): Kit {
     raven?.noteViewport(viewport?.columns)
     let cached: Ui | undefined
@@ -69,6 +70,7 @@ export function register(on: On, options: PluginOptions) {
       },
       columns,
       rows,
+      surface,
     }
   }
 
@@ -151,6 +153,7 @@ export function register(on: On, options: PluginOptions) {
       () => $.ui.resolve(e),
       e.props.bodyColumns,
       e.props.scroll.bodyRows,
+      e.surface,
     )
     if (!raven || !PANE_IDS.includes(e.requestId)) return next(e)
     const drawn = raven.render(e.requestId, kit)
@@ -158,7 +161,13 @@ export function register(on: On, options: PluginOptions) {
   })
 
   on('ui.render', { component: 'AbovePrompt' }, async ($, e, next) => {
-    const kit = kitOf(e.viewport, () => $.ui.resolve(e), e.props.bodyColumns, e.props.maxRows)
+    const kit = kitOf(
+      e.viewport,
+      () => $.ui.resolve(e),
+      e.props.bodyColumns,
+      e.props.maxRows,
+      e.surface,
+    )
     if (!raven) return next(e)
     const drawn = await raven.band(kit, e.props.hasSurvey)
     return drawn ?? next(e)
@@ -168,7 +177,7 @@ export function register(on: On, options: PluginOptions) {
     'ui.render',
     { component: 'CommandOutput', props: { command: COMMAND } },
     async ($, e, next) => {
-      const kit = kitOf(e.viewport, () => $.ui.resolve(e), 0, 0)
+      const kit = kitOf(e.viewport, () => $.ui.resolve(e), 0, 0, e.surface)
       if (!raven) return next(e)
       return commandOutputRow(kit, {
         text: e.props.text,

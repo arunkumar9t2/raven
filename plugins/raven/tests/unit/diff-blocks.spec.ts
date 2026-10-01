@@ -45,21 +45,24 @@ const hunkA = hunkOf('@@ -1,2 +1,2 @@', [' a', '-b', '+c'])
 const hunkB = hunkOf('@@ -10,1 +10,1 @@', ['-x', '+y'])
 
 describe('blocksOf', () => {
-  test('a file with no hunks yet is title, comment box, status row', () => {
+  test('a file with no hunks yet is title, status row; idle draws no comment box', () => {
     const blocks = blocksOf(file, undefined, [], null)
-    expect(blocks.map(b => b.key)).toEqual([
-      TITLE_KEY,
-      commentBoxKeyOf({ path: file.path }),
-      STATUS_KEY,
-    ])
-    expect(blocks[0]).toMatchObject({ item: { kind: 'title', file } })
+    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY])
+    expect(blocks[0]).toMatchObject({ item: { kind: 'title', file, canNote: true } })
     expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Loading…' } })
   })
 
-  test('a comment box block carries its anchor', () => {
+  test('an idle file draws no comment-box block; the heading carries the note control', () => {
     const blocks = blocksOf(file, [hunkA], [], null)
-    const box = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
-    expect(box).toMatchObject({ item: { kind: 'comment-box', anchor: { path: file.path } } })
+    expect(blocks.some(block => block.key.startsWith('comment-box:'))).toBe(false)
+    expect(blocks[0]).toMatchObject({ item: { kind: 'title', canNote: true } })
+  })
+
+  test('a comment box block carries its anchor while that anchor is being composed', () => {
+    const anchor = { path: file.path }
+    const blocks = blocksOf(file, [hunkA], [], anchor)
+    const box = blocks.find(b => b.key === commentBoxKeyOf(anchor))
+    expect(box).toMatchObject({ item: { kind: 'comment-box', anchor } })
   })
 
   test('a note block carries its comment', () => {
@@ -75,17 +78,14 @@ describe('blocksOf', () => {
     expect(gap).toMatchObject({ item: { kind: 'gap' } })
   })
 
-  test('order: title, file comment box, then each hunk with its own comment box, gap between', () => {
+  test('order: title, then each hunk with its own actions row, gap between', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => b.key)).toEqual([
       TITLE_KEY,
-      commentBoxKeyOf({ path: file.path }),
       'hunk:0:@@ -1,2 +1,2 @@',
-      commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
       hunkActionsKeyOf({ path: file.path, hunk: hunkA.header }),
       'gap:1',
       'hunk:1:@@ -10,1 +10,1 @@',
-      commentBoxKeyOf({ path: file.path, hunk: hunkB.header }),
       hunkActionsKeyOf({ path: file.path, hunk: hunkB.header }),
     ])
   })
@@ -94,13 +94,10 @@ describe('blocksOf', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => (b.kind === 'hunk' ? 'hunk' : b.item.kind))).toEqual([
       'title',
-      'comment-box',
       'hunk',
-      'comment-box',
       'hunk-actions',
       'gap',
       'hunk',
-      'comment-box',
       'hunk-actions',
     ])
     expect(blocks.filter(b => b.kind === 'fixed' && b.item.kind === 'gap')).toHaveLength(1)
@@ -115,21 +112,19 @@ describe('blocksOf', () => {
     expect(blocks.map(b => b.key)).toEqual([
       TITLE_KEY,
       noteKeyOf('file-note'),
-      commentBoxKeyOf({ path: file.path }),
       'hunk:0:@@ -1,2 +1,2 @@',
       noteKeyOf('hunk-note'),
-      commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
       hunkActionsKeyOf({ path: file.path, hunk: hunkA.header }),
     ])
   })
 
-  test('composing on a hunk is 3 rows (line-picker Select + Input + cancel)', () => {
+  test('composing on a hunk is 3 rows (line-picker Select + Input + cancel); the file box stays absent', () => {
     const blocks = blocksOf(file, [hunkA], [], { path: file.path, hunk: hunkA.header })
     const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
     const hunkBox = blocks.find(
       b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
     )
-    expect(fileBox).toMatchObject({ rows: 1 })
+    expect(fileBox).toBeUndefined()
     expect(hunkBox).toMatchObject({ rows: 3 })
   })
 
@@ -139,28 +134,23 @@ describe('blocksOf', () => {
     expect(fileBox).toMatchObject({ rows: 2 })
   })
 
-  test('row total matches title + notes + boxes + hunk lines + gaps + actions rows', () => {
+  test('row total matches title + notes + hunk lines + gaps + actions rows', () => {
     const comments: Comments = [commentOf({ id: 'n1' })]
     const blocks = blocksOf(file, [hunkA, hunkB], comments, null)
-    // title(1) + note(1) + filebox(1) + hunkA(3 lines) + hunkAbox(1) + hunkAactions(1) + gap(1)
-    // + hunkB(2 lines) + hunkBbox(1) + hunkBactions(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + 1 + 1 + 1 + 2 + 1 + 1)
+    // title(1) + note(1) + hunkA(3 lines) + hunkAactions(1) + gap(1) + hunkB(2 lines) + hunkBactions(1)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 1 + 2 + 1)
   })
 
   test('row total with a note and an active compose box together', () => {
     const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
     const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
-    // title(1) + filebox(1) + hunkA(3 lines) + note(1) + composebox(3, with the line picker) + actions(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 3 + 1)
+    // title(1) + hunkA(3 lines) + note(1) + composebox(3, with the line picker) + actions(1)
+    expect(contentRowsOf(blocks)).toBe(1 + 3 + 1 + 3 + 1)
   })
 
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
     const blocks = blocksOf(file, [], [], null)
-    expect(blocks.map(b => b.key)).toEqual([
-      TITLE_KEY,
-      commentBoxKeyOf({ path: file.path }),
-      STATUS_KEY,
-    ])
+    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY])
     expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'No textual changes' } })
   })
 
@@ -181,7 +171,7 @@ describe('blocksOf', () => {
     })
     // Not rendered under hunkA's own (unrelated) anchor.
     expect(
-      blocks.findIndex(b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header })),
+      blocks.findIndex(b => b.key === hunkActionsKeyOf({ path: file.path, hunk: hunkA.header })),
     ).toBeLessThan(titleIndex)
   })
 

@@ -1,7 +1,7 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
 import { commentsStoreKeyOf, DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
-import { stageKeyOf } from '../hooks/views/diff/anchor'
+import { hunkActionsKeyOf, stageKeyOf } from '../hooks/views/diff/anchor'
 import { SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
 import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
@@ -404,8 +404,10 @@ describe('review stream', () => {
       plugin: NAME,
       surface: 'terminal',
       component: 'Pane',
-      // kit.rows = 8; minus 2 header + 2 list + 1 rule leaves 3 body rows: one file's section.
-      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      // kit.rows = 7; minus 2 header + 2 list + 1 rule leaves 2 body rows: less than either
+      // file's section (title + status, unread with no hunks), so scrolling can reach past
+      // a.ts's into b.ts's title.
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 7 } },
       requestId: DIFF_PANE.id,
     })
     expect((await ui.find({ key: 'row:a.ts' }))?.text).toContain('❯')
@@ -822,6 +824,19 @@ describe('stage and revert a hunk', () => {
 
     expect(applyRan).toBe(false)
     expect(toasts).toContain('The hunk changed — refreshed, try again')
+  })
+
+  test('a hunk has one row of controls: note, stage, revert', async ($, on) => {
+    hunkWorld(on, () => {})
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const row = await ui.find({ key: hunkActionsKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+    expect(row?.text).toContain('＋ note on hunk')
+    expect(row?.text).toContain('stage')
+    expect(row?.text).toContain('revert')
   })
 })
 
