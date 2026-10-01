@@ -14,17 +14,50 @@ primary "send N" button (`variant="primary"`, the pane's main action), then clea
 (`plugins/raven/hooks/views/diff/header.tsx`). Beneath it sits the file list
 (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
-trailing "… N more" row. A one-row rule follows, then the body: the selected file's title, its
-hunks, and the comment/stage controls around each, laid out into a scrollable window so wheel and
-arrow-key scrolling moves through one file's content without redrawing the header or file list
+trailing "… N more" row. A one-row rule follows, then the body: **one review stream**. Every
+changed file's section — its heading, file-level notes and `＋ note on file`, then each hunk with
+its own notes, `＋ note on hunk` and stage/revert row — draws one after another, a blank row
+between files (`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`); the body is not limited
+to one file at a time. The whole stream is laid out into one scrollable window so wheel and
+arrow-key scrolling moves through it without redrawing the header or file list
 (`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling body total
 2 (header) + min(file count, 8) (file list) + 1 (rule). Within the body, a title, a status line, a
 note, the collapsed "✓ N addressed" row, a hunk's stage/revert row, the "Outdated" title, and the
-blank row between hunks are each one row; an idle comment button is one row, a composing box two
-(Input plus cancel), three when a hunk's line picker draws above the Input. A hunk itself takes as
-many rows as its body has lines, sliced into whatever range the current scroll position exposes,
-and a fixed row only draws once its first row falls inside that range. Element caps, focus, and the
-scroll contract these elements draw under are engine facts owned by [`mod-api.md`](./mod-api.md).
+blank row between hunks or between files are each one row; an idle comment button is one row, a
+composing box two (Input plus cancel), three when a hunk's line picker draws above the Input. A
+hunk itself takes as many rows as its body has lines, sliced into whatever range the current scroll
+position exposes, and a fixed row only draws once its first row falls inside that range. Element
+caps, focus, and the scroll contract these elements draw under are engine facts owned by
+[`mod-api.md`](./mod-api.md).
+
+A file's section shows only its own comments — and, for a renamed file, comments made under its
+old path too (`blocksOf`'s path filter in `plugins/raven/hooks/views/diff/blocks.ts`); comments
+themselves are [`review.md`](./review.md)'s concern.
+
+## The file list navigates the stream
+
+The file list and the stream track each other in both directions. Pressing a file's row
+(`select(path)`) scrolls that file's heading to the top of the stream without reloading anything.
+Scrolling the stream — by wheel, or the file list's `↑`/`↓` Buttons (below) — moves the list's `❯`
+to whichever file's heading sits at or above the current top row (`fileAtRow` in
+`plugins/raven/hooks/views/diff/blocks.ts`), so the list and the stream always agree on which file
+is current. `↑`/`↓` step the selection to the adjacent file in list order and scroll to it the same
+way pressing its row does.
+
+## Live feed
+
+A file an `Edit`/`Write`/`NotebookEdit`/`MultiEdit` call changes during the current turn — from the
+main loop or a subagent — draws `●` in `COLORS.modified` in its file-list row, after its
+`+adds`/`−dels` counts (`plugins/raven/hooks/views/diff/file-list.tsx`). The mark clears once the
+turn ends, on any main-loop turn-completion reason — an answer, an interrupt, or an error — not
+only a clean answer.
+
+**Follow:** while the person has not scrolled the stream during the current turn, a landed edit
+scrolls its file's heading into view once the refresh after it completes. Any person-originated
+scroll this turn — wheel, the file list's `↑`/`↓`, or pressing a file row — turns follow off for
+the rest of the turn; the next turn turns it back on. Follow never jumps while a comment's compose
+box is open: it keeps the pending target and tries again on the next refresh rather than dropping
+it.
 
 ## Sources
 
@@ -44,9 +77,10 @@ with the repository's default branch, resolved as origin's `HEAD` symref, else `
 Picking a turn switches the file list and hunks to that turn's edited files instead of a git diff:
 synthetic hunks built from the turn's `Edit`/`MultiEdit`/`Write`/`NotebookEdit` calls
 (`plugins/raven/hooks/review/turns.ts`). This source is read-only — no comment boxes, no
-stage/revert — and the selected file's title row reads "Turn N" instead of its path, and it
-replaces the file list entirely: a turn's files are the only ones shown, so an untracked file never
-appears there.
+stage/revert — and it replaces the file list entirely: a turn's files are the only ones shown, so
+an untracked file never appears there. Every file's heading is still its own path, the same as any
+other source — the header's source picker already names the turn, so a shared "Turn N" heading on
+every file would say nothing a path doesn't.
 
 The file list itself is always built from `git status` against HEAD, regardless of the selected
 source; only a file's hunks and add/del counts are read against that source. Selecting
@@ -57,6 +91,24 @@ against every git-based source: their hunks come from a diff against `/dev/null`
 counts come from a per-file diff against `/dev/null` for up to 50 untracked files — past that limit
 they show `+0` rather than spawn a git process per file
 (`plugins/raven/hooks/git/load.ts`).
+
+## Reading hunks
+
+A refresh reads every tracked file's hunks in one process — `git diff -M <base>` against the whole
+working tree, no pathspec — and splits the output per file by its `diff --git` sections
+(`diffSectionsOf`, `loadAllHunks` in `plugins/raven/hooks/git/load.ts`); `-M` carries rename
+detection the same way the single-hunk stage/revert reads already did. Each untracked file is read
+on its own, `git diff --no-index` against `/dev/null`, one process per file up to the same 50-file
+limit the file list's add counts use — past that limit, and on any single file's read failing,
+that file's section shows "Not read" instead of hunks.
+
+The combined tracked-files diff can overrun the engine's 4 MiB run-output cap. When it does, the
+file whose section the cut falls inside keeps its complete hunks up to the cut and drops only its
+last, partial one (toasting `${path}: diff too large, its last hunk is not shown`); every tracked
+file after the cut section is missing from that one process's output entirely, so `loadAllHunks`
+re-reads each of them with its own single-file diff instead, together rather than one at a time. A
+non-zero exit from the combined diff (a bad revision, for instance) throws rather than silently
+treating every tracked file as unchanged.
 
 ## Refresh
 
@@ -85,10 +137,10 @@ button, so Esc/Enter flow stays inside the pane rather than jumping to the compo
 ## Stage and revert one hunk
 
 Each hunk in a non-read-only source carries a stage/revert row under its comment box. Before
-either runs, Raven re-reads the file's current hunks and requires an exact header-and-text match
-against the hunk the button was drawn for. A mismatch — the working tree moved since the last
-render — toasts "The hunk changed — refreshed, try again", refreshes the view with the current
-hunks, and applies nothing.
+either runs, Raven re-reads that one file's current hunks and requires an exact header-and-text
+match against the hunk the button was drawn for. A mismatch — the working tree moved since the
+last render — toasts "The hunk changed — refreshed, try again", refreshes the whole stream with
+the current hunks, and applies nothing.
 
 `stage` runs `git apply --cached --recount` against a patch built for that one hunk
 (`plugins/raven/hooks/git/patch.ts`); once it succeeds the button reads `staged ✓` and stops
@@ -99,7 +151,8 @@ change — `Button` has no colour prop), and any other action anywhere in the pa
 background refresh or a scroll, not only a deliberate one — resets that arming, so a second,
 immediately-following press is what applies it. Reverting an added or untracked file's
 one hunk deletes the file outright: its forward patch is "create this file", so `git apply -R`
-undoes that.
+undoes that. Either way, success re-reads and re-renders every file's hunks — the same refresh
+[above](#reading-hunks) — not just the one file the hunk belonged to.
 
 The hunk applied is always the one computed against the pane's *selected* source, not necessarily
 HEAD: this is consistent when the source is `HEAD`, since the index `--cached` targets and the
