@@ -385,6 +385,35 @@ describe('review stream', () => {
     expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
     expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
   })
+
+  test("scrolling the stream by wheel moves the list's ❯ to the file at the top", async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      // kit.rows = 8; minus 2 header + 2 list + 1 rule leaves 3 body rows: one file's section.
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      requestId: DIFF_PANE.id,
+    })
+    expect((await ui.find({ key: 'row:a.ts' }))?.text).toContain('❯')
+
+    await $.ui.scroll({
+      component: 'Pane',
+      requestId: DIFF_PANE.id,
+      offset: 0,
+      by: 10,
+      bodyRows: 8,
+      contentRows: 20,
+      origin: { kind: 'person' },
+    })
+
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
+    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('❯')
+  })
 })
 
 describe('diff header', () => {

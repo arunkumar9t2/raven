@@ -97,6 +97,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     turnIndex: number | undefined
     readOnly: boolean
     capabilities: Capabilities
+    isLoaded: boolean
     stream: Stream
   } | null = null
 
@@ -149,11 +150,22 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     stagedHunks: prunedStaged(path, hunks),
   })
 
-  /** `prunedStaged` over every path a bulk reload read, for the one `update` a `refresh` makes. */
+  /**
+   * `prunedStaged` over every path a bulk reload read, for the one `update` a `refresh` makes;
+   * also drops any path no longer among `files` at all (deleted, reverted, renamed away).
+   */
   function prunedStagedAll(
+    files: readonly ChangedFile[],
     hunks: ReadonlyMap<string, readonly Hunk[]>,
   ): ReadonlyMap<string, ReadonlySet<string>> {
     let staged = model.stagedHunks
+    if (staged.size === 0) return staged
+
+    const live = new Set(files.map(file => file.path))
+    if ([...staged.keys()].some(path => !live.has(path))) {
+      staged = new Map([...staged].filter(([path]) => live.has(path)))
+    }
+
     for (const [path, pathHunks] of hunks) {
       const current = staged.get(path)
       if (!current || current.size === 0) continue
@@ -193,7 +205,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       hunks = loaded.byPath
       // A header collides easily (e.g. `@@ -1,2 +1,2 @@`); drop a path's stale staged marks
       // rather than risk a new hunk reading as already staged.
-      stagedHunks = prunedStagedAll(hunks)
+      stagedHunks = prunedStagedAll(files, hunks)
       if (loaded.truncatedPath !== null)
         host.toast(`${loaded.truncatedPath}: diff too large, its last hunk is not shown`)
     }
@@ -330,7 +342,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       cache.turnIndex === turnIndex &&
       cache.readOnly === readOnly &&
       cache.capabilities.canType === capabilities.canType &&
-      cache.capabilities.canPick === capabilities.canPick
+      cache.capabilities.canPick === capabilities.canPick &&
+      cache.isLoaded === model.isLoaded
     ) {
       return cache.stream
     }
@@ -357,6 +370,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       turnIndex,
       readOnly,
       capabilities,
+      isLoaded: model.isLoaded,
       stream,
     }
     return stream
