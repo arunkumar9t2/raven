@@ -56,12 +56,12 @@ main loop or a subagent — draws `●` in `COLORS.modified` in its file-list ro
 turn ends, on any main-loop turn-completion reason — an answer, an interrupt, or an error — not
 only a clean answer.
 
-**Follow:** while the person has not scrolled the stream during the current turn, a landed edit
-scrolls its file's heading into view once the refresh after it completes. Any person-originated
-scroll this turn — wheel, the file list's `↑`/`↓`, or pressing a file row — turns follow off for
-the rest of the turn; the next turn turns it back on. Follow never jumps while a comment's compose
-box is open: it keeps the pending target and tries again on the next refresh rather than dropping
-it.
+**Follow:** while the person has not scrolled or pressed a file row this turn, a landed edit
+scrolls its file's heading into view once the refresh after it completes. A person's scroll or
+file-list press — wheel, the file list's `↑`/`↓`, or pressing a file row — turns follow off until
+the next turn; a programmatic jump (a `diff` directive naming a path) never does. Follow never
+jumps while a comment's compose box is open: it keeps the pending target and tries again on the
+next refresh rather than dropping it.
 
 ## Sources
 

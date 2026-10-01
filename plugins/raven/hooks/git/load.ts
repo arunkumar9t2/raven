@@ -116,7 +116,10 @@ export function diffSectionsOf(diff: string): Map<string, string> {
 }
 
 export type LoadedHunks = {
-  /** Hunks per path; a path absent here was not read (an untracked file past the cap). */
+  /**
+   * Hunks per path; a path absent here was not read (an untracked file past the cap, or one
+   * whose read failed).
+   */
   byPath: ReadonlyMap<string, readonly Hunk[]>
   /** The file the output cap cut mid-diff (its last hunk dropped), or null. */
   truncatedPath: string | null

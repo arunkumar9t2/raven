@@ -568,11 +568,17 @@ describe('review stream', () => {
       requestId: DIFF_PANE.id,
     })
 
-    // The person presses a.ts's row (already selected, but a press always jumps and now also
-    // drops follow, same as a scroll does).
-    await ui.press({ key: 'file:a.ts' })
-
+    // A first edit on b.ts follows it into view.
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+    await clock.advance(300)
+    expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
+
+    // The person presses a.ts's row, bringing the view back and dropping follow for the turn.
+    await ui.press({ key: 'file:a.ts' })
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+
+    // A second edit on b.ts must not pull the view away again this turn.
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'b', new_string: 'c' })
     await clock.advance(300)
 
     expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
