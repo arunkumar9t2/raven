@@ -153,7 +153,10 @@ carries a matcher.
 - **`$.process.run`** — `(argv, {cwd, env, stdin, timeoutMs})`, no shell in between, resolving
   `{exitCode, stdout, stderr}`. Raven's `Host.run` wraps it for git plumbing; the mod never shells out
   through Bash's own tool, since nothing routes a mod's own commands through the model's tool-call
-  loop.
+  loop. The engine cuts `stdout` at a 4 MiB cap and sets `isStdoutTruncated` on the result when it
+  does; a caller reading multiple records out of one run's output (as Raven's own multi-file `git
+  diff` does, [`diff-pane.md`](./diff-pane.md)) needs its own plan for a cut record, since nothing
+  here recovers what the cap dropped.
 
 ## UI elements and their caps
 
