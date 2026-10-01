@@ -16,7 +16,8 @@ export type ToolEvent = {
 }
 
 export type Action =
-  | { kind: 'refresh-diff' }
+  /** `path` is the edit that caused it; a shell refresh carries no path. */
+  | { kind: 'refresh-diff'; path?: string }
   /** The main loop's edit landed: the controller opens the diff on the first of these. */
   | { kind: 'main-loop-edit' }
   | { kind: 'show-doc'; path: string }
@@ -77,7 +78,10 @@ const editedPathOf = (event: ToolEvent) => {
 const onEdit: Trigger = event => {
   const path = editedPathOf(event)
   if (path === null) return []
-  const actions: Action[] = [{ kind: 'refresh-diff' }, { kind: 'reload-doc', path }]
+  const actions: Action[] = [
+    { kind: 'refresh-diff', path },
+    { kind: 'reload-doc', path },
+  ]
   if (event.agentId === undefined) actions.push({ kind: 'main-loop-edit' })
   return actions
 }

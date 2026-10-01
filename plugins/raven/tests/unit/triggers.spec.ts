@@ -67,6 +67,17 @@ describe('actionsOf watched-doc paths', () => {
   })
 })
 
+describe('actionsOf refresh-diff', () => {
+  test('an edit refresh carries the edited path; a shell refresh does not', () => {
+    expect(actionsWith()(editOf('/repo/a.ts'))).toContainEqual({
+      kind: 'refresh-diff',
+      path: '/repo/a.ts',
+    })
+    const shell: ToolEvent = { tool: 'Bash', input: { command: 'ls' }, isLanded: true }
+    expect(actionsWith()(shell)).toContainEqual({ kind: 'refresh-diff' })
+  })
+})
+
 describe('actionsOf main-loop-edit', () => {
   test('a main-loop edit always raises the action; gating is the controller’s job', () => {
     const actions = actionsWith()(editOf('/repo/a.ts'))
