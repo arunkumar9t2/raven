@@ -65,7 +65,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
         key={commentButtonKeyOf(anchor)}
         plain
         dimColor
-        label={anchor.hunk ? '＋ comment on this hunk' : '＋ comment on this file'}
+        label={anchor.hunk ? '＋ note on hunk' : '＋ note on file'}
         onPress={() => props.onStart(anchor)}
       />
     )

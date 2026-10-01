@@ -339,6 +339,17 @@ describe('diff header', () => {
     await ui.press({ key: 'clear' })
     expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
   })
+
+  test('the file-level comment button names its target', async ($, on) => {
+    gitWorld(on, {}, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: '＋ note on file' })).toBeDefined()
+    expect(await ui.find({ text: /comment on this/ })).toBeUndefined()
+  })
 })
 
 describe('turn.complete resolves sent comments', () => {
