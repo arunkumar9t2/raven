@@ -270,6 +270,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
    * Selects `path` and scrolls its heading to the top of the stream; no reload. Always jumps,
    * even when `path` is already selected — pressing the row of the file the scroll bar's ❯
    * already tracks is exactly how the stream's top is recovered after scrolling away from it.
+   * The person's own navigation (a file-list press, the ↓/↑ buttons): turns follow off for the
+   * rest of the turn, same as a scroll. A programmatic jump (`reveal`) does its own update
+   * instead, so a directive or a follow-driven jump never trips this.
    */
   function select(path: string) {
     update({
@@ -277,6 +280,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       composing: null,
       top: lastTitleRows.get(path) ?? model.top,
       pendingReveal: null,
+      isFollowing: false,
+      followPath: null,
     })
   }
 
@@ -592,13 +597,20 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
   /**
    * Selects the file at an absolute path, when it is among the changes. When it isn't yet in the
    * last render's title rows (a refresh still in flight), the jump is deferred to `render` via
-   * `pendingReveal` rather than left at the view's current `top`.
+   * `pendingReveal` rather than left at the view's current `top`. A programmatic jump (a `diff`
+   * directive naming a path): never touches follow, unlike `select`, which is the person's own
+   * navigation.
    */
   function reveal(path: string) {
     const relative = relativeOf(path)
     if (relative === null) return
     if (lastTitleRows.has(relative)) {
-      select(relative)
+      update({
+        selected: relative,
+        composing: null,
+        top: lastTitleRows.get(relative) ?? model.top,
+        pendingReveal: null,
+      })
     } else {
       update({ selected: relative, composing: null, pendingReveal: relative })
     }
