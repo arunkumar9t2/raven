@@ -22,7 +22,9 @@ extension, or inline markdown from a `note` directive (see [`agentic.md`](./agen
 history of up to 10 shown documents, deduplicated by a key over the document's kind and path or title,
 most recent first; picking an older entry re-shows it without re-reading it from disk.
 
-The pane draws one title row above the body: a shown file's full path, or a note's title. A markdown
+The pane draws one title row above the body: a shown file with a caller-given title draws that title
+in bold beside its full path, dimmed; a file without one draws its full path in bold; a note draws its
+title. A markdown
 file or note is split by `markdown-chunks.ts` into pieces small enough for the engine's `Markdown`
 element, which refuses to draw text over its character cap (`ELEMENT_TEXT_LIMIT`, the same cap `Code`
 and `Text` carry — see [`mod-api.md`](./mod-api.md)). Cuts prefer a blank line outside a code fence, so

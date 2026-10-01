@@ -180,9 +180,18 @@ export function createDocView(host: Host): DocView {
       <Box flexDirection="column" gap={1}>
         {picker}
         <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
-          <Text bold wrap="truncate-end">
-            {shown.doc.kind === 'file' ? shown.doc.path : shown.title}
-          </Text>
+          {shown.doc.kind === 'file' && shown.doc.title ? (
+            <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+              <Text bold>{shown.doc.title}</Text>
+              <Text dimColor wrap="truncate-end">
+                {shown.doc.path}
+              </Text>
+            </Box>
+          ) : (
+            <Text bold wrap="truncate-end">
+              {shown.doc.kind === 'file' ? shown.doc.path : shown.title}
+            </Text>
+          )}
         </Box>
         {body(kit, shown)}
       </Box>

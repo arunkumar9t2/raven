@@ -178,6 +178,28 @@ describe('options: watched doc paths, defaults', () => {
     // The basename alone is no longer a row of its own.
     expect(await ui.find({ text: /^x\.md$/ })).toBeUndefined()
   })
+
+  test('a shown file with a caller title draws the title beside its path', async ($, on) => {
+    openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call({
+      tool: TOOL,
+      op: 'show',
+      path: '/work/docs/superpowers/plans/x.md',
+      title: 'My plan',
+    })
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    expect(await ui.find({ text: /^My plan$/ })).toBeDefined()
+    expect(await ui.find({ text: /^\/work\/docs\/superpowers\/plans\/x\.md$/ })).toBeDefined()
+  })
 })
 
 const PLAN = '/home/u/.claude/plans/x.md'
