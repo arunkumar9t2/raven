@@ -12,6 +12,8 @@ import { fileWindowOf } from './layout'
 export type FileListProps = {
   files: readonly ChangedFile[]
   selected: string | null
+  /** Paths edited this turn; a row among them draws `●` so the live feed stands out. */
+  edited: ReadonlySet<string>
   onSelect: (path: string) => void
 }
 
@@ -60,6 +62,7 @@ function fileRow(kit: Kit, file: ChangedFile, props: FileListProps): RenderEleme
       />
       <Text color={COLORS.added}>+{file.adds}</Text>
       <Text color={COLORS.removed}>−{file.dels}</Text>
+      {props.edited.has(file.path) ? <Text color={COLORS.modified}>●</Text> : null}
     </Box>
   )
 }

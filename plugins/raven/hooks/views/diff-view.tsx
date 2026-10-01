@@ -48,7 +48,15 @@ type Model = {
    * of the refresh that will add it); `render` jumps to it once `streamFor` places it.
    */
   pendingReveal: string | null
+  /** Relative paths of files a main-loop edit touched this turn; cleared on `turnEnded`. */
+  edited: ReadonlySet<string>
+  /** The absolute path `reveal`-ed once the refresh it is waiting on completes; null when idle. */
+  followPath: string | null
+  /** False once the person scrolls the stream this turn; a further edit then leaves the view put. */
+  isFollowing: boolean
 }
+
+const EMPTY_EDITED: ReadonlySet<string> = new Set()
 
 /** What the diff view asks of the controller. */
 export type DiffActions = {
@@ -64,6 +72,10 @@ export type DiffView = View & {
   refresh: () => Promise<void>
   /** Selects the file at an absolute path, when it is among the changes. */
   reveal: (path: string) => void
+  /** Marks `absolutePath` edited this turn; while following, the next refresh reveals it. */
+  noteEdited: (absolutePath: string) => void
+  /** Clears this turn's edited marks and resumes following, for the controller to call per turn. */
+  turnEnded: () => void
 }
 
 export function createDiffView(host: Host, review: Review, actions: DiffActions): DiffView {
@@ -78,6 +90,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     stagedHunks: new Map(),
     confirming: null,
     pendingReveal: null,
+    edited: EMPTY_EDITED,
+    followPath: null,
+    isFollowing: true,
   }
 
   const sourceController = createSourceController(host)
@@ -218,6 +233,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     })
 
     if (repository) await review.load(repository.toplevel)
+    if (model.followPath) reveal(model.followPath)
   }
 
   /**
@@ -503,7 +519,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           onNext: () => stepSelection(1),
           onClear: pressClear,
         })}
-        {fileList(kit, { files, selected: model.selected, onSelect: select })}
+        {fileList(kit, { files, selected: model.selected, edited: model.edited, onSelect: select })}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
         {placed.map(p => placedRowOf(kit, p, filesByPath))}
       </Box>
@@ -519,7 +535,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     const step = size >= bodyRows ? size : size * WHEEL_ROWS
     const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows)
     if (top !== model.top) {
-      update({ top, selected: fileAtRow(lastTitleRows, top) ?? model.selected })
+      update({ top, selected: fileAtRow(lastTitleRows, top) ?? model.selected, isFollowing: false })
+    } else if (model.isFollowing) {
+      update({ isFollowing: false })
     }
     return true
   }
@@ -540,5 +558,32 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     }
   }
 
-  return { pane: DIFF_PANE, subcommand: 'diff', render, refresh, reveal, scroll }
+  /**
+   * Marks `abs` edited this turn (by its path relative to the repository, ignored outside it);
+   * while still following (no person scroll this turn), it becomes the next refresh's follow
+   * target, replacing whichever earlier edit this turn was following.
+   */
+  function noteEdited(abs: string) {
+    const toplevel = model.repository?.toplevel
+    if (!toplevel || !abs.startsWith(`${toplevel}/`)) return
+    const relative = abs.slice(toplevel.length + 1)
+    const edited = new Set(model.edited).add(relative)
+    update({ edited, followPath: model.isFollowing ? abs : model.followPath })
+  }
+
+  /** Clears this turn's edited marks and resumes following, for the next turn. */
+  function turnEnded() {
+    update({ edited: EMPTY_EDITED, followPath: null, isFollowing: true })
+  }
+
+  return {
+    pane: DIFF_PANE,
+    subcommand: 'diff',
+    render,
+    refresh,
+    reveal,
+    scroll,
+    noteEdited,
+    turnEnded,
+  }
 }

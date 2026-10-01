@@ -295,7 +295,7 @@ function gitWorld(
   messages: readonly SessionMessage[] = [],
   extraShownIds: readonly string[] = [],
 ) {
-  baseWorld(on, storeEntries)
+  const clock = baseWorld(on, storeEntries)
   on('session.messages', () => ({ value: [...messages] }))
   on('process.run', ($, e) => {
     const [cmd, sub] = e.argv
@@ -323,6 +323,7 @@ function gitWorld(
   on('turn.complete', ($, e) => ({ text: e.answer }))
 
   trackShownPanes(on, extraShownIds)
+  return clock
 }
 
 describe('diff view keyboard control', () => {
@@ -413,6 +414,88 @@ describe('review stream', () => {
 
     expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
     expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('❯')
+  })
+
+  test('a file edited this turn is marked in the list until the turn ends', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('●')
+    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('●')
+
+    await $.turn.complete(mainLoopTurn('done'))
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('●')
+  })
+
+  test("an edit's refresh follows its file into view when it starts out of view", async ($, on) => {
+    const clock = gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      // kit.rows = 8; minus 2 header + 2 list + 1 rule leaves 3 body rows: one file's section, so
+      // b.ts (the second file) starts out of view.
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      requestId: DIFF_PANE.id,
+    })
+    expect(await ui.find({ key: 'b.ts#title' })).toBeUndefined()
+
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+    // The refresh is debounced; advance the mock clock past it.
+    await clock.advance(300)
+
+    expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
+  })
+
+  test('a person scroll this turn stops a further edit from moving the view', async ($, on) => {
+    const clock = gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      requestId: DIFF_PANE.id,
+    })
+
+    // The person scrolls down to b.ts, then back up to a.ts, dropping follow for this turn.
+    await $.ui.scroll({
+      component: 'Pane',
+      requestId: DIFF_PANE.id,
+      offset: 0,
+      by: 10,
+      bodyRows: 8,
+      contentRows: 20,
+      origin: { kind: 'person' },
+    })
+    expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
+    await $.ui.scroll({
+      component: 'Pane',
+      requestId: DIFF_PANE.id,
+      offset: 0,
+      by: -10,
+      bodyRows: 8,
+      contentRows: 20,
+      origin: { kind: 'person' },
+    })
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+    await clock.advance(300)
+
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+    expect(await ui.find({ key: 'b.ts#title' })).toBeUndefined()
   })
 })
 

@@ -275,6 +275,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   async function runAction(action: Action): Promise<string | undefined> {
     switch (action.kind) {
       case 'refresh-diff':
+        if (action.path !== undefined) diff.noteEdited(action.path)
         if (open.has(diff.pane.id) || open.has(tree.pane.id)) scheduleRefresh()
         return undefined
       case 'main-loop-edit':
@@ -379,7 +380,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       }
       return text
     },
-    turnCompleted: () => resolveSent(),
+    turnCompleted: () => {
+      diff.turnEnded()
+      return resolveSent()
+    },
     render: (paneId, kit) => {
       const view = views.find(each => each.pane.id === paneId)
       if (!view) return null

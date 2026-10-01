@@ -1,5 +1,5 @@
 import type { CommandRunInput, On } from 'claude-code'
-import { mock } from 'claude-code/testing'
+import { type MockClock, mock } from 'claude-code/testing'
 
 /** A `process.run` resolution shaped like the engine's real `RunResult`. */
 export const ran = (exitCode: number, stdout = '', stderr = '') => ({
@@ -26,13 +26,18 @@ export const PANE_PROPS = {
   view: {},
 }
 
-/** The stubs every world needs: the clock/store, and session/command/tool registration. */
-export function baseWorld(on: On, storeEntries: Record<string, unknown> = {}) {
-  mock.clock(on)
+/**
+ * The stubs every world needs: the clock/store, and session/command/tool registration.
+ *
+ * @returns the clock, for a test that needs to advance it past a debounce.
+ */
+export function baseWorld(on: On, storeEntries: Record<string, unknown> = {}): MockClock {
+  const clock = mock.clock(on)
   mock.store(on, storeEntries)
   on('session.start', ($, e) => ({ cwd: e.cwd }))
   on('command.register', ($, e) => ({ value: { command: e.name } }))
   on('tool.register', ($, e) => ({ value: { tool: `mcp__${$.plugin.name}__${e.name}` } }))
+  return clock
 }
 
 /**
