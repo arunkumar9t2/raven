@@ -47,7 +47,9 @@ without also marking it sent.
 
 - **Hidden context** — the next prompt the person sends through the composer or Remote Control (a
   `bridge` origin) carries the pending review as hidden context, appended in `prompt.submit`
-  (`plugins/raven/hooks/register.ts`). A prompt from any other origin does not trigger this.
+  (`plugins/raven/hooks/register.ts`). A prompt from any other origin does not trigger this. When it
+  does, Raven toasts "Raven: N review comments sent with this prompt" so the carry is never silent
+  (`plugins/raven/hooks/core/raven.ts`).
 - **Send** — the header's "send N" button, or `/raven send`, submits the review as a *visible*
   prompt (`$.prompt.submit`) instead of hidden context, so the person sees exactly what Claude was
   asked.
@@ -81,8 +83,8 @@ forked more than once over its lifetime before it resolves.
 
 Raven's status line (`$.ui.status`) reads "N review comments pending" whenever the pending count
 changes, and is cleared once it reaches zero. The header's plain "clear" button asks for
-confirmation: the first press relabels it "clear all? (again)"; the second drops every comment
-regardless of status. Any other action anywhere in the pane — selecting a file, staging a hunk,
+confirmation: the first press relabels it "clear all? press again", shown at full strength (no
+colour change — `Button` has no colour prop); the second drops every comment regardless of status. Any other action anywhere in the pane — selecting a file, staging a hunk,
 opening another comment box, even a background refresh — resets that armed state before it fires.
 
 ## Persistence
