@@ -34,7 +34,7 @@ const COMPOSE_ROWS_WITH_PICKER = COMPOSE_ROWS + 1
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
-  | { kind: 'title'; file: ChangedFile; turnIndex?: number }
+  | { kind: 'title'; file: ChangedFile }
   | { kind: 'note'; comment: Comment }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
@@ -128,8 +128,6 @@ function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
 }
 
 export type BlocksOptions = {
-  /** A turn source's index, shown as the title ("Turn N") in place of the file path. */
-  turnIndex?: number
   /** A turn's diff is read-only: no comment boxes, no stage/revert, just the title and hunks. */
   readOnly?: boolean
   /** The surface's `Input`/`Select`; every surface has both when omitted. */
@@ -165,7 +163,7 @@ export function blocksOf(
       kind: 'fixed',
       key: TITLE_KEY,
       rows: 1,
-      item: { kind: 'title', file, turnIndex: options.turnIndex },
+      item: { kind: 'title', file },
     },
     ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities)),
   ]

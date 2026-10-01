@@ -299,10 +299,10 @@ describe('blocksOf with degraded capabilities', () => {
 })
 
 describe('blocksOf for a turn source', () => {
-  test('titles the file with the turn index and drops comment/stage/revert rows', () => {
-    const blocks = blocksOf(file, [hunkA, hunkB], [], null, { turnIndex: 3, readOnly: true })
+  test('titles the file with its own path (the header names the turn) and drops comment/stage/revert rows', () => {
+    const blocks = blocksOf(file, [hunkA, hunkB], [], null, { readOnly: true })
 
-    expect(blocks[0]).toMatchObject({ item: { kind: 'title', file, turnIndex: 3 } })
+    expect(blocks[0]).toMatchObject({ item: { kind: 'title', file } })
     expect(blocks.some(b => b.key === commentBoxKeyOf({ path: file.path }))).toBe(false)
     expect(
       blocks.some(b => b.key === hunkActionsKeyOf({ path: file.path, hunk: hunkA.header })),
@@ -312,7 +312,7 @@ describe('blocksOf for a turn source', () => {
 
   test('drops outdated comments too, since a turn has none of its own', () => {
     const stale = commentOf({ hunk: '@@ -99,1 +99,1 @@' })
-    const blocks = blocksOf(file, [hunkA], [stale], null, { turnIndex: 1, readOnly: true })
+    const blocks = blocksOf(file, [hunkA], [stale], null, { readOnly: true })
 
     expect(blocks.some(b => b.key === OUTDATED_TITLE_KEY)).toBe(false)
   })
@@ -353,5 +353,13 @@ describe('streamOf', () => {
     expect(stream.blocks.at(-1)).toMatchObject({
       item: { kind: 'status', text: 'Not read: too many new files' },
     })
+  })
+
+  test('a turn source (read-only) still titles each file with its own path, not a shared "Turn N"', () => {
+    const stream = streamOf([file, b], () => [hunkA], [], null, { readOnly: true })
+    const titleOf = (path: string) =>
+      stream.blocks.find(block => block.key === `${path}#${TITLE_KEY}`)
+    expect(titleOf(file.path)).toMatchObject({ item: { kind: 'title', file } })
+    expect(titleOf('b.ts')).toMatchObject({ item: { kind: 'title', file: b } })
   })
 })
