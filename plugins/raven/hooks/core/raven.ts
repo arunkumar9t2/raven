@@ -44,7 +44,11 @@ export type Raven = {
   runTool: (input: unknown) => Promise<string>
   /** Hidden context the next prompt carries: the pending review, which it consumes. */
   takePromptContext: () => string | undefined
-  /** Reacts to a finished main-loop turn: forks once to learn which sent comments it addressed. */
+  /**
+   * Reacts to a finished main-loop turn: always resets the live feed (clears this turn's edited
+   * marks and resumes following); only an answered turn also forks once to learn which sent
+   * comments it addressed.
+   */
   turnCompleted: (turn: TurnCompleteInput) => Promise<void>
   render: (paneId: string, kit: Kit) => RenderElement | null
   /** Moves a pane's own scroll by `by` rows; true when its view handled the move. */
@@ -380,9 +384,9 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       }
       return text
     },
-    turnCompleted: () => {
+    turnCompleted: async turn => {
       diff.turnEnded()
-      return resolveSent()
+      if (turn.reason === 'answer') await resolveSent()
     },
     render: (paneId, kit) => {
       const view = views.find(each => each.pane.id === paneId)

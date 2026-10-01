@@ -185,10 +185,13 @@ export function register(on: On, options: PluginOptions) {
   })
 
   // A fork of its own answer raises no turn.complete the types promise, but the flag inside
-  // `turnCompleted` guards it either way; `next(e)` runs first so this never slows the turn.
+  // `turnCompleted` guards it either way; `next(e)` runs first so this never slows the turn. Every
+  // main-loop turn end reaches it, not just `reason: 'answer'`, so the live feed resets even on an
+  // interrupted or errored turn; `turnCompleted` itself only forks to resolve sent comments when
+  // the turn actually answered.
   on('turn.complete', ($, e, next) => {
     const result = next(e)
-    if (raven && e.reason === 'answer' && e.agentId === undefined) void raven.turnCompleted(e)
+    if (raven && e.agentId === undefined) void raven.turnCompleted(e)
     return result
   })
 

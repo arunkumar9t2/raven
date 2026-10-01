@@ -497,6 +497,62 @@ describe('review stream', () => {
     expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
     expect(await ui.find({ key: 'b.ts#title' })).toBeUndefined()
   })
+
+  test('a stale follow target does not re-apply on a later refresh after a person scroll', async ($, on) => {
+    const clock = gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    on('tool.call', { tool: 'Bash' }, () => ({
+      result: { stdout: '', stderr: '', interrupted: false },
+    }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      requestId: DIFF_PANE.id,
+    })
+    expect(await ui.find({ key: 'b.ts#title' })).toBeUndefined()
+
+    // The edit's refresh follows b.ts into view.
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+    await clock.advance(300)
+    expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
+
+    // The person scrolls back up to a.ts, dropping follow (and its stale target) for this turn.
+    await $.ui.scroll({
+      component: 'Pane',
+      requestId: DIFF_PANE.id,
+      offset: 0,
+      by: -10,
+      bodyRows: 8,
+      contentRows: 20,
+      origin: { kind: 'person' },
+    })
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+
+    // A later refresh with no edit of its own (a shell call) must not re-apply the old follow
+    // target and jump back to b.ts.
+    await $.tool.call({ tool: 'Bash', command: 'echo hi' })
+    await clock.advance(300)
+
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+    expect(await ui.find({ key: 'b.ts#title' })).toBeUndefined()
+  })
+
+  test('the first edit of a session is marked, even though it is the auto-open refresh and the repository is not yet loaded', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    await $.session.start(SESSION)
+
+    // No `/raven diff` first: this edit is the one that auto-opens the pane.
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('●')
+  })
 })
 
 describe('diff header', () => {
@@ -582,6 +638,35 @@ describe('turn.complete resolves sent comments', () => {
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
     await $.turn.complete(mainLoopTurn('done'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: /addressed/ })).toBeUndefined()
+    expect(await ui.find({ text: /fix this/ })).toBeDefined()
+  })
+})
+
+describe('turn.complete resets the live feed on every reason', () => {
+  test('an aborted turn still clears the edited marks, not just an answered one', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('●')
+
+    await $.turn.complete({ ...mainLoopTurn('done'), reason: 'aborted' })
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('●')
+  })
+
+  test('an aborted turn does not fork to resolve sent comments', async ($, on) => {
+    const sent = { id: 'c5', path: 'a.ts', text: 'fix this', status: 'sent', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [sent] }, '["c5"]')
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.turn.complete({ ...mainLoopTurn('done'), reason: 'aborted' })
 
     const ui = await mountDiff($)
     expect(await ui.find({ text: /addressed/ })).toBeUndefined()
