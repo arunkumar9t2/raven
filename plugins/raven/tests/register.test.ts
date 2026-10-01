@@ -301,6 +301,19 @@ describe('diff view keyboard control', () => {
     expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('❯')
     expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
   })
+
+  test('no control carries a letter hotkey; the list arrows ride the engine list actions', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const buttons = await ui.findAll({ type: 'Button' })
+    expect(buttons.filter(button => button.props.hotkey !== undefined)).toEqual([])
+    expect((await ui.find({ key: 'previous' }))?.props.action).toBe('app:diffFileListUp')
+    expect((await ui.find({ key: 'next' }))?.props.action).toBe('app:diffFileListDown')
+  })
 })
 
 describe('turn.complete resolves sent comments', () => {

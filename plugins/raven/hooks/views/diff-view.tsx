@@ -201,7 +201,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     void loadSelected()
   }
 
-  /** Moves the selection `by` files (1 next, -1 previous); the `j`/`k` hotkeys and ↓/↑ buttons. */
+  /** Moves the selection `by` files (1 next, -1 previous); the ↓/↑ buttons. */
   function stepSelection(by: number) {
     const files = filesOf()
     if (files.length === 0) return
@@ -380,7 +380,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           hunk: item.hunk,
           line: model.composingLine,
           columns: kit.columns,
-          hotkey: item.anchor.hunk === undefined ? 'c' : undefined,
           onStart: startComposing,
           onLineChange: line => update({ composingLine: line }),
           onSubmit: text => submitComment(item.anchor, text),
