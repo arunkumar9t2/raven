@@ -2,7 +2,14 @@ import { describe, expect, test } from 'bun:test'
 import { changedFilesOf, numstatOf, statusEntriesOf } from '../../hooks/git/changes'
 import { clampHunk, hunksOf, lineKindOf } from '../../hooks/git/hunks'
 import type { Base, Run } from '../../hooks/git/load'
-import { applyPatch, loadChanges, loadHunks } from '../../hooks/git/load'
+import {
+  applyPatch,
+  diffSectionsOf,
+  loadAllHunks,
+  loadChanges,
+  loadHunks,
+  UNTRACKED_COUNT_LIMIT,
+} from '../../hooks/git/load'
 
 describe('statusEntriesOf', () => {
   test('parses modified, added, deleted, untracked, and renamed entries', () => {
@@ -342,5 +349,105 @@ describe('applyPatch', () => {
       ok: false,
       error: 'patch does not apply',
     })
+  })
+})
+
+describe('diffSectionsOf', () => {
+  const two = [
+    'diff --git a/a b.ts b/a b.ts',
+    'index 1..2 100644',
+    // git appends a tab to ---/+++ names that contain a space.
+    '--- a/a b.ts\t',
+    '+++ b/a b.ts\t',
+    '@@ -1 +1 @@',
+    '-x',
+    '+y',
+    'diff --git a/old.ts b/new.ts',
+    'similarity index 100%',
+    'rename from old.ts',
+    'rename to new.ts',
+    'diff --git a/gone.ts b/gone.ts',
+    'deleted file mode 100644',
+    '--- a/gone.ts',
+    '+++ /dev/null',
+    '@@ -1 +0,0 @@',
+    '-z',
+    'diff --git a/img.png b/img.png',
+    'Binary files a/img.png and b/img.png differ',
+    '',
+  ].join('\n')
+
+  test('keys each section by the path it changes', () => {
+    expect([...diffSectionsOf(two).keys()]).toEqual(['a b.ts', 'new.ts', 'gone.ts', 'img.png'])
+  })
+
+  test('a section holds its own hunks only', () => {
+    expect(hunksOf(diffSectionsOf(two).get('a b.ts') ?? '')).toHaveLength(1)
+    expect(hunksOf(diffSectionsOf(two).get('new.ts') ?? '')).toEqual([])
+  })
+})
+
+describe('loadAllHunks', () => {
+  const tracked = {
+    path: 'foo.txt',
+    status: 'modified' as const,
+    adds: 1,
+    dels: 1,
+    isBinary: false,
+  }
+  const fresh = {
+    path: 'newfile.txt',
+    status: 'untracked' as const,
+    adds: 2,
+    dels: 0,
+    isBinary: false,
+  }
+  const ALL = 'git -c core.quotePath=false diff -M HEAD'
+
+  test('reads tracked files in one process and untracked ones by path', async () => {
+    const run = runOf({
+      [ALL]: {
+        stdout: `diff --git a/foo.txt b/foo.txt\n--- a/foo.txt\n+++ b/foo.txt\n${MODIFIED_DIFF}`,
+      },
+      'git diff --no-index -- /dev/null newfile.txt': { exitCode: 1, stdout: NEW_FILE_DIFF },
+    })
+    const loaded = await loadAllHunks(run, [tracked, fresh], HEAD)
+    expect(loaded.byPath.get('foo.txt')).toHaveLength(2)
+    expect(loaded.byPath.get('newfile.txt')).toHaveLength(1)
+    expect(loaded.truncatedPath).toBeNull()
+  })
+
+  test('a cut diff drops the cut hunk and re-reads the files after it one by one', async () => {
+    const bar = { path: 'bar.txt', status: 'modified' as const, adds: 1, dels: 1, isBinary: false }
+    const run = runOf({
+      [ALL]: {
+        stdout: `diff --git a/foo.txt b/foo.txt\n--- a/foo.txt\n+++ b/foo.txt\n${MODIFIED_DIFF}`,
+        isStdoutTruncated: true,
+      },
+      'git diff HEAD -- bar.txt': { stdout: MODIFIED_DIFF },
+    })
+    const loaded = await loadAllHunks(run, [tracked, bar], HEAD)
+    expect(loaded.byPath.get('foo.txt')).toHaveLength(1)
+    expect(loaded.byPath.get('bar.txt')).toHaveLength(2)
+    expect(loaded.truncatedPath).toBe('foo.txt')
+  })
+
+  test('untracked files past the cap are left unread', async () => {
+    const many = Array.from({ length: UNTRACKED_COUNT_LIMIT + 1 }, (_, i) => ({
+      path: `n${i}.txt`,
+      status: 'untracked' as const,
+      adds: 1,
+      dels: 0,
+      isBinary: false,
+    }))
+    const outputs = Object.fromEntries(
+      many.map(file => [
+        `git diff --no-index -- /dev/null ${file.path}`,
+        { exitCode: 1, stdout: NEW_FILE_DIFF },
+      ]),
+    )
+    const loaded = await loadAllHunks(runOf(outputs), many, HEAD)
+    expect(loaded.byPath.has(`n${UNTRACKED_COUNT_LIMIT}.txt`)).toBe(false)
+    expect(loaded.byPath.size).toBe(UNTRACKED_COUNT_LIMIT)
   })
 })
