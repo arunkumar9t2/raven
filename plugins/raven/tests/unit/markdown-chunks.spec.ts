@@ -67,4 +67,10 @@ describe('docBlocksOf', () => {
       { kind: 'code', text: 'print(1)', language: 'py' },
     ])
   })
+
+  test('a fenced block containing a ```ts line is one code block, not closed early', () => {
+    expect(docBlocksOf('```\nSee:\n```ts\nconst x = 1\n```')).toEqual([
+      { kind: 'code', text: 'See:\n```ts\nconst x = 1' },
+    ])
+  })
 })

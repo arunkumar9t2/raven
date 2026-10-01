@@ -3,6 +3,17 @@ import { ELEMENT_TEXT_LIMIT } from '../core/view'
 const FENCE = /^\s*(`{3,}|~{3,})/
 
 /**
+ * CommonMark: a fence closes on a line that is only the marker's character, at least as long as
+ * the opener, with nothing but whitespace around it — an info string (e.g. a ```ts` line nested
+ * inside a ``` block) carries no closing, it is content.
+ */
+function closesFence(line: string, marker: string): boolean {
+  const char = marker[0]
+  const body = char === '`' ? '`+' : '~+'
+  return new RegExp(`^\\s*${body}\\s*$`).test(line) && line.trim().length >= marker.length
+}
+
+/**
  * Splits markdown into pieces of at most `max` characters, each drawn as its own `Markdown`
  * element. Cuts fall on blank lines outside code fences, so blocks stay whole; a single block
  * longer than `max` is cut between lines, a code fence closed and reopened across the cut.
@@ -73,7 +84,7 @@ export function docBlocksOf(chunk: string): DocBlock[] {
     if (fence === null && match?.[1]) {
       flushProse()
       fence = match[2] ? { marker: match[1], language: match[2] } : { marker: match[1] }
-    } else if (fence !== null && line.trim().startsWith(fence.marker)) {
+    } else if (fence !== null && closesFence(line, fence.marker)) {
       blocks.push({
         kind: 'code',
         text: code.join('\n'),
