@@ -427,8 +427,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     return stream
   }
 
-  /** One fixed row's element, by its payload kind; `null` renders as a blank row (e.g. a gap). */
-  function bodyRowOf(kit: Kit, item: BodyItem, file: ChangedFile): RenderElement | null {
+  /** One fixed row's element, by its payload kind: a `gap` draws one blank row, a `rule` a dim line. */
+  function bodyRowOf(kit: Kit, item: BodyItem, file: ChangedFile): RenderElement {
     const { Box, Text } = kit.ui
     switch (item.kind) {
       case 'title': {
@@ -447,7 +447,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       case 'status':
         return <Text dimColor>{item.text}</Text>
       case 'gap':
-        return null
+        return <Text> </Text>
+      case 'rule':
+        return <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
       case 'outdated-title':
         return outdatedTitle(kit)
       case 'addressed':

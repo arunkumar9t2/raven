@@ -368,6 +368,14 @@ describe('review stream', () => {
     expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
   })
 
+  test('a rule row separates files and draws', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'b.ts#sep' }))?.text).toContain('─')
+  })
+
   test('pressing a file row scrolls its heading to the top of the stream', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     await $.session.start(SESSION)
