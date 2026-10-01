@@ -272,7 +272,12 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
    * already tracks is exactly how the stream's top is recovered after scrolling away from it.
    */
   function select(path: string) {
-    update({ selected: path, composing: null, top: lastTitleRows.get(path) ?? model.top })
+    update({
+      selected: path,
+      composing: null,
+      top: lastTitleRows.get(path) ?? model.top,
+      pendingReveal: null,
+    })
   }
 
   /** Moves the selection `by` files (1 next, -1 previous); the ↓/↑ buttons. */
@@ -570,9 +575,10 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         selected: fileAtRow(lastTitleRows, top) ?? model.selected,
         isFollowing: false,
         followPath: null,
+        pendingReveal: null,
       })
     } else if (model.isFollowing) {
-      update({ isFollowing: false, followPath: null })
+      update({ isFollowing: false, followPath: null, pendingReveal: null })
     }
     return true
   }
