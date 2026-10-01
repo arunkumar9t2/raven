@@ -553,6 +553,63 @@ describe('review stream', () => {
     const ui = await mountDiff($)
     expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('●')
   })
+
+  test('a file-list press turns follow off for the rest of the turn', async ($, on) => {
+    const clock = gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      requestId: DIFF_PANE.id,
+    })
+
+    // The person presses a.ts's row (already selected, but a press always jumps and now also
+    // drops follow, same as a scroll does).
+    await ui.press({ key: 'file:a.ts' })
+
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+    await clock.advance(300)
+
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+    expect(await ui.find({ key: 'b.ts#title' })).toBeUndefined()
+  })
+
+  test('a directive reveal does not turn follow off', async ($, on) => {
+    const clock = gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    on('tool.call', { tool: 'Bash' }, () => ({
+      result: {
+        stdout: '::raven::{"op":"diff","path":"/work/a.ts"}\n',
+        stderr: '',
+        interrupted: false,
+      },
+    }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      requestId: DIFF_PANE.id,
+    })
+
+    // A programmatic reveal of the file already selected and in view — unlike a person's press,
+    // it must leave follow on.
+    await $.tool.call({ tool: 'Bash', command: 'raven diff /work/a.ts' })
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+    await clock.advance(300)
+
+    expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
+  })
 })
 
 describe('diff header', () => {
