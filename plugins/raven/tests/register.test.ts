@@ -667,3 +667,39 @@ describe('the built-in diff panel warning', () => {
     expect(toasts).toHaveLength(0)
   })
 })
+
+describe('prompt carries the review', () => {
+  function promptWorld(on: On, comments: readonly unknown[]) {
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: comments }, null)
+    const toasts: string[] = []
+    on('ui.toast', ($, e) => {
+      toasts.push(e.text)
+      return { value: undefined }
+    })
+    on('prompt.submit', ($, e) => ({ text: e.text }))
+    return toasts
+  }
+
+  test('a composer prompt that carries pending comments says so', async ($, on) => {
+    const toasts = promptWorld(on, [
+      { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'a.ts', text: 'and this', status: 'pending', createdAt: 1 },
+    ])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+
+    expect(toasts).toContain('Raven: 2 review comments sent with this prompt')
+  })
+
+  test('no pending comments, no toast', async ($, on) => {
+    const toasts = promptWorld(on, [])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+
+    expect(toasts.filter(text => text.includes('review comment'))).toEqual([])
+  })
+})
