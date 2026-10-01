@@ -356,6 +356,37 @@ describe('diff view keyboard control', () => {
   })
 })
 
+describe('review stream', () => {
+  test('every changed file has its heading in the pane at once', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
+    expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
+  })
+
+  test('pressing a file row scrolls its heading to the top of the stream', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      // kit.rows = 8; minus 2 header + 2 list + 1 rule leaves 3 body rows: one file's section.
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
+      requestId: DIFF_PANE.id,
+    })
+    await ui.press({ key: 'file:b.ts' })
+    expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
+    expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
+  })
+})
+
 describe('diff header', () => {
   test('send is the primary action once a comment is pending', async ($, on) => {
     const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
@@ -465,6 +496,12 @@ function hunkWorld(
       onApply(e.argv, e.init?.stdin)
       return ran(0)
     }
+    // The all-files bulk diff `loadAllHunks` issues (refresh): a real multi-file diff, sectioned
+    // by `diff --git` lines, so `diffSectionsOf` can find a.ts's section.
+    if (cmd === 'git' && e.argv.includes('-c')) {
+      return ran(0, `diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n${diffTextOf()}`)
+    }
+    // The single-file diff `readHunks` issues (applyHunk's re-check): just the hunk text.
     return ran(0, diffTextOf())
   })
 

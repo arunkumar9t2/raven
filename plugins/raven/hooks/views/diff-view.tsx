@@ -3,31 +3,25 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
+import { COLORS } from '../core/colors'
 import { type Host, loggedAs } from '../core/host'
 import { type Capabilities, capabilitiesOf, type Kit, type View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
-import { applyPatch, loadChanges, loadHunks, refOf } from '../git/load'
+import { applyPatch, loadAllHunks, loadChanges, loadHunks, refOf } from '../git/load'
 import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { type BodyItem, blocksOf, fixedRowsOf } from './diff/blocks'
+import { type BodyItem, fileAtRow, fixedRowsOf, type Stream, streamOf } from './diff/blocks'
 import { addressedRow, commentBox, hunkActionsRow, note, outdatedTitle } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
-import {
-  type Block,
-  clampTop,
-  contentRowsOf,
-  type Placed,
-  sliceHunk,
-  stepFileIndexOf,
-  windowOf,
-} from './diff/layout'
+import { clampTop, type Placed, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
+import { iconOf, statusMarkOf } from './icons'
 
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
 const WHEEL_ROWS = 3
@@ -49,6 +43,11 @@ type Model = {
    * anchor key. Any other update drops it (see `update`).
    */
   confirming: string | null
+  /**
+   * A `reveal` target not yet among the last render's title rows (e.g. a file just edited, ahead
+   * of the refresh that will add it); `render` jumps to it once `streamFor` places it.
+   */
+  pendingReveal: string | null
 }
 
 /** What the diff view asks of the controller. */
@@ -78,27 +77,27 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     top: 0,
     stagedHunks: new Map(),
     confirming: null,
+    pendingReveal: null,
   }
 
   const sourceController = createSourceController(host)
 
-  // The body rows, selected file and content-row count the most recent render computed, so
-  // `scroll` (which has no kit) can clamp without recomputing them.
+  // The body rows and the title rows/content-row count of the most recent render computed, so
+  // `scroll` and `select` (which have no kit) can clamp/jump without recomputing them.
   let lastBodyRows = 0
-  let lastFile: ChangedFile | null = null
+  let lastTitleRows: ReadonlyMap<string, number> = new Map()
   let lastContentRows = 0
 
-  // The last blocksOf() result, valid while its inputs are reference-equal to these.
+  // The last streamOf() result, valid while its inputs are reference-equal to these.
   let cache: {
-    file: ChangedFile
-    hunks: readonly Hunk[] | undefined
+    files: readonly ChangedFile[]
+    hunks: ReadonlyMap<string, readonly Hunk[]>
     comments: Comments
     composing: Anchor | null
     turnIndex: number | undefined
     readOnly: boolean
     capabilities: Capabilities
-    blocks: Block<BodyItem>[]
-    contentRows: number
+    stream: Stream
   } | null = null
 
   /** The files the current source shows: the repository's, or one turn's edited files. */
@@ -118,8 +117,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
 
   const isArmed = (key: string) => model.confirming === key
   const arm = (key: string) => update({ confirming: key })
-
-  const selectedFile = () => filesOf().find(file => file.path === model.selected) ?? null
 
   // Bumped by each refresh, so a slow read that lands after a newer one is dropped.
   let generation = 0
@@ -152,19 +149,19 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     stagedHunks: prunedStaged(path, hunks),
   })
 
-  /** No-op for a turn source: its hunks are already known, read straight off the controller. */
-  async function loadSelected() {
-    if (sourceController.isReadOnly()) return
-    const file = selectedFile()
-    if (!file) return
-    const started = generation
-    const { hunks, isTruncated } = await readHunks(file)
-    const isCurrent = started === generation && model.selected === file.path
-    if (isCurrent) {
-      update(withHunks(file.path, hunks))
-      if (isTruncated)
-        host.toast(`${file.path}: diff too large, showing its first ${hunks.length} hunks`)
+  /** `prunedStaged` over every path a bulk reload read, for the one `update` a `refresh` makes. */
+  function prunedStagedAll(
+    hunks: ReadonlyMap<string, readonly Hunk[]>,
+  ): ReadonlyMap<string, ReadonlySet<string>> {
+    let staged = model.stagedHunks
+    for (const [path, pathHunks] of hunks) {
+      const current = staged.get(path)
+      if (!current || current.size === 0) continue
+      const headers = new Set(pathHunks.map(hunk => hunk.header))
+      const kept = new Set([...current].filter(header => headers.has(header)))
+      if (kept.size !== current.size) staged = new Map(staged).set(path, kept)
     }
+    return staged
   }
 
   async function refresh() {
@@ -184,21 +181,41 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     const files = sourceController.files(repository)
     const isKept = files.some(file => file.path === model.selected)
 
+    // A turn source's hunks come from the controller's own `turnHunks`, read straight off it;
+    // only a git source needs this bulk read.
+    let hunks: ReadonlyMap<string, readonly Hunk[]> = new Map()
+    let stagedHunks = model.stagedHunks
+    if (!sourceController.isReadOnly()) {
+      const loaded = await loadAllHunks(host.run, files, sourceController.base()).catch(
+        loggedAs(host, 'loading hunks', { byPath: new Map(), truncatedPath: null }),
+      )
+      if (started !== generation) return
+      hunks = loaded.byPath
+      // A header collides easily (e.g. `@@ -1,2 +1,2 @@`); drop a path's stale staged marks
+      // rather than risk a new hunk reading as already staged.
+      stagedHunks = prunedStagedAll(hunks)
+      if (loaded.truncatedPath !== null)
+        host.toast(`${loaded.truncatedPath}: diff too large, its last hunk is not shown`)
+    }
+
     update({
       repository,
       isLoaded: true,
-      hunks: new Map(),
+      hunks,
+      stagedHunks,
       selected: isKept ? model.selected : (files[0]?.path ?? null),
     })
 
     if (repository) await review.load(repository.toplevel)
-    if (!sourceController.isReadOnly()) await loadSelected()
   }
 
+  /**
+   * Selects `path` and scrolls its heading to the top of the stream; no reload. Always jumps,
+   * even when `path` is already selected — pressing the row of the file the scroll bar's ❯
+   * already tracks is exactly how the stream's top is recovered after scrolling away from it.
+   */
   function select(path: string) {
-    if (path === model.selected) return
-    update({ selected: path, composing: null, top: 0 })
-    void loadSelected()
+    update({ selected: path, composing: null, top: lastTitleRows.get(path) ?? model.top })
   }
 
   /** Moves the selection `by` files (1 next, -1 previous); the ↓/↑ buttons. */
@@ -282,7 +299,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         stagedHunks: new Map(model.stagedHunks).set(file.path, new Set(current).add(hunk.header)),
       })
     }
-    await loadSelected()
+    await refresh()
   }
 
   /** First press asks for confirmation; a second press on the same hunk reverts it. */
@@ -296,32 +313,18 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     }
   }
 
-  /** The selected file's blocks and their total row count, cached while its inputs are unchanged. */
-  function blocksForSelected(capabilities: Capabilities): {
-    file: ChangedFile | null
-    blocks: Block<BodyItem>[]
-    contentRows: number
-  } {
-    const file = selectedFile()
-    if (!file) {
-      cache = null
-      return { file: null, blocks: [], contentRows: 0 }
-    }
-
+  /** Every changed file's blocks in one stream, cached while its inputs are unchanged. */
+  function streamFor(capabilities: Capabilities): Stream {
+    const files = filesOf()
     const source = sourceController.source()
-    const hunks = selectedHunksOf(
-      source,
-      sourceController.hunksFor(file),
-      model.hunks.get(file.path),
-    )
-    const comments = review.comments()
     const turnIndex = source.kind === 'turn' ? source.index : undefined
     const readOnly = sourceController.isReadOnly()
+    const comments = review.comments()
 
     if (
       cache &&
-      cache.file === file &&
-      cache.hunks === hunks &&
+      cache.files === files &&
+      cache.hunks === model.hunks &&
       cache.comments === comments &&
       cache.composing === model.composing &&
       cache.turnIndex === turnIndex &&
@@ -329,39 +332,55 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick
     ) {
-      return { file, blocks: cache.blocks, contentRows: cache.contentRows }
+      return cache.stream
     }
 
-    const blocks = blocksOf(file, hunks, comments, model.composing, {
-      turnIndex,
-      readOnly,
-      capabilities,
-    })
-    const contentRows = contentRowsOf(blocks)
+    const stream = streamOf(
+      files,
+      file => selectedHunksOf(source, sourceController.hunksFor(file), model.hunks.get(file.path)),
+      comments,
+      model.composing,
+      {
+        turnIndex,
+        readOnly,
+        capabilities,
+        // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
+        // read (an untracked file past the cap, or a failed `git diff`), not still loading.
+        unreadText: model.isLoaded ? 'Not read' : undefined,
+      },
+    )
     cache = {
-      file,
-      hunks,
+      files,
+      hunks: model.hunks,
       comments,
       composing: model.composing,
       turnIndex,
       readOnly,
       capabilities,
-      blocks,
-      contentRows,
+      stream,
     }
-    return { file, blocks, contentRows }
+    return stream
   }
 
   /** One fixed row's element, by its payload kind; `null` renders as a blank row (e.g. a gap). */
   function bodyRowOf(kit: Kit, item: BodyItem, file: ChangedFile): RenderElement | null {
-    const { Text } = kit.ui
+    const { Box, Text } = kit.ui
     switch (item.kind) {
-      case 'title':
+      case 'title': {
+        const mark = statusMarkOf(item.file.status)
+        const icon = iconOf(item.file.path)
         return (
-          <Text bold>
-            {item.turnIndex !== undefined ? `Turn ${item.turnIndex}` : item.file.path}
-          </Text>
+          <Box flexDirection="row" gap={1}>
+            <Text color={mark.color}>{mark.glyph}</Text>
+            <Text color={icon.color}>{icon.glyph}</Text>
+            <Text bold>
+              {item.turnIndex !== undefined ? `Turn ${item.turnIndex}` : item.file.path}
+            </Text>
+            <Text color={COLORS.added}>+{item.file.adds}</Text>
+            <Text color={COLORS.removed}>−{item.file.dels}</Text>
+          </Box>
         )
+      }
       case 'status':
         return <Text dimColor>{item.text}</Text>
       case 'gap':
@@ -396,9 +415,17 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     }
   }
 
-  function placedRowOf(kit: Kit, placed: Placed<BodyItem>, file: ChangedFile): RenderElement {
+  /** A placed block's element; the file it belongs to is found by its key's `path#...` prefix. */
+  function placedRowOf(
+    kit: Kit,
+    placed: Placed<BodyItem>,
+    filesByPath: ReadonlyMap<string, ChangedFile>,
+  ): RenderElement {
     const { Box, Code } = kit.ui
     const { block } = placed
+    const path = block.key.slice(0, block.key.indexOf('#'))
+    const file = filesByPath.get(path)
+    if (!file) return <Box key={block.key} />
 
     if (block.kind === 'hunk') {
       return (
@@ -429,16 +456,23 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       return <Text dimColor>{text}</Text>
     }
 
-    const { file, blocks, contentRows } = blocksForSelected(capabilitiesOf(kit.ui))
-    lastFile = file
-    lastContentRows = contentRows
+    const stream = streamFor(capabilitiesOf(kit.ui))
+    lastTitleRows = stream.titleRows
+    lastContentRows = stream.contentRows
+
+    // A `reveal` for a file not yet in the last stream (a refresh still in flight when it was
+    // called) lands here once `streamFor` finally places it.
+    const pendingRow =
+      model.pendingReveal !== null ? stream.titleRows.get(model.pendingReveal) : undefined
+    if (pendingRow !== undefined) model = { ...model, top: pendingRow, pendingReveal: null }
 
     const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS))
     lastBodyRows = bodyRows
-    const top = clampTop(model.top, contentRows, bodyRows)
+    const top = clampTop(model.top, stream.contentRows, bodyRows)
     if (top !== model.top) model = { ...model, top }
 
-    const placed = file ? windowOf(blocks, top, bodyRows) : []
+    const placed = windowOf(stream.blocks, top, bodyRows)
+    const filesByPath = new Map(files.map(file => [file.path, file]))
 
     return (
       <Box flexDirection="column">
@@ -464,26 +498,39 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         })}
         {fileList(kit, { files, selected: model.selected, onSelect: select })}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
-        {file ? placed.map(p => placedRowOf(kit, p, file)) : null}
+        {placed.map(p => placedRowOf(kit, p, filesByPath))}
       </Box>
     )
   }
 
   function scroll(by: number): boolean {
-    if (!lastFile) return false
+    if (filesOf().length === 0) return false
     const bodyRows = lastBodyRows
     const size = Math.abs(by)
     // A wheel tick or arrow asks for a row or two; scale it to a readable step, as the terminal's
     // own scrollable views do. A page or Home/End key already asks for a step this size or more.
     const step = size >= bodyRows ? size : size * WHEEL_ROWS
     const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows)
-    if (top !== model.top) update({ top })
+    if (top !== model.top) {
+      update({ top, selected: fileAtRow(lastTitleRows, top) ?? model.selected })
+    }
     return true
   }
 
+  /**
+   * Selects the file at an absolute path, when it is among the changes. When it isn't yet in the
+   * last render's title rows (a refresh still in flight), the jump is deferred to `render` via
+   * `pendingReveal` rather than left at the view's current `top`.
+   */
   function reveal(path: string) {
     const toplevel = model.repository?.toplevel
-    if (toplevel && path.startsWith(`${toplevel}/`)) select(path.slice(toplevel.length + 1))
+    if (!toplevel || !path.startsWith(`${toplevel}/`)) return
+    const relative = path.slice(toplevel.length + 1)
+    if (lastTitleRows.has(relative)) {
+      select(relative)
+    } else {
+      update({ selected: relative, composing: null, pendingReveal: relative })
+    }
   }
 
   return { pane: DIFF_PANE, subcommand: 'diff', render, refresh, reveal, scroll }
