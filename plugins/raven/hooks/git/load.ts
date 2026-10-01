@@ -12,6 +12,11 @@ export function outputOf(result: RunResult): string | null {
   return result.exitCode === 0 ? result.stdout.trim() : null
 }
 
+/** The repository's root, or null outside a git repository. */
+export async function toplevelOf(run: Run): Promise<string | null> {
+  return outputOf(await run(['git', 'rev-parse', '--show-toplevel']))
+}
+
 /** What the working tree is diffed against: `HEAD`, or a specific commit (a session start or a merge-base). */
 export type Base = { kind: 'head' } | { kind: 'commit'; sha: string }
 
@@ -27,13 +32,13 @@ export async function loadChanges(
   run: Run,
   base: Base,
 ): Promise<{ toplevel: string; files: ChangedFile[] } | null> {
-  const top = await run(['git', 'rev-parse', '--show-toplevel'])
-  const toplevel = outputOf(top)
-  if (toplevel === null) return null
-  const [status, diff] = await Promise.all([
+  // Outside a repository status and diff fail harmlessly, so all three start together.
+  const [toplevel, status, diff] = await Promise.all([
+    toplevelOf(run),
     run(['git', 'status', '--porcelain=v1', '-z', '--untracked-files=all']),
     run(['git', 'diff', refOf(base), '--numstat', '-z']),
   ])
+  if (toplevel === null) return null
   const numstat = diff.exitCode === 0 ? numstatOf(diff.stdout) : new Map()
   const entries = statusEntriesOf(status.stdout)
   const files = changedFilesOf(entries, numstat, await untrackedLinesOf(run, entries))
@@ -62,11 +67,15 @@ async function untrackedLinesOf(
 }
 
 /**
- * One file's hunks: tracked files diff against `base`, untracked files diff against /dev/null, and
+ * One file's hunks (all but a cut-off last one when the diff overran the output cap): tracked files diff against `base`, untracked files diff against /dev/null, and
  * a renamed file diffs with rename detection (`-M`) against both its old and new path — diffing
  * the new path alone would compare it against nothing at `base` and show the whole file as added.
  */
-export async function loadHunks(run: Run, file: ChangedFile, base: Base): Promise<Hunk[]> {
+export async function loadHunks(
+  run: Run,
+  file: ChangedFile,
+  base: Base,
+): Promise<{ hunks: Hunk[]; isTruncated: boolean }> {
   const argv =
     file.status === 'untracked'
       ? ['git', 'diff', '--no-index', '--', '/dev/null', file.path]
@@ -74,7 +83,12 @@ export async function loadHunks(run: Run, file: ChangedFile, base: Base): Promis
         ? ['git', 'diff', '-M', refOf(base), '--', file.oldPath, file.path]
         : ['git', 'diff', refOf(base), '--', file.path]
   const result = await run(argv)
-  return hunksOf(result.stdout)
+  const hunks = hunksOf(result.stdout)
+  // A diff past the engine's output cap ends mid-hunk: drop that last hunk rather than show (or
+  // let anyone stage) half of it.
+  return result.isStdoutTruncated
+    ? { hunks: hunks.slice(0, -1), isTruncated: true }
+    : { hunks, isTruncated: false }
 }
 
 /** Stages or reverts one hunk's patch via `git apply`, reading it from stdin. */

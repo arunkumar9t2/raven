@@ -138,21 +138,32 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       : new Map(model.stagedHunks).set(path, kept)
   }
 
+  const NO_HUNKS = { hunks: [] as Hunk[], isTruncated: false }
+
+  /** A file's hunks against the current base; none (logged) when git fails. */
+  const readHunks = (file: ChangedFile) =>
+    loadHunks(host.run, file, sourceController.base()).catch(
+      loggedAs(host, 'loading hunks', NO_HUNKS),
+    )
+
+  /** The model patch that seats `hunks` as `path`'s, keeping only staged marks still present. */
+  const withHunks = (path: string, hunks: readonly Hunk[]) => ({
+    hunks: new Map(model.hunks).set(path, hunks),
+    stagedHunks: prunedStaged(path, hunks),
+  })
+
   /** No-op for a turn source: its hunks are already known, read straight off the controller. */
   async function loadSelected() {
     if (sourceController.isReadOnly()) return
     const file = selectedFile()
     if (!file) return
     const started = generation
-    const hunks = await loadHunks(host.run, file, sourceController.base()).catch(
-      loggedAs<Hunk[]>(host, 'loading hunks', []),
-    )
+    const { hunks, isTruncated } = await readHunks(file)
     const isCurrent = started === generation && model.selected === file.path
     if (isCurrent) {
-      update({
-        hunks: new Map(model.hunks).set(file.path, hunks),
-        stagedHunks: prunedStaged(file.path, hunks),
-      })
+      update(withHunks(file.path, hunks))
+      if (isTruncated)
+        host.toast(`${file.path}: diff too large, showing its first ${hunks.length} hunks`)
     }
   }
 
@@ -249,18 +260,13 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
    * lines, so an exact header+text match is required before `git apply` ever runs.
    */
   async function applyHunk(file: ChangedFile, hunk: Hunk, mode: 'stage' | 'revert') {
-    const current = await loadHunks(host.run, file, sourceController.base()).catch(
-      loggedAs<Hunk[]>(host, 'loading hunks', []),
-    )
+    const { hunks: current } = await readHunks(file)
     const stillPresent = current.some(
       candidate => candidate.header === hunk.header && candidate.text === hunk.text,
     )
     if (!stillPresent) {
       host.toast('The hunk changed — refreshed, try again')
-      update({
-        hunks: new Map(model.hunks).set(file.path, current),
-        stagedHunks: prunedStaged(file.path, current),
-      })
+      update(withHunks(file.path, current))
       return
     }
     const result = await applyPatch(host.run, patchOf(file, hunk), mode)

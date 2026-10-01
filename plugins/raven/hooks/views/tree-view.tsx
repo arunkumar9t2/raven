@@ -5,7 +5,7 @@ import type { RenderElement } from 'claude-code'
 
 import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
-import { loadChanges, outputOf } from '../git/load'
+import { loadChanges, toplevelOf } from '../git/load'
 import { TREE_PANE } from '../names'
 import { clampTop } from './diff/layout'
 import { iconOf, statusMarkOf } from './icons'
@@ -47,7 +47,31 @@ function rowsFor(model: Model): Row[] {
   return rows
 }
 
+/**
+ * `rowsFor`, recomputed only when the tree, its expanded set or its cap changes: a scroll or a
+ * redraw replaces the model without touching any of them.
+ */
+function cachedRowsFor(): (model: Model) => Row[] {
+  let last: { root: Model['root']; expanded: Model['expanded']; isCapped: boolean; rows: Row[] } = {
+    root: null,
+    expanded: new Set(),
+    isCapped: false,
+    rows: [],
+  }
+  return model => {
+    if (
+      model.root !== last.root ||
+      model.expanded !== last.expanded ||
+      model.isCapped !== last.isCapped
+    ) {
+      last = { ...model, rows: rowsFor(model) }
+    }
+    return last.rows
+  }
+}
+
 export function createTreeView(host: Host, actions: TreeActions): TreeView {
+  const rowsOfModel = cachedRowsFor()
   let model: Model = {
     isLoaded: false,
     toplevel: null,
@@ -76,7 +100,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
 
   async function refresh(options?: { force?: boolean }): Promise<void> {
     const started = ++generation
-    const toplevel = outputOf(await host.run(['git', 'rev-parse', '--show-toplevel']))
+    const toplevel = await toplevelOf(host.run)
     if (toplevel === null) {
       if (started === generation) update({ isLoaded: true, toplevel: null, root: null })
       return
@@ -173,7 +197,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
     if (!model.isLoaded) return <Text dimColor>Reading the repository…</Text>
     if (!model.toplevel || !model.root) return <Text dimColor>Not in a git repository.</Text>
 
-    const rows = rowsFor(model)
+    const rows = rowsOfModel(model)
     lastRows = kit.rows
     const top = clampTop(model.top, rows.length, kit.rows)
     if (top !== model.top) model = { ...model, top }
@@ -196,7 +220,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
 
   function scroll(by: number): boolean {
     if (!model.isLoaded) return false
-    const total = rowsFor(model).length
+    const total = rowsOfModel(model).length
     const top = clampTop(model.top + by, total, lastRows)
     if (top !== model.top) update({ top })
     return true

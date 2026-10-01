@@ -3,7 +3,7 @@ import { type Host, loggedAs } from '../../core/host'
 import { branchPointOf } from '../../git/base'
 import type { ChangedFile } from '../../git/changes'
 import type { Hunk } from '../../git/hunks'
-import type { Base } from '../../git/load'
+import { type Base, toplevelOf } from '../../git/load'
 import { sourceStoreKeyOf } from '../../names'
 import { changedFileOfTurnFile, type TurnEdits, turnEditsOf, turnFilesOf } from '../../review/turns'
 import { isPersistable, type Source, sourceOf, sourceOptionsOf } from './source'
@@ -70,11 +70,9 @@ export function createSourceController(host: Host): SourceController {
   async function resolveStoredSource(): Promise<void> {
     if (hasReadStoredSource) return
     hasReadStoredSource = true
-    const top = await host
-      .run(['git', 'rev-parse', '--show-toplevel'])
-      .catch(loggedAs(host, 'toplevel', null))
-    if (top?.exitCode !== 0) return
-    toplevel = top.stdout.trim()
+    const top = await toplevelOf(host.run).catch(loggedAs(host, 'toplevel', null))
+    if (top === null) return
+    toplevel = top
     const stored = await host.storeGet(sourceStoreKeyOf(toplevel))
     if (typeof stored !== 'string') return
     const parsed = sourceOf(stored)

@@ -180,17 +180,32 @@ const runOf = (outputs: Record<string, RunResultLike>): Run => {
     const key = argv.join(' ')
     const out = outputs[key]
     if (!out) throw new Error(`unexpected argv: ${key}`)
-    return { exitCode: out.exitCode ?? 0, stdout: out.stdout ?? '', stderr: out.stderr ?? '' }
+    return {
+      exitCode: out.exitCode ?? 0,
+      stdout: out.stdout ?? '',
+      stderr: out.stderr ?? '',
+      isStdoutTruncated: out.isStdoutTruncated,
+    }
   }
 }
 
-type RunResultLike = { exitCode?: number; stdout?: string; stderr?: string }
+type RunResultLike = {
+  exitCode?: number
+  stdout?: string
+  stderr?: string
+  isStdoutTruncated?: boolean
+}
 
 const HEAD: Base = { kind: 'head' }
 
 describe('loadChanges', () => {
   test('returns null outside a git repo', async () => {
-    const run = runOf({ 'git rev-parse --show-toplevel': { exitCode: 128 } })
+    // status and the HEAD diff run in parallel with the toplevel check, so they get fixtures too.
+    const run = runOf({
+      'git rev-parse --show-toplevel': { exitCode: 128 },
+      'git status --porcelain=v1 -z --untracked-files=all': { exitCode: 128 },
+      'git diff HEAD --numstat -z': { exitCode: 128 },
+    })
     expect(await loadChanges(run, HEAD)).toBeNull()
   })
 
@@ -234,13 +249,13 @@ describe('loadHunks', () => {
   test('diffs a tracked file against HEAD', async () => {
     const run = runOf({ 'git diff HEAD -- foo.txt': { stdout: MODIFIED_DIFF } })
     const file = { path: 'foo.txt', status: 'modified' as const, adds: 1, dels: 1, isBinary: false }
-    expect(await loadHunks(run, file, HEAD)).toHaveLength(2)
+    expect((await loadHunks(run, file, HEAD)).hunks).toHaveLength(2)
   })
 
   test('diffs a tracked file against a commit base', async () => {
     const run = runOf({ 'git diff abc123 -- foo.txt': { stdout: MODIFIED_DIFF } })
     const file = { path: 'foo.txt', status: 'modified' as const, adds: 1, dels: 1, isBinary: false }
-    expect(await loadHunks(run, file, { kind: 'commit', sha: 'abc123' })).toHaveLength(2)
+    expect((await loadHunks(run, file, { kind: 'commit', sha: 'abc123' })).hunks).toHaveLength(2)
   })
 
   test('diffs an untracked file against /dev/null, treating exit 1 as success', async () => {
@@ -254,7 +269,7 @@ describe('loadHunks', () => {
       dels: 0,
       isBinary: false,
     }
-    expect(await loadHunks(run, file, HEAD)).toEqual([
+    expect((await loadHunks(run, file, HEAD)).hunks).toEqual([
       { header: '@@ -0,0 +1,2 @@', text: '@@ -0,0 +1,2 @@\n+hello\n+world\n' },
     ])
   })
@@ -269,13 +284,23 @@ describe('loadHunks', () => {
       dels: 1,
       isBinary: false,
     }
-    expect(await loadHunks(run, file, HEAD)).toHaveLength(2)
+    expect((await loadHunks(run, file, HEAD)).hunks).toHaveLength(2)
   })
 
   test('a renamed file with no oldPath falls back to diffing the new path alone', async () => {
     const run = runOf({ 'git diff HEAD -- foo.txt': { stdout: MODIFIED_DIFF } })
     const file = { path: 'foo.txt', status: 'renamed' as const, adds: 1, dels: 1, isBinary: false }
-    expect(await loadHunks(run, file, HEAD)).toHaveLength(2)
+    expect((await loadHunks(run, file, HEAD)).hunks).toHaveLength(2)
+  })
+
+  test('drops the cut-off last hunk of a diff the output cap truncated', async () => {
+    const run = runOf({
+      'git diff HEAD -- foo.txt': { stdout: MODIFIED_DIFF, isStdoutTruncated: true },
+    })
+    const file = { path: 'foo.txt', status: 'modified' as const, adds: 1, dels: 1, isBinary: false }
+    const loaded = await loadHunks(run, file, HEAD)
+    expect(loaded.isTruncated).toBe(true)
+    expect(loaded.hunks).toHaveLength(1)
   })
 })
 

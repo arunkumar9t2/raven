@@ -1,4 +1,5 @@
 import { COLORS } from '../core/colors'
+import type { ChangeStatus } from '../git/changes'
 
 type Glyph = { glyph: string; color: string }
 
@@ -76,7 +77,7 @@ export function iconOf(path: string): Glyph {
   return GENERIC_ICON
 }
 
-const STATUS_MARKS: Record<'added' | 'modified' | 'deleted' | 'renamed' | 'untracked', Glyph> = {
+const STATUS_MARKS: Record<ChangeStatus, Glyph> = {
   added: { glyph: 'A', color: COLORS.added },
   modified: { glyph: 'M', color: COLORS.modified },
   deleted: { glyph: 'D', color: COLORS.removed },
@@ -85,8 +86,6 @@ const STATUS_MARKS: Record<'added' | 'modified' | 'deleted' | 'renamed' | 'untra
 }
 
 /** Glyph + color for a change status. */
-export function statusMarkOf(
-  status: 'added' | 'modified' | 'deleted' | 'renamed' | 'untracked',
-): Glyph {
+export function statusMarkOf(status: ChangeStatus): Glyph {
   return STATUS_MARKS[status]
 }

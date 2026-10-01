@@ -20,7 +20,9 @@ M6 is done: every task in `docs/superpowers/plans/2026-09-29-raven-m6.md`, three
 
 ## Decisions
 
-- 2026-09-29 Repo lives at ~/Work/projects/claude-mod (temporary); the name "raven" is one constant so a rename is mechanical.
+- 2026-10-02 Whole-plugin simplify pass (4 Sonnet reviewers): `Host.isShown` dropped (derived from `shownPaneIds`); triggers stay pure (plan paths passed to `actionsOf` per call); `afterTool`/`planNoted` log their own failures so `register.ts` keeps no `host`; one `toplevelOf`; `rev-parse` runs alongside status/diff; Doc chunks and Files rows cached instead of rebuilt per frame; shared test helpers (`tests/helpers.ts`, `tests/unit/fake-host.ts`). Deferred: one shared change load for Diff+Files, view hooks in place of `view === diff` branches in the controller, a shared stale-read guard, moving the directive ack splice out of `register.ts`.
+- 2026-10-02 Plan mode's plan file comes from the engine's `prompt.attachment` plan notes (`planFilePath`) instead of a guessed `~/.claude/plans/` pattern, so a custom plans directory works; exit/re-entry opens the plan. Diff output past `$.process.run`'s 4 MiB cap drops its cut-off last hunk and toasts. Types synced to 2.1.287.
+- 2026-10-02 Repo moved from ~/Work/projects/claude-mod to ~/Work/projects/raven; `bun run setup:local` re-registered the plugin path.
 - 2026-09-29 Mod layer owns everything in-session: UI, event reactions, prompt injection, state. The CLI is stateless: it is the agentic entry point Claude reaches through Bash and prints a directive the mod intercepts from the Bash tool result (no polling, no IPC). With function hooks off the CLI prints plain useful output instead.
 - 2026-09-29 The compiled Bun binary is not committed: `bin/raven` is a shim that execs `dist/raven` when built, else `bun cli/src/main.ts`.
 - 2026-09-29 Raven state stays out of the working tree (`$.store`), so it never shows up in its own diff pane.

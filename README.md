@@ -12,7 +12,8 @@ A live preview pane for Claude Code. Raven docks beside the transcript and shows
 - **Files** and **Tasks** — the repository tree with change marks, and Claude's task list.
 - **Status band** — pending comments and updated plans show above the prompt when the pane is closed.
 - **Doc** — plans and specs rendered as Claude writes them (`docs/superpowers/`, `.superpowers/`,
-  `~/.claude/plans/`), plus anything Claude chooses to show with the `raven` CLI.
+  and plan mode's plan file, wherever plans are kept), plus anything Claude chooses to show with the
+  `raven` CLI. Leaving or re-entering plan mode opens the plan.
 
 Raven is a Claude Code *mod*: a plugin whose behaviour is a TypeScript function-hooks module running
 inside Claude Code, paired with a Bun CLI and a skill so Claude can drive the pane itself.

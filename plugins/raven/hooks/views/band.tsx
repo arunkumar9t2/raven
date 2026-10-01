@@ -8,7 +8,7 @@ import type { Kit } from '../core/view'
 import { NAME } from '../names'
 
 /** What the `AbovePrompt` band has to say: pending review comments, an unseen doc, or both. */
-export type BandState = {
+export type BandProps = {
   pendingCount: number
   isDocUpdated: boolean
 }
@@ -20,7 +20,7 @@ export type BandActions = {
 }
 
 /** One row above the prompt: `raven · N comments pending · plan updated`, plain `open`/`send`. */
-export function band(kit: Pick<Kit, 'ui' | 'columns'>, state: BandState, actions: BandActions) {
+export function band(kit: Pick<Kit, 'ui' | 'columns'>, state: BandProps, actions: BandActions) {
   const { Box, Text, Button } = kit.ui
   const parts = [
     NAME,

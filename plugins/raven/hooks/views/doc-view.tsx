@@ -5,7 +5,7 @@ import type { RenderElement } from 'claude-code'
 
 import { COLORS } from '../core/colors'
 import type { Host } from '../core/host'
-import { capabilitiesOf, ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
+import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { baseName } from './icons'
@@ -18,6 +18,8 @@ export type Doc =
   | { kind: 'note'; markdown: string; title?: string }
 
 type Shown = { key: string; title: string; doc: Doc; text: string | null; error?: string }
+
+type Chunk = { text: string; links?: ReturnType<typeof docLinksOf> }
 
 export type DocView = View & {
   show: (doc: Doc) => Promise<void>
@@ -38,6 +40,24 @@ const titleOf = (doc: Doc) => doc.title ?? (doc.kind === 'file' ? baseName(doc.p
 export function createDocView(host: Host): DocView {
   let history: readonly Shown[] = []
   let current: string | null = null
+  // A Shown is replaced, never mutated, on a reload, so its chunks are computed once, not per frame.
+  const chunksByShown = new WeakMap<Shown, readonly Chunk[]>()
+
+  function chunksOf(shown: Shown, text: string): readonly Chunk[] {
+    const cached = chunksByShown.get(shown)
+    if (cached) return cached
+    const doc = shown.doc
+    const chunks = markdownChunksOf(text).map(chunk =>
+      doc.kind === 'file' ? { text: chunk, links: docLinksOf(doc.path, chunk) } : { text: chunk },
+    )
+    chunksByShown.set(shown, chunks)
+    return chunks
+  }
+
+  const pick = (value: string) => {
+    current = value
+    host.redraw()
+  }
 
   async function read(doc: Doc): Promise<Pick<Shown, 'text' | 'error'>> {
     if (doc.kind === 'note') return { text: doc.markdown }
@@ -86,19 +106,19 @@ export function createDocView(host: Host): DocView {
       const doc = shown.doc
       return (
         <Box flexDirection="column">
-          {markdownChunksOf(shown.text).map((chunk, index) =>
+          {chunksOf(shown, shown.text).map((chunk, index) =>
             doc.kind === 'file' ? (
               <Markdown
                 key={`md:${index}`}
-                text={chunk}
-                pressableLinks={docLinksOf(doc.path, chunk)}
+                text={chunk.text}
+                pressableLinks={chunk.links}
                 onLinkPress={link => {
                   const target = resolveDocLink(doc.path, link.href)
                   if (target) void show({ kind: 'file', path: target })
                 }}
               />
             ) : (
-              <Markdown key={`md:${index}`} text={chunk} />
+              <Markdown key={`md:${index}`} text={chunk.text} />
             ),
           )}
         </Box>
@@ -123,10 +143,7 @@ export function createDocView(host: Host): DocView {
       key: 'history',
       options: history.slice(0, 3).map(each => ({ value: each.key, label: each.title })),
       value: shown.key,
-      onSelect: value => {
-        current = value
-        host.redraw()
-      },
+      onSelect: pick,
     })
   }
 
@@ -138,16 +155,13 @@ export function createDocView(host: Host): DocView {
       return <Text dimColor>Nothing shown yet. Plans and docs Claude writes open here.</Text>
 
     const picker =
-      history.length <= 1 ? null : capabilitiesOf(kit.ui).canPick && Select ? (
+      history.length <= 1 ? null : Select ? (
         <Select
           key="history"
           label="Documents"
           value={shown.key}
           options={history.map(each => ({ value: each.key, label: each.title }))}
-          onSelect={value => {
-            current = value
-            host.redraw()
-          }}
+          onSelect={pick}
         />
       ) : (
         historyButtons(kit, shown)

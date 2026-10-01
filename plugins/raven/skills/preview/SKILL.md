@@ -6,8 +6,8 @@ description: Show things to the user in the Raven preview pane beside the transc
 # Raven preview pane
 
 Raven docks a pane beside the transcript. It already reacts on its own: the diff refreshes as files
-change, and markdown written under `docs/superpowers/`, `.superpowers/` or `~/.claude/plans/` opens
-as it is written. Reach for the Raven `show` tool only for what it cannot see coming.
+change, and markdown written under `docs/superpowers/` or `.superpowers/`, and plan mode's plan file,
+open as they are written. Reach for the Raven `show` tool only for what it cannot see coming.
 
 Prefer the Raven `show` tool when it is listed among your tools: call it with `op` (`show`, `note`,
 `diff` or `comments`), and `path` / `markdown` / `title` as the op needs. A relative `path` resolves
