@@ -46,7 +46,7 @@ export async function loadChanges(
 }
 
 /** Past this many new files the list shows +0 for them rather than spawning a git per file. */
-const UNTRACKED_COUNT_LIMIT = 50
+export const UNTRACKED_COUNT_LIMIT = 50
 
 /** Line counts of untracked files, which `git diff HEAD` does not see. */
 async function untrackedLinesOf(
@@ -89,6 +89,80 @@ export async function loadHunks(
   return result.isStdoutTruncated
     ? { hunks: hunks.slice(0, -1), isTruncated: true }
     : { hunks, isTruncated: false }
+}
+
+/**
+ * The path a `diff --git` section changes: the rename target, the new file, else the old one.
+ * git appends a tab to a ---/+++ name containing a space; it is not part of the path.
+ */
+function sectionPathOf(section: string): string | null {
+  const path =
+    /^rename to (.+)$/m.exec(section)?.[1] ??
+    /^\+\+\+ b\/(.+)$/m.exec(section)?.[1] ??
+    /^--- a\/(.+)$/m.exec(section)?.[1] ??
+    /^diff --git a\/.+ b\/(.+)$/m.exec(section)?.[1]
+  return path === undefined ? null : path.replace(/\t$/, '')
+}
+
+/** A multi-file `git diff` cut at its `diff --git` lines, keyed by the path each section changes. */
+export function diffSectionsOf(diff: string): Map<string, string> {
+  const sections = new Map<string, string>()
+  for (const part of diff.split(/^(?=diff --git )/m)) {
+    if (!part.startsWith('diff --git ')) continue
+    const path = sectionPathOf(part)
+    if (path !== null) sections.set(path, part)
+  }
+  return sections
+}
+
+export type LoadedHunks = {
+  /** Hunks per path; a path absent here was not read (an untracked file past the cap). */
+  byPath: ReadonlyMap<string, readonly Hunk[]>
+  /** The file the output cap cut mid-diff (its last hunk dropped), or null. */
+  truncatedPath: string | null
+}
+
+/**
+ * Every changed file's hunks against `base`: one `git diff -M` for all tracked files (no
+ * pathspec, so no argv limit), split per file; untracked files one `--no-index` read each, up to
+ * `UNTRACKED_COUNT_LIMIT`. Past the 4 MiB output cap the cut file keeps its whole hunks and the
+ * files after it are read one by one.
+ */
+export async function loadAllHunks(
+  run: Run,
+  files: readonly ChangedFile[],
+  base: Base,
+): Promise<LoadedHunks> {
+  const tracked = files.filter(file => file.status !== 'untracked')
+  const untracked = files
+    .filter(file => file.status === 'untracked')
+    .slice(0, UNTRACKED_COUNT_LIMIT)
+  const byPath = new Map<string, readonly Hunk[]>()
+  let truncatedPath: string | null = null
+
+  if (tracked.length > 0) {
+    const result = await run(['git', '-c', 'core.quotePath=false', 'diff', '-M', refOf(base)])
+    const sections = [...diffSectionsOf(result.stdout)]
+    sections.forEach(([path, section], index) => {
+      const hunks = hunksOf(section)
+      const isCut = result.isStdoutTruncated === true && index === sections.length - 1
+      if (isCut) truncatedPath = path
+      byPath.set(path, isCut ? hunks.slice(0, -1) : hunks)
+    })
+    for (const file of tracked) {
+      if (byPath.has(file.path)) continue
+      byPath.set(
+        file.path,
+        result.isStdoutTruncated ? (await loadHunks(run, file, base)).hunks : [],
+      )
+    }
+  }
+
+  const read = await Promise.all(
+    untracked.map(async file => [file.path, (await loadHunks(run, file, base)).hunks] as const),
+  )
+  for (const [path, hunks] of read) byPath.set(path, hunks)
+  return { byPath, truncatedPath }
 }
 
 /** Stages or reverts one hunk's patch via `git apply`, reading it from stdin. */
