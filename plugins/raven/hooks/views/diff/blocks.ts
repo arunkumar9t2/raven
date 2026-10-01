@@ -41,6 +41,7 @@ export type BodyItem =
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk }
   | { kind: 'hunk-actions'; anchor: Anchor; hunk: Hunk }
   | { kind: 'gap' }
+  | { kind: 'rule' }
   | { kind: 'status'; text: string }
 
 /** The block key of the blank row between hunk `index` and the one before it. */
@@ -216,7 +217,7 @@ export type Stream = {
 }
 
 /**
- * The files' `blocksOf` one after another, a blank row between files; each block's key is
+ * The files' `blocksOf` one after another, a dim rule between files; each block's key is
  * prefixed with its file's path so keys stay unique across the stream.
  */
 export function streamOf(
@@ -231,7 +232,7 @@ export function streamOf(
   let row = 0
   files.forEach((each, index) => {
     if (index > 0) {
-      blocks.push({ kind: 'fixed', key: `${each.path}#sep`, rows: 1, item: { kind: 'gap' } })
+      blocks.push({ kind: 'fixed', key: `${each.path}#sep`, rows: 1, item: { kind: 'rule' } })
       row += 1
     }
     titleRows.set(each.path, row)
