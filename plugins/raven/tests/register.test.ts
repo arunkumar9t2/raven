@@ -316,6 +316,31 @@ describe('diff view keyboard control', () => {
   })
 })
 
+describe('diff header', () => {
+  test('send is the primary action once a comment is pending', async ($, on) => {
+    const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'send' }))?.props.variant).toBe('primary')
+  })
+
+  test('an armed clear says to press again', async ($, on) => {
+    const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    await ui.press({ key: 'clear' })
+    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
+  })
+})
+
 describe('turn.complete resolves sent comments', () => {
   test('a mocked fork naming the id moves a sent comment to addressed', async ($, on) => {
     const sent = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'sent', createdAt: 0 }

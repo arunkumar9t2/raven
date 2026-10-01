@@ -163,13 +163,16 @@ export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement
         label={props.isStaged ? 'staged ✓' : 'stage'}
         onPress={props.isStaged ? () => {} : props.onStage}
       />
-      <Button
-        key={revertKeyOf(anchor)}
-        plain
-        dimColor
-        label={props.confirmingRevert ? 'revert? (again)' : 'revert'}
-        onPress={props.onRevert}
-      />
+      {props.confirmingRevert ? (
+        <Button
+          key={revertKeyOf(anchor)}
+          plain
+          label="revert? press again"
+          onPress={props.onRevert}
+        />
+      ) : (
+        <Button key={revertKeyOf(anchor)} plain dimColor label="revert" onPress={props.onRevert} />
+      )}
     </Box>
   )
 }
