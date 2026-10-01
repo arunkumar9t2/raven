@@ -94,21 +94,20 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
           onPress={props.onNext}
         />
         <Button key="refresh" plain dimColor label="↻ refresh" onPress={props.onRefresh} />
-        <Button
-          key="clear"
-          plain
-          dimColor
-          label={props.confirmingClear ? 'clear all? (again)' : 'clear'}
-          onPress={props.onClear}
-        />
-        {/* Two siblings, not one <>…</> Fragment: a Fragment child draws as its own box here and
-            forces this row onto two lines even when everything would otherwise fit on one. */}
+        {/* Siblings, not a Fragment: a Fragment child draws as its own box and wraps this row. */}
+        {pending > 0 ? <Text dimColor>·</Text> : null}
         {pending > 0 ? (
           <Button key="edit-send" plain dimColor label="edit & send" onPress={props.onEditSend} />
         ) : null}
         {pending > 0 ? (
-          <Button key="send" label={`send ${pending}`} onPress={props.onSend} />
+          <Button key="send" variant="primary" label={`send ${pending}`} onPress={props.onSend} />
         ) : null}
+        <Text dimColor>·</Text>
+        {props.confirmingClear ? (
+          <Button key="clear" plain label="clear all? press again" onPress={props.onClear} />
+        ) : (
+          <Button key="clear" plain dimColor label="clear" onPress={props.onClear} />
+        )}
       </Box>
     </Box>
   )
