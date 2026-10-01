@@ -450,4 +450,13 @@ describe('loadAllHunks', () => {
     expect(loaded.byPath.has(`n${UNTRACKED_COUNT_LIMIT}.txt`)).toBe(false)
     expect(loaded.byPath.size).toBe(UNTRACKED_COUNT_LIMIT)
   })
+
+  test('a failed all-files diff throws instead of reading as no changes', async () => {
+    const run = runOf({
+      [ALL]: { exitCode: 128, stderr: 'bad revision' },
+    })
+    await expect(loadAllHunks(run, [tracked], HEAD)).rejects.toThrow(
+      'git diff failed: bad revision',
+    )
+  })
 })
