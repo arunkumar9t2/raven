@@ -9,7 +9,7 @@ import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { baseName } from './icons'
-import { markdownChunksOf } from './markdown-chunks'
+import { type DocBlock, docBlocksOf, markdownChunksOf } from './markdown-chunks'
 import { selectButtons } from './select-buttons'
 
 /** A document the pane can show: a file read from disk, or markdown handed over inline. */
@@ -19,7 +19,7 @@ export type Doc =
 
 type Shown = { key: string; title: string; doc: Doc; text: string | null; error?: string }
 
-type Chunk = { text: string; links?: ReturnType<typeof docLinksOf> }
+type Chunk = { blocks: readonly DocBlock[]; links?: ReturnType<typeof docLinksOf> }
 
 export type DocView = View & {
   show: (doc: Doc) => Promise<void>
@@ -47,9 +47,10 @@ export function createDocView(host: Host): DocView {
     const cached = chunksByShown.get(shown)
     if (cached) return cached
     const doc = shown.doc
-    const chunks = markdownChunksOf(text).map(chunk =>
-      doc.kind === 'file' ? { text: chunk, links: docLinksOf(doc.path, chunk) } : { text: chunk },
-    )
+    const chunks = markdownChunksOf(text).map(chunk => ({
+      blocks: docBlocksOf(chunk),
+      links: doc.kind === 'file' ? docLinksOf(doc.path, chunk) : undefined,
+    }))
     chunksByShown.set(shown, chunks)
     return chunks
   }
@@ -106,20 +107,28 @@ export function createDocView(host: Host): DocView {
       const doc = shown.doc
       return (
         <Box flexDirection="column">
-          {chunksOf(shown, shown.text).map((chunk, index) =>
-            doc.kind === 'file' ? (
-              <Markdown
-                key={`md:${index}`}
-                text={chunk.text}
-                pressableLinks={chunk.links}
-                onLinkPress={link => {
-                  const target = resolveDocLink(doc.path, link.href)
-                  if (target) void show({ kind: 'file', path: target })
-                }}
-              />
-            ) : (
-              <Markdown key={`md:${index}`} text={chunk.text} />
-            ),
+          {chunksOf(shown, shown.text).flatMap((chunk, i) =>
+            chunk.blocks.map((block, j) => {
+              if (block.kind === 'code') {
+                // R2: an empty fence has nothing to draw; the engine may refuse the whole drawing
+                // if `Code` gets an empty source.
+                if (block.text === '') return null
+                return <Code key={`code:${i}:${j}`} source={block.text} language={block.language} />
+              }
+              return doc.kind === 'file' ? (
+                <Markdown
+                  key={`md:${i}:${j}`}
+                  text={block.text}
+                  pressableLinks={chunk.links}
+                  onLinkPress={link => {
+                    const target = resolveDocLink(doc.path, link.href)
+                    if (target) void show({ kind: 'file', path: target })
+                  }}
+                />
+              ) : (
+                <Markdown key={`md:${i}:${j}`} text={block.text} />
+              )
+            }),
           )}
         </Box>
       )
@@ -170,9 +179,10 @@ export function createDocView(host: Host): DocView {
     return (
       <Box flexDirection="column" gap={1}>
         {picker}
-        <Box flexDirection="column">
-          <Text bold>{shown.title}</Text>
-          {shown.doc.kind === 'file' ? <Text dimColor>{shown.doc.path}</Text> : null}
+        <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
+          <Text bold wrap="truncate-end">
+            {shown.doc.kind === 'file' ? shown.doc.path : shown.title}
+          </Text>
         </Box>
         {body(kit, shown)}
       </Box>
