@@ -12,6 +12,7 @@ import {
   sameAnchor,
 } from './anchor'
 import type { Block } from './layout'
+import { rowsOf } from './layout'
 
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
@@ -133,6 +134,8 @@ export type BlocksOptions = {
   readOnly?: boolean
   /** The surface's `Input`/`Select`; every surface has both when omitted. */
   capabilities?: Capabilities
+  /** The status for a file whose hunks are undefined; `Loading…` when omitted. */
+  unreadText?: string
 }
 
 /**
@@ -167,7 +170,11 @@ export function blocksOf(
 
   if (hunks === undefined || hunks.length === 0) {
     const text =
-      hunks === undefined ? 'Loading…' : file.isBinary ? 'Binary file' : 'No textual changes'
+      hunks === undefined
+        ? (options.unreadText ?? 'Loading…')
+        : file.isBinary
+          ? 'Binary file'
+          : 'No textual changes'
     blocks.push({ kind: 'fixed', key: STATUS_KEY, rows: 1, item: { kind: 'status', text } })
     return blocks
   }
@@ -199,4 +206,46 @@ export function blocksOf(
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated))
 
   return blocks
+}
+
+/** Every file's blocks in one scroll, with each file's title row for the list to jump to. */
+export type Stream = {
+  blocks: Block<BodyItem>[]
+  titleRows: ReadonlyMap<string, number>
+  contentRows: number
+}
+
+/**
+ * The files' `blocksOf` one after another, a blank row between files; each block's key is
+ * prefixed with its file's path so keys stay unique across the stream.
+ */
+export function streamOf(
+  files: readonly ChangedFile[],
+  hunksFor: (file: ChangedFile) => readonly Hunk[] | undefined,
+  comments: Comments,
+  composing: Anchor | null,
+  options: BlocksOptions = {},
+): Stream {
+  const blocks: Block<BodyItem>[] = []
+  const titleRows = new Map<string, number>()
+  let row = 0
+  files.forEach((each, index) => {
+    if (index > 0) {
+      blocks.push({ kind: 'fixed', key: `${each.path}#sep`, rows: 1, item: { kind: 'gap' } })
+      row += 1
+    }
+    titleRows.set(each.path, row)
+    for (const block of blocksOf(each, hunksFor(each), comments, composing, options)) {
+      blocks.push({ ...block, key: `${each.path}#${block.key}` })
+      row += rowsOf(block)
+    }
+  })
+  return { blocks, titleRows, contentRows: row }
+}
+
+/** The file whose section holds `row`: the last title at or above it; null for an empty stream. */
+export function fileAtRow(titleRows: ReadonlyMap<string, number>, row: number): string | null {
+  let found: string | null = null
+  for (const [path, start] of titleRows) if (start <= row) found = path
+  return found
 }
