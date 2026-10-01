@@ -231,6 +231,15 @@ describe('blocksOf', () => {
     expect(blocks.some(block => block.kind === 'fixed' && block.item.kind === 'note')).toBe(false)
   })
 
+  test('a renamed file keeps a comment made under its old path', () => {
+    const renamed = { ...file, path: 'new.ts', oldPath: 'old.ts', status: 'renamed' as const }
+    const underOldPath = commentOf({ id: 'o1', path: 'old.ts' })
+    const blocks = blocksOf(renamed, [hunkA], [underOldPath], null)
+    expect(blocks.find(b => b.key === noteKeyOf('o1'))).toMatchObject({
+      item: { kind: 'note', comment: underOldPath },
+    })
+  })
+
   test('a hunk-actions row follows every hunk, carrying its anchor and hunk', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     const anchorA = { path: file.path, hunk: hunkA.header }
