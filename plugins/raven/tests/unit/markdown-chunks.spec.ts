@@ -35,6 +35,14 @@ describe('markdownChunksOf', () => {
     const [chunk] = markdownChunksOf('x'.repeat(5000), 1000)
     expect(chunk?.length).toBeLessThanOrEqual(1000)
   })
+
+  test('a fence-like line with an info string inside a block does not end the block', () => {
+    const inner = `\`\`\`\nbefore\n\`\`\`ts\n${'x\n'.repeat(30)}\`\`\``
+    // With the block still open at the cut, the cut closes and reopens it: every chunk is code.
+    for (const chunk of markdownChunksOf(inner, 40)) {
+      expect(docBlocksOf(chunk).every(block => block.kind === 'code')).toBe(true)
+    }
+  })
 })
 
 describe('docBlocksOf', () => {

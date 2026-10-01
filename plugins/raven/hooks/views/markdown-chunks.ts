@@ -48,7 +48,11 @@ export function markdownChunksOf(markdown: string, max = ELEMENT_TEXT_LIMIT): st
     size += cost
 
     const marker = FENCE.exec(line)?.[1]
-    if (marker) fence = fence === null ? marker : line.trim().startsWith(fence) ? null : fence
+    if (fence === null) {
+      if (marker) fence = marker
+    } else if (closesFence(line, fence)) {
+      fence = null
+    }
 
     const isBoundary = fence === null && line.trim() === ''
     if (isBoundary && size > max / 2) flush()
