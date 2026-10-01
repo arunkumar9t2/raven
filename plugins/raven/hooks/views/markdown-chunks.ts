@@ -46,3 +46,53 @@ export function markdownChunksOf(markdown: string, max = ELEMENT_TEXT_LIMIT): st
   flush()
   return chunks
 }
+
+/** One drawable piece of a markdown chunk: prose for `Markdown`, or a fenced block for `Code`. */
+export type DocBlock =
+  | { kind: 'markdown'; text: string }
+  | { kind: 'code'; text: string; language?: string }
+
+/**
+ * Splits one chunk (as `markdownChunksOf` cut it, fences balanced or running to the end) into
+ * prose and fenced code, in order. Empty prose between blocks is dropped.
+ */
+export function docBlocksOf(chunk: string): DocBlock[] {
+  const blocks: DocBlock[] = []
+  let prose: string[] = []
+  let code: string[] = []
+  let fence: { marker: string; language?: string } | null = null
+
+  const flushProse = () => {
+    const text = prose.join('\n').trim()
+    if (text !== '') blocks.push({ kind: 'markdown', text })
+    prose = []
+  }
+
+  for (const line of chunk.split('\n')) {
+    const match = /^\s*(`{3,}|~{3,})\s*([\w+#.-]*)/.exec(line)
+    if (fence === null && match?.[1]) {
+      flushProse()
+      fence = match[2] ? { marker: match[1], language: match[2] } : { marker: match[1] }
+    } else if (fence !== null && line.trim().startsWith(fence.marker)) {
+      blocks.push({
+        kind: 'code',
+        text: code.join('\n'),
+        ...(fence.language ? { language: fence.language } : {}),
+      })
+      code = []
+      fence = null
+    } else if (fence !== null) {
+      code.push(line)
+    } else {
+      prose.push(line)
+    }
+  }
+  if (fence !== null)
+    blocks.push({
+      kind: 'code',
+      text: code.join('\n'),
+      ...(fence.language ? { language: fence.language } : {}),
+    })
+  flushProse()
+  return blocks
+}

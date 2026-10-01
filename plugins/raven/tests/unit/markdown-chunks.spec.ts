@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 
-import { markdownChunksOf } from '../../hooks/views/markdown-chunks'
+import { docBlocksOf, markdownChunksOf } from '../../hooks/views/markdown-chunks'
 
 describe('markdownChunksOf', () => {
   test('short markdown is one chunk', () => {
@@ -34,5 +34,37 @@ describe('markdownChunksOf', () => {
   test('a single overlong line is truncated to fit', () => {
     const [chunk] = markdownChunksOf('x'.repeat(5000), 1000)
     expect(chunk?.length).toBeLessThanOrEqual(1000)
+  })
+})
+
+describe('docBlocksOf', () => {
+  test('splits prose and a fenced block, keeping the language', () => {
+    expect(docBlocksOf('# Title\n\nSome text\n\n```ts\nconst x = 1\n```\n\nAfter')).toEqual([
+      { kind: 'markdown', text: '# Title\n\nSome text' },
+      { kind: 'code', text: 'const x = 1', language: 'ts' },
+      { kind: 'markdown', text: 'After' },
+    ])
+  })
+
+  test('a fence with no language and a tilde fence are code too', () => {
+    expect(docBlocksOf('```\na\n```\n~~~\nb\n~~~')).toEqual([
+      { kind: 'code', text: 'a' },
+      { kind: 'code', text: 'b' },
+    ])
+  })
+
+  test('a fence markdownChunksOf closed and reopened across a cut stays code in both chunks', () => {
+    const chunks = markdownChunksOf(`\`\`\`ts\n${'x\n'.repeat(30)}\`\`\``, 40)
+    expect(chunks.length).toBeGreaterThan(1)
+    for (const chunk of chunks) {
+      expect(docBlocksOf(chunk).every(block => block.kind === 'code')).toBe(true)
+    }
+  })
+
+  test('an unclosed fence runs to the end as code', () => {
+    expect(docBlocksOf('Intro\n\n```py\nprint(1)')).toEqual([
+      { kind: 'markdown', text: 'Intro' },
+      { kind: 'code', text: 'print(1)', language: 'py' },
+    ])
   })
 })

@@ -160,6 +160,24 @@ describe('options: watched doc paths, defaults', () => {
 
     expect(opened).not.toContain(DOC_PANE.id)
   })
+
+  test('a shown file has one title row: its path', async ($, on) => {
+    openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf('/work/docs/superpowers/plans/x.md'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    expect(await ui.find({ text: /^\/work\/docs\/superpowers\/plans\/x\.md$/ })).toBeDefined()
+    // The basename alone is no longer a row of its own.
+    expect(await ui.find({ text: /^x\.md$/ })).toBeUndefined()
+  })
 })
 
 const PLAN = '/home/u/.claude/plans/x.md'
