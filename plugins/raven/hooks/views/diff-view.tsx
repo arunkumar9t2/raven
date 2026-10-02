@@ -469,6 +469,8 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       case 'gap':
         return <Text> </Text>
       case 'rule':
+        // One short of the full width: a line exactly `columns` wide risks the terminal itself
+        // wrapping it onto a second row, which would throw off this row's own accounting.
         return <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
       case 'outdated-title':
         return outdatedTitle(kit)
@@ -583,6 +585,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           onClear: pressClear,
         })}
         {fileList(kit, { files, selected: model.selected, edited: model.edited, onSelect: select })}
+        {/* One short of the full width, same as the 'rule' case above, and for the same reason. */}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
         {placed.map(p => placedRowOf(kit, p, filesByPath))}
       </Box>

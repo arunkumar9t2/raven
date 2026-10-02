@@ -130,18 +130,18 @@ function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
 export type BlocksOptions = {
   /** A turn's diff is read-only: no comment boxes, no stage/revert, just the title and hunks. */
   readOnly?: boolean
-  /** The surface's capabilities (`canType`, `canPick`); every one is on when omitted. */
+  /** The surface's capabilities (`canType`, `canPick`, `canShowImage`); every one is on when omitted. */
   capabilities?: Capabilities
   /** The status for a file whose hunks are undefined; `Loading…` when omitted. */
   unreadText?: string
 }
 
 /**
- * The selected file's body as fixed-height and hunk blocks, top to bottom: the title, the
- * file-level notes and comment box, then each hunk with its own notes, comment box and
- * stage/revert row, one blank row between hunks, then an "Outdated" group for comments whose
- * hunk no longer exists. A file with no hunks (loading, binary, or no textual changes) ends with
- * one status row instead.
+ * The selected file's body as fixed-height and hunk blocks, top to bottom: the title row (carrying
+ * the file's own "＋ note on file"), the file-level notes and comment box, then each hunk with its
+ * own notes, comment box and one row of controls (note · stage · revert) at its end, one blank row
+ * between hunks, then an "Outdated" group for comments whose hunk no longer exists. A file with no
+ * hunks (loading, binary, or no textual changes) ends with one status row instead.
  */
 export function blocksOf(
   file: ChangedFile,

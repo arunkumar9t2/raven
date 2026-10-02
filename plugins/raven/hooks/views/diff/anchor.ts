@@ -6,9 +6,9 @@ export const sameAnchor = (a: Anchor | null, b: Anchor) => a?.path === b.path &&
 /** The one key derived from an anchor; every anchor-scoped key below builds on it. */
 export const anchorKeyOf = (anchor: Anchor) => `${anchor.path}|${anchor.hunk ?? ''}`
 
-/** The block key of an anchor's comment button or compose box. */
+/** The block key of an anchor's open compose box. */
 export const commentBoxKeyOf = (anchor: Anchor) => `comment-box:${anchorKeyOf(anchor)}`
-/** The element key of the "＋ comment" button itself. */
+/** The element key of the idle "＋ note on file"/"＋ note on hunk" button itself. */
 export const commentButtonKeyOf = (anchor: Anchor) => `comment:${anchorKeyOf(anchor)}`
 /** The element key of the cancel button under an open compose box. */
 export const cancelKeyOf = (anchor: Anchor) => `cancel:${anchorKeyOf(anchor)}`
@@ -26,7 +26,7 @@ export const resendKeyOf = (id: string) => `resend:${id}`
 /** The block key of an anchor's collapsed "N addressed" row. */
 export const addressedKeyOf = (anchor: Anchor) => `addressed:${anchorKeyOf(anchor)}`
 
-/** The block key of a hunk's stage/revert row. */
+/** The block key of a hunk's one row of controls: note, stage, and revert together. */
 export const hunkActionsKeyOf = (anchor: Anchor) => `hunk-actions:${anchorKeyOf(anchor)}`
 /** The element key of a hunk's stage button. */
 export const stageKeyOf = (anchor: Anchor) => `stage:${anchorKeyOf(anchor)}`

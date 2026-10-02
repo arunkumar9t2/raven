@@ -160,10 +160,12 @@ carries a matcher.
 
 ## UI elements and their caps
 
-Every terminal element Raven draws is checked against `Elements['terminal']`; `Image`, `Input` and
-`Select` are declared optional on Raven's own `Ui` type (`plugins/raven/hooks/core/view.ts`) because
-not every surface's table carries them — see [`settings-and-surfaces.md`](./settings-and-surfaces.md) for how a view degrades
-when one is missing. Caps and behavior worth knowing before drawing:
+Every terminal element Raven draws is checked against `Elements['terminal']`. `Image`, `Input` and
+`Select` are typed present on Raven's own `Ui` type the same as the other five — the engine
+completes every surface's element table, so presence can never be checked; `kit.capabilities` is
+the one source of truth for which of the three a surface actually carries. See
+[`settings-and-surfaces.md`](./settings-and-surfaces.md#surfaces) for the per-surface table and how
+a view reads it. Caps and behavior worth knowing before drawing:
 
 - `Markdown`, `Code` and `Text` each cap their text at 10 000 characters; an element over that cap is
   not truncated for you — the engine refuses the whole drawing that contains it. Raven clamps a

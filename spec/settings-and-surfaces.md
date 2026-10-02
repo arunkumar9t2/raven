@@ -45,13 +45,14 @@ session, not the current one, since `createRaven` and its triggers are built onc
 
 Raven draws with a fixed element set — `Box`, `Text`, `Button`, `Code`, `Markdown` — that every
 surface carries, plus three elements — `Image`, `Input`, `Select` — that only some surfaces do.
-`plugins/raven/hooks/core/view.ts` types the full set as `Ui`, with the three optional on the type
-so a view still compiles if it names one; but **presence can never tell a real control from a
-missing one**, because the engine completes every surface's element table to a constructor for
-every element name — one a surface doesn't actually carry just draws a fragment there, it is never
-literally `undefined`. So no view ever writes `ui.Input`, `ui.Select`, `ui.Image`, or any
-`X ? … : …`/`!X` branch keyed on one of those three; destructuring them in order to draw is fine,
-but which branch to take is decided below, never by checking the element itself.
+`plugins/raven/hooks/core/view.ts` types the full set as `Ui`, all eight elements typed present,
+never `| undefined` — because the engine completes every surface's element table to a constructor
+for every element name, one a surface doesn't actually carry just draws a fragment there, it is
+never literally `undefined`. So **presence can never tell a real control from a completed
+fragment**, and the type can't be made to say otherwise: no view ever writes `ui.Input`,
+`ui.Select`, `ui.Image`, or any `X ? … : …`/`!X` branch keyed on one of those three; destructuring
+them in order to draw is fine, but which branch to take is decided below, never by checking the
+element itself.
 
 The one source of truth is a fixed, per-surface table (`CAPABILITIES_BY_SURFACE` in
 `core/view.ts`, mirroring the engine's own `Elements` type) that `capabilitiesOf` reads by surface
