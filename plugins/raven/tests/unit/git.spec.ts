@@ -5,6 +5,7 @@ import type { Base, Run } from '../../hooks/git/load'
 import {
   applyPatch,
   diffSectionsOf,
+  existingPathsOf,
   loadAllHunks,
   loadChanges,
   loadHunks,
@@ -480,5 +481,58 @@ describe('loadAllHunks', () => {
     const loaded = await loadAllHunks(run, [good, bad], HEAD)
     expect(loaded.byPath.get('ok.txt')).toHaveLength(1)
     expect(loaded.byPath.has('bad.txt')).toBe(false)
+  })
+})
+
+describe('existingPathsOf', () => {
+  test('a gitignored file that still exists is reported as existing (no --exclude-standard)', async () => {
+    // The pathspec (`-- ignored.txt a.ts`) already limits the listing to the candidates, so
+    // `--exclude-standard` would only ever drop a candidate that is itself gitignored but still
+    // on disk — exactly the file this check must not call gone.
+    const run = runOf({
+      'git --literal-pathspecs -C /repo ls-files --cached --others -z -- ignored.txt a.ts': {
+        stdout: 'ignored.txt\0a.ts\0',
+      },
+    })
+    const existing = await existingPathsOf(run, '/repo', ['ignored.txt', 'a.ts'])
+    expect(existing).toEqual(new Set(['ignored.txt', 'a.ts']))
+  })
+
+  test('chunks many candidate paths across multiple calls and merges the results', async () => {
+    const many = Array.from({ length: 250 }, (_, i) => `f${i}.ts`)
+    const chunk1 = many.slice(0, 200)
+    const chunk2 = many.slice(200)
+    const run = runOf({
+      [`git --literal-pathspecs -C /repo ls-files --cached --others -z -- ${chunk1.join(' ')}`]: {
+        stdout: chunk1.map(path => `${path}\0`).join(''),
+      },
+      [`git --literal-pathspecs -C /repo ls-files --cached --others -z -- ${chunk2.join(' ')}`]: {
+        stdout: chunk2.map(path => `${path}\0`).join(''),
+      },
+    })
+    const existing = await existingPathsOf(run, '/repo', many)
+    expect(existing).toEqual(new Set(many))
+  })
+
+  test('a failed chunk fails the whole check open (null), not just that chunk', async () => {
+    const many = Array.from({ length: 250 }, (_, i) => `f${i}.ts`)
+    const chunk1 = many.slice(0, 200)
+    const chunk2 = many.slice(200)
+    const run = runOf({
+      [`git --literal-pathspecs -C /repo ls-files --cached --others -z -- ${chunk1.join(' ')}`]: {
+        stdout: chunk1.map(path => `${path}\0`).join(''),
+      },
+      [`git --literal-pathspecs -C /repo ls-files --cached --others -z -- ${chunk2.join(' ')}`]: {
+        exitCode: 1,
+      },
+    })
+    const existing = await existingPathsOf(run, '/repo', many)
+    expect(existing).toBeNull()
+  })
+
+  test('no paths needs no call', async () => {
+    const run = runOf({})
+    const existing = await existingPathsOf(run, '/repo', [])
+    expect(existing).toEqual(new Set())
   })
 })
