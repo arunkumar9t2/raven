@@ -176,6 +176,18 @@ describe('scrubNames', () => {
     })
     expect(names).toEqual(['AI_AGENT', 'CLAUDE_PID', 'CLAUDE_PLUGIN_DATA'])
   })
+
+  test('drops a matching name that is not a safe shell identifier, from either source', () => {
+    const names = scrubNames(
+      {
+        'CLAUDE_CODE_; rm -rf /': 'x',
+        'CLAUDECODE FOO': 'x',
+        CLAUDE_CODE_PLUGIN_DIRS: '/x',
+      },
+      ['CLAUDE_CODE_BAR; echo pwned'],
+    )
+    expect(names).toEqual(['CLAUDE_CODE_PLUGIN_DIRS'])
+  })
 })
 
 describe('buildPaneCommand', () => {

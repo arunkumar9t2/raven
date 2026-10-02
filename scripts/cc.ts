@@ -69,10 +69,18 @@ export function scrubEnv(env: Record<string, string | undefined>): Record<string
   return out
 }
 
+// What `env -u NAME` can take as a bare, unquoted shell word in buildPaneCommand's command
+// string. A name with a space or a shell metacharacter (e.g. `;`) would either break the `env`
+// invocation or inject another command, so any such name is dropped rather than passed through —
+// it can't be a real POSIX environment variable name anyway.
+const IDENTIFIER_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
+
 /**
  * The full set of names the pane command must `-u` to be clean: every scrubbed name in the
  * caller's own env, unioned with `extraNames` (the matching names already held in a tmux server's
- * global environment, when one is already running from an earlier, unscrubbed launch).
+ * global environment, when one is already running from an earlier, unscrubbed launch). Only
+ * identifier-safe names reach the result; anything else is dropped before it could reach the
+ * `env -u …` shell string.
  */
 export function scrubNames(
   callerEnv: Record<string, string | undefined>,
@@ -85,7 +93,7 @@ export function scrubNames(
   for (const key of extraNames) {
     if (isScrubbedName(key)) names.add(key)
   }
-  return [...names].sort()
+  return [...names].filter(name => IDENTIFIER_NAME.test(name)).sort()
 }
 
 /**
@@ -228,12 +236,12 @@ export function parse(argv: string[]): ParseResult {
 
 function run(
   argv: string[],
-  opts: { input?: string; env?: Record<string, string> } = {},
+  opts: { input?: string; env?: Record<string, string>; quiet?: boolean } = {},
   cwd?: string,
 ): { code: number; stdout: string } {
   const result = Bun.spawnSync(argv, {
     stdin: opts.input ? Buffer.from(opts.input) : undefined,
-    stderr: 'inherit',
+    stderr: opts.quiet ? 'ignore' : 'inherit',
     ...(opts.env ? { env: opts.env } : {}),
     ...(cwd ? { cwd } : {}),
   })
@@ -287,7 +295,9 @@ async function main(): Promise<number> {
         if (sandboxCode !== 0) return sandboxCode
         workdir = sandbox
       }
-      run(['tmux', 'kill-session', '-t', session]) // ignored: fine if there was no prior session
+      // ignored, and quiet: cc.sh's own pre-start cleanup was `|| true` with no "session not
+      // found" noise on a clean start
+      run(['tmux', 'kill-session', '-t', session], { quiet: true })
 
       const globalNames = readTmuxGlobalEnvNames()
       const names = scrubNames(process.env, globalNames)
@@ -375,7 +385,8 @@ async function main(): Promise<number> {
     }
 
     case 'stop':
-      run(['tmux', 'kill-session', '-t', session]) // ignored: fine if the session was already gone
+      // ignored, and quiet: cc.sh's own `stop` was `|| true` with no "session not found" noise
+      run(['tmux', 'kill-session', '-t', session], { quiet: true })
       return 0
   }
 }
