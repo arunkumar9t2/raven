@@ -29,8 +29,10 @@ inside Claude Code, paired with a Bun CLI and a skill so Claude can drive the pa
 ## Requirements
 
 - Claude Code 2.1.287+ (mods load by default there; no environment variable needed)
-- The fullscreen layout and a terminal wide enough to dock: 144 columns or more auto-opens the diff,
-  narrower still works but opens as an overlay instead
+- The fullscreen layout — on by default outside tmux; under tmux (which defaults to the main
+  screen) set `CLAUDE_CODE_NO_FLICKER=1` — and a terminal wide enough to dock: 110 columns once you
+  open the pane yourself (`/raven`), 144 columns for it to auto-open on the first edit. Narrower
+  than 110, the pane waits undrawn until you widen the terminal.
 - A Nerd Font for file icons
 - Bun on PATH for the `raven` CLI (or a compiled `plugins/raven/dist/raven` from `bun run build`)
 - The built-in diff panel closed: it takes the dock on the first edit and hides Raven. Close it once
