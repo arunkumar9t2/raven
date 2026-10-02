@@ -35,7 +35,17 @@ function slotOf(kit: Kit, value: RenderElement | string, dim: boolean): RenderEl
   )
 }
 
-/** A space-between row: left truncates first, nowrap; a keyed row can light on hover. */
+/**
+ * A space-between row: left truncates first, nowrap; a keyed row can light on hover.
+ *
+ * `flexGrow={1}`: a row-direction parent (as every caller's wrapping rail/indent Box is, see
+ * `diff-view.tsx`'s `placedRowOf`/`bodyRowOf`) sizes a flex child to its own content on the main
+ * axis unless the child claims a share of the growth itself — only a column parent's default
+ * `alignItems: stretch` would have filled the width for free, and nothing here is one. Without
+ * this, `justifyContent="space-between"` has no free width to distribute and the right slot sits
+ * right after the left instead of at the row's far edge (confirmed live: `+1 −1 [ ✎ note ]` with
+ * no gap at all).
+ */
 export function row(kit: Kit, props: RowProps): RenderElement {
   const { Box } = kit.ui
   const { left, right, key, hover } = props
@@ -44,6 +54,7 @@ export function row(kit: Kit, props: RowProps): RenderElement {
     <Box
       key={key}
       flexDirection="row"
+      flexGrow={1}
       justifyContent="space-between"
       gap={1}
       overflow="hidden"

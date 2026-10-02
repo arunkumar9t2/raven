@@ -143,13 +143,14 @@ export function note(
       <Text wrap="truncate-end">{comment.text}</Text>
     </Box>
   )
+  const scope = noteKeyOf(comment.id)
   const right = (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
       {meta(kit, [lineLabel, age])}
-      {chipRow(kit, chips, 'words')}
+      {chipRow(kit, chips, 'words', scope)}
     </Box>
   )
-  return row(kit, { left, right, key: noteKeyOf(comment.id) })
+  return row(kit, { left, right, key: scope })
 }
 
 /**
@@ -183,12 +184,21 @@ export type HunkToolbarProps = {
   onRevert: () => void
 }
 
-/** Room `chipsFit` leaves for the header label before shrinking the chips to icons. */
-const HEADER_MIN = 12
+/**
+ * Room `chipsFit` leaves for the header label before shrinking its chips to icons — shared by
+ * the hunk toolbar and (via `diff-view.tsx`'s title row) the file heading, so both shrink their
+ * chips the same way under the same pressure.
+ */
+export const HEADER_MIN = 12
 
 /**
  * A hunk's function context and its new-side line range — `ƒ handleRequest  L2–8`, or the bare
  * range when git gives no context (a trailing `{`/`(` off a long suffix is dropped). D10 point 3.
+ *
+ * The strip is unconditional, not gated on the suffix's length: git only ever puts one context
+ * line there, so a trailing brace/paren is always the same kind of artefact (an opening brace a
+ * function/block signature got cut on) regardless of how long that line happens to be — there is
+ * no length past which it stops being one.
  */
 function hunkLabelOf(hunk: Hunk): string {
   const parsed = parseHeader(hunk.header)
@@ -209,8 +219,9 @@ function hunkLabelOf(hunk: Hunk): string {
 export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
   const { anchor } = props
   const label = hunkLabelOf(props.hunk)
+  const key = hunkHeaderKeyOf(anchor)
 
-  if (props.isReadOnly) return row(kit, { left: label, key: hunkHeaderKeyOf(anchor) })
+  if (props.isReadOnly) return row(kit, { left: label, key })
 
   const chips: Chip[] = []
   if (props.canNote) chips.push(noteChip(anchor, props.onStartNote))
@@ -233,7 +244,7 @@ export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
   const room = Math.max(0, props.columns - HEADER_MIN)
   const mode = chipsFit(chips, room)
 
-  return row(kit, { left: label, right: chipRow(kit, chips, mode), key: hunkHeaderKeyOf(anchor) })
+  return row(kit, { left: label, right: chipRow(kit, chips, mode, key), key })
 }
 
 /** The collapsed row for an anchor's addressed comments: "✓ N addressed". */

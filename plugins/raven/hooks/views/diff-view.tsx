@@ -13,13 +13,14 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { chipRow } from '../ui/chips'
+import { chipRow, chipsFit } from '../ui/chips'
 import { row } from '../ui/row'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { type BodyItem, fileAtRow, fixedRowsOf, type Stream, streamOf } from './diff/blocks'
 import {
   addressedRow,
   commentBox,
+  HEADER_MIN,
   hunkToolbar,
   note,
   noteChip,
@@ -478,10 +479,17 @@ export function createDiffView(
           </Box>
         )
         const anchor: Anchor = { path: item.file.path }
-        const right = item.canNote
-          ? chipRow(kit, [noteChip(anchor, startComposing)], 'words')
-          : undefined
-        return row(kit, { left, right, key: `title-row:${item.file.path}` })
+        const titleKey = `title-row:${item.file.path}`
+        let right: RenderElement | undefined
+        if (item.canNote) {
+          const chip = noteChip(anchor, startComposing)
+          // The same HEADER_MIN the hunk toolbar reserves for its own label, so the heading's
+          // single note chip shrinks to its bare icon under the same pressure, the path (which
+          // already truncates on its own via `wrap="truncate-end"`) giving way first.
+          const mode = chipsFit([chip], Math.max(0, contentWidth - HEADER_MIN))
+          right = chipRow(kit, [chip], mode, titleKey)
+        }
+        return row(kit, { left, right, key: titleKey })
       }
       case 'status':
         return <Text dimColor>{item.text}</Text>

@@ -137,6 +137,30 @@ function chipHoverWorld(on: On) {
           { key: 'armed', label: 'sure?', icon: '↺', forceWords: true, onPress: () => {} },
         ],
         'icons',
+        'toolbar-row',
+      ),
+    })
+  })
+}
+
+/** Same as `chipHoverWorld`, but under a key the test can tell apart (`quiet-scoped`). */
+function scopedChipWorld(on: On) {
+  baseWorld(on)
+  on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
+    const kit: Kit = {
+      ui: (await $.ui.resolve(e)) as unknown as Ui,
+      columns: 40,
+      rows: 20,
+      capabilities: FULL_CAPABILITIES,
+    }
+    return row(kit, {
+      key: 'toolbar-row-2',
+      left: 'L1–2',
+      right: chipRow(
+        kit,
+        [{ key: 'quiet-scoped', label: 'note', icon: '✎', isDim: true, onPress: () => {} }],
+        'words',
+        'toolbar-row-2',
       ),
     })
   })
@@ -169,6 +193,30 @@ describe("chipRow's quiet chips", () => {
 
     expect((await ui.find({ key: 'armed' }))?.text).toContain('↺ sure?')
     expect((await ui.find({ key: 'quiet' }))?.text).not.toContain('note')
+  })
+
+  /**
+   * A `scope` passed to `chipRow` (D10 fix round 1, item 2) draws with no refusal — the kit's own
+   * side of the contract. `hover` itself is documented as never crossing back to the plugin
+   * (`chips.tsx`'s comment on `chipRow` quotes the exact line, three times over, for `Box`,
+   * `Button` and `Text` alike), the same category `FoundElement.props` already excludes a
+   * handler from, so there is no `.props.hover` this or any test can assert — confirmed
+   * empirically against a bare `Box.hover` with no scope at all, not just this chip's case.
+   */
+  test('a scoped chip draws with no refusal', async ($: Engine, on: On) => {
+    scopedChipWorld(on)
+    await $.session.start(SESSION)
+    const ui = await $.ui.mount({
+      plugin: 'raven',
+      surface: 'terminal',
+      component: 'InfoNotice',
+      props: { text: 'kit', command: null },
+    })
+
+    await expect(ui.drawn()).resolves.toBeDefined()
+    const quiet = await ui.find({ key: 'quiet-scoped' })
+    expect(quiet?.props.dimColor).toBe(true)
+    expect(quiet?.text).toContain('note')
   })
 })
 
