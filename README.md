@@ -34,28 +34,34 @@ inside Claude Code, paired with a Bun CLI and a skill so Claude can drive the pa
   open the pane yourself (`/raven`), 144 columns for it to auto-open on the first edit. Narrower
   than 110, the pane waits undrawn until you widen the terminal.
 - A Nerd Font for file icons
-- Bun on PATH for the `raven` CLI (or a compiled `plugins/raven/dist/raven` from `bun run build`)
+- Bun on PATH for the `raven` CLI (every install runs it through Bun; nothing ships a prebuilt
+  binary)
 - The built-in diff panel closed: it takes the dock on the first edit and hides Raven. Close it once
   with its ✕ and Claude Code remembers. (`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1` also stops it,
   at the cost of `/rewind`.)
 
 ## Install
 
-From the marketplace (the repo is private, so this needs GitHub access from your Claude Code):
+From the marketplace (the repo is private, so this needs GitHub access from your Claude Code; mods
+load by default on Claude Code 2.1.287, no environment variable needed):
 
 ```
 /plugin marketplace add arunkumar9t2/raven
 /plugin install raven@raven
 ```
 
-Then restart Claude Code (or run `/reload-plugins`) to pick it up.
+Then run `/reload-plugins` (or restart Claude Code).
 
 Or run it straight from a checkout, without installing it:
 
 ```bash
-bun install && bun run build
+bun install
 claude --plugin-dir ./plugins/raven
 ```
+
+`bun run build` additionally compiles the CLI to `plugins/raven/dist/raven`, which `bin/raven`
+prefers when present; without it, `bin/raven` runs the TypeScript source through Bun directly — the
+same thing a marketplace install does, since the compiled binary is gitignored and not published.
 
 Or load this checkout live in every local session (keeps hot-reload on save):
 
@@ -64,11 +70,12 @@ bun run setup:local            # --remove to undo, --dry-run to preview
 ```
 
 It adds this plugin folder to `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`'s `env` (and,
-for older Claude Code, `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), and allows `Bash(raven:*)`. With a
-chezmoi-managed settings file, follow it with `chezmoi add ~/.claude/settings.json`.
+kept for backward compatibility with Claude Code older than 2.1.287,
+`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), and allows `Bash(raven:*)`. With a chezmoi-managed settings
+file, follow it with `chezmoi add ~/.claude/settings.json`.
 
-Then `/raven` (diff), `/raven doc`, `/raven send`. To let Claude run the CLI without a permission
-prompt, allow `Bash(raven:*)` in your settings.
+Whichever way it's loaded: `/raven` (diff), `/raven doc`, `/raven send`. To let Claude run the CLI
+without a permission prompt, allow `Bash(raven:*)` in your settings.
 
 ## CLI
 
