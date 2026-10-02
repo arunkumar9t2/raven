@@ -1,7 +1,7 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
 import { commentsStoreKeyOf, DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
-import { hunkActionsKeyOf, stageKeyOf } from '../hooks/views/diff/anchor'
+import { hunkActionsKeyOf, revertKeyOf, stageKeyOf } from '../hooks/views/diff/anchor'
 import { SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
 import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
@@ -834,9 +834,25 @@ describe('stage and revert a hunk', () => {
 
     const ui = await mountDiff($)
     const row = await ui.find({ key: hunkActionsKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
-    expect(row?.text).toContain('＋ note on hunk')
+    expect(row?.text).toContain('＋ note')
     expect(row?.text).toContain('stage')
     expect(row?.text).toContain('revert')
+  })
+
+  test('the armed revert confirm fits the narrowest docked pane', async ($, on) => {
+    hunkWorld(on, () => {})
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const anchor = { path: 'a.ts', hunk: HUNK_HEADER }
+    await ui.press({ key: revertKeyOf(anchor) })
+
+    const row = await ui.find({ key: hunkActionsKeyOf(anchor) })
+    expect(row?.text).toContain('＋ note')
+    expect(row?.text).toContain('revert? press again')
+    expect(row?.text?.length).toBeLessThanOrEqual(38)
   })
 
   const SECOND_HUNK_HEADER = '@@ -10,2 +10,2 @@'

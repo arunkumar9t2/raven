@@ -17,7 +17,7 @@ file gets a row, and beyond it the list shows a window centered on the selected 
 trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
 every changed file's section at once — its heading, ending in `＋ note on file`, then its
 file-level notes, then each hunk in turn: its own notes, then (only while that hunk is being
-composed) its compose box, then its one row of controls, `＋ note on hunk · stage · revert` — a
+composed) its compose box, then its one row of controls, `＋ note · stage · revert` — a
 blank row between one hunk and the next, a dim rule between one file's section and the next
 (`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). A file's heading carries the same
 status mark, icon and `+adds`/`−dels` as its file-list row and the same bold path (`bodyRowOf`'s
@@ -139,13 +139,15 @@ No control carries a letter hotkey; every action is reachable by click and by Ta
 list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
 the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
 file's comment button, on its heading row, reads "＋ note on file"; a hunk's, on its controls
-row, "＋ note on hunk" — each names what it attaches to. Submitting or cancelling a comment
+row, reads just "＋ note" — the heading names what it attaches to in full, the hunk row stays
+short so the row (including the armed revert confirm) fits the narrowest docked pane. Submitting
+or cancelling a comment
 returns the keyboard to that anchor's comment button, so Esc/Enter flow stays inside the pane
 rather than jumping to the composer.
 
 ## Stage and revert one hunk
 
-Each hunk in a non-read-only source carries its one row of controls: `＋ note on hunk` (when the
+Each hunk in a non-read-only source carries its one row of controls: `＋ note` (when the
 surface has `canType` and the hunk isn't being composed), then `stage`, then `revert`. Before
 either runs, Raven re-reads that one file's current hunks and requires an exact header-and-text
 match against the hunk the button was drawn for. A mismatch — the working tree moved since the
