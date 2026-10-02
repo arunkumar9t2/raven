@@ -43,17 +43,35 @@ export function chipsFit(
  * (a `forceWords` chip keeps its words either way). A quiet chip (`isDim`) draws dim at rest —
  * `ButtonProps.dimColor`'s own documented behaviour already goes "full strength under the
  * pointer or the focus", so D10's "quiet at rest, loud under the pointer" falls out of
- * `dimColor` alone.
+ * `dimColor` alone, per chip.
  *
- * NEEDS_CONTEXT: an explicit `hover={{ dimColor: false }}` override (so the *whole* toolbar row
- * lights together, not just the one chip directly under the pointer) was tried and measured —
- * every chip in this mod that sets `hover` has it come back stripped from the resolved tree, on
- * both a bare `InfoNotice` fixture and a real mounted `Pane`, with the chip nested at one level
- * (a direct `Box` child) or several (through `row`'s slot wrapper). Either this test harness
- * doesn't model that part of the hover contract yet, or a nesting rule beyond "a keyed ancestor
- * exists" applies that the type doc doesn't spell out. Left off rather than shipped unverified.
+ * `scope`, when given, additionally wires every quiet chip in this row into one named hover
+ * group (`BoxHoverProps`/`TextHoverProps`'s `scope`, types/claude-code.d.ts ≈715–724 and
+ * ≈11814–11823): the pointer resting on *any* chip bearing the group's name is meant to light
+ * every chip that names it, not just the one directly under the pointer — D10's "the whole row
+ * lights together".
+ *
+ * On verifying this once round 1 shipped per-chip `dimColor` alone, `hover` (Box's own and
+ * Button's/Text's) on the resolved tree is unconditionally absent from `ui.find()`'s
+ * `FoundElement.props` in this harness — confirmed again here, with `scope` set, with the scope
+ * matching an ancestor `Box`'s key and matching the Button's own key, and on a bare `Box.hover`
+ * with no scope at all; none of them showed up. This is not a refusal of this usage in
+ * particular: the type doc says, for all three of `BoxHoverProps`, `ButtonProps.hover` and
+ * `TextHoverProps`, the identical "No hook runs and nothing crosses to the plugin" — the same
+ * category `FoundElement.props` already documents for a handler ("a Button's `onPress` is not
+ * here"). So `hover` not reaching `ui.find()` is the contract working as specified, not a sign
+ * it was dropped or refused; there is no prop-level test that can confirm it either way. A real
+ * mouse hover would, but this harness's input simulation (`ui.press`, `ui.select`, `ui.scroll`)
+ * has no hover-only pointer-move event to drive one. Shipped per the doc's contract; see
+ * `ui-kit.test.ts` for the smoke test this leaves (draws with no refusal) in place of a
+ * prop assertion.
  */
-export function chipRow(kit: Kit, chips: readonly Chip[], mode: 'words' | 'icons'): RenderElement {
+export function chipRow(
+  kit: Kit,
+  chips: readonly Chip[],
+  mode: 'words' | 'icons',
+  scope?: string,
+): RenderElement {
   const { Box, Button } = kit.ui
   return (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
@@ -63,6 +81,7 @@ export function chipRow(kit: Kit, chips: readonly Chip[], mode: 'words' | 'icons
           label={mode === 'words' || chip.forceWords ? wordsOf(chip.icon, chip.label) : chip.icon}
           variant={chip.variant}
           dimColor={chip.isDim}
+          hover={chip.isDim && scope !== undefined ? { scope, dimColor: false } : undefined}
           onPress={chip.onPress}
         />
       ))}
