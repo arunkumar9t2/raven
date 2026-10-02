@@ -77,10 +77,16 @@ export function createReview(host: Host, now: () => number): Review {
     comments: () => comments,
     load: async repository => {
       if (scope === repository) return
+      const stored = commentsFrom(await host.storeGet(commentsStoreKeyOf(repository)))
+      const storedIds = new Set(stored.map(comment => comment.id))
+      const kept = comments.filter(comment => !storedIds.has(comment.id))
+      comments = [...stored, ...kept]
       scope = repository
-      comments = commentsFrom(await host.storeGet(commentsStoreKeyOf(repository)))
-      notifyStatus()
-      host.redraw()
+      if (kept.length > 0) save()
+      else {
+        notifyStatus()
+        host.redraw()
+      }
     },
     add: input => {
       comments = addComment(comments, { ...input, createdAt: now() })

@@ -97,6 +97,13 @@ describe('createReview state transitions', () => {
     await reviewB.load('/repo')
     expect(reviewB.comments().map(c => c.text)).toEqual(['persisted'])
   })
+
+  test('a comment added before the store load lands survives the load', async () => {
+    const review = createReview(fakeHostBase({ storeGet: async () => [] }), () => 1)
+    review.add({ path: '/plans/p.md', section: 'Goals', text: 'early' })
+    await review.load('/repo')
+    expect(review.comments().map(comment => comment.text)).toEqual(['early'])
+  })
 })
 
 describe('createReview pending status', () => {
