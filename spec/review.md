@@ -21,9 +21,12 @@ heading (or `(top)` before the first one), `sectionIndex` its 0-based position i
 the time the comment was made — and never carries `hunk`. `sectionIndex` is what keeps two sections
 sharing a heading apart: the Doc view keys each section's own controls off it
 (`sectionAnchorOf` in `plugins/raven/hooks/views/doc-view.tsx`), while the comment itself stores the
-heading text and the index separately, for [resolution](#resolution) and for how Claude reads them
-below. How the Doc view draws a section's notes, its note chip, and what happens once a section
-disappears is [`views.md`](./views.md#doc-view)'s concern.
+heading text and the index separately, for how Claude reads them below (`§ heading`, `(2nd)` for a
+repeated one, ranked by `sectionIndex`). The fork that resolves a sent comment reads a doc comment
+the same bare way as a hunk-less, line-less one — `[id] path: text`, with no section or line in the
+listing (`lineOf` in `plugins/raven/hooks/review/resolve.ts`). How the Doc view draws a section's
+notes, its note chip, and what happens once a section disappears is
+[`views.md`](./views.md#doc-view)'s concern.
 
 Without `canType`, a surface draws no comment controls at all — no button, no compose box, on
 either the diff pane or a doc's sections — while an anchor's existing notes still show; without
@@ -33,10 +36,14 @@ owned by [`settings-and-surfaces.md`](./settings-and-surfaces.md).
 
 A diff comment whose hunk header no longer matches any of the file's current hunks — Claude edited
 past it — moves into an "Outdated" group, grouped by the stale hunk header, rendered after the
-file's live hunks under a dim title row. A doc comment whose section is gone — its heading and
-index both no longer on screen — moves into the Doc view's own trailing "Outdated" group the same
-way, at the end of the document rather than per-file. Either way the comment stays fully usable
-there: removable, resendable, and it still rides the next review send.
+file's live hunks under a dim title row. A doc comment goes outdated the same way once its
+recorded `sectionIndex` no longer carries its recorded heading — the section it named was renamed
+or removed, or a section added or removed above it shifted every index below, even one whose
+heading is still on screen elsewhere in the doc — and moves into the Doc view's own trailing
+"Outdated" group, at the end of the document rather than per-file. A legacy comment with no
+`sectionIndex` goes outdated only once its heading is gone from the document entirely. Either way
+the comment stays fully usable there: removable, resendable, and it still rides the next review
+send.
 
 A comment whose path matches no file in the diff's current stream at all — the selected source
 moved past it, or the file is gone — draws instead in a closing "Not in this diff" group at the end
@@ -71,7 +78,8 @@ accent bar's colour is the only status mark.
 Every delivery path draws from the same pending set and consumes it: taking the pending comments
 moves them to `sent` and formats them as review text in one step
 (`reviewTextOf` in `plugins/raven/hooks/review/comments.ts`) — there is no way to preview a review
-without also marking it sent. `reviewTextOf` groups by path, a diff file's comments by hunk (file-
+without also marking it sent. The text opens with a fixed preamble, "These are the user's review
+comments on files and docs. Address them.", then groups by path, a diff file's comments by hunk (file-
 level first) in first-seen order; a doc path's comments group instead under `§ heading`, each
 heading's groups ordered by `createdAt` of their first comment, but labelled by the section's
 actual position in the document — a heading repeated further down the doc reads `(2nd)`, `(3rd)`,

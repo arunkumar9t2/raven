@@ -19,8 +19,10 @@ While a clear is armed, row 2 drops the nav/refresh chips and the map/notes summ
 nothing competes with the confirm while the person decides. With nothing armed, the same row
 degrades instead of vanishing as the pane narrows: `[ ↑ ] [ ↓ ]` never give way, in words, icons,
 or by dropping, since they are the file list's only carriers of the person's own list chords, so
-`refresh` gives way first; the change map keeps a floor of 2 cells; and the notes summary compacts
-from `✎ N pending` to a bare `✎` (the send chip's own `➤ N` still carries the count). Beneath it sits the file list
+`refresh` gives way first; the change map's own cell count caps at 2 instead of scaling to the
+pane's width (two changed files each still draw their own glyph; more than two draw one glyph plus
+the overflow `…`); and the notes summary compacts from `✎ N pending` to a bare `✎` (the send chip's
+own `➤ N` still carries the count). Beneath it sits the file list
 (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
 trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
@@ -40,8 +42,9 @@ file-list row's alone. The whole stream is laid out into one scrollable window s
 arrow-key scrolling moves through it without redrawing the header or file list
 (`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling body total 2
 (header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a status line, a
-note, the collapsed "✓ N addressed" row, a hunk's toolbar row, the "Outdated" title, and the blank
-row between files are each one row; a note chip draws idle on the heading or a hunk's toolbar row
+note, the collapsed "✓ N addressed" row, a hunk's toolbar row, the "Outdated" title, the "Not in
+this diff" title, an orphan path's own row, and the blank row between files are each one row; a
+note chip draws idle on the heading or a hunk's toolbar row
 rather than as a row of its own, and opens a compose box in its place — two rows (Input plus
 cancel), three when a hunk's line picker draws above the Input — only while that anchor is being
 composed. A hunk itself takes as many rows as its body has lines, sliced into whatever range the
