@@ -77,7 +77,7 @@ raven comments                    print pending review comments
 
 ## Develop
 
-See `CLAUDE.md`. `bun run check` runs everything; `scripts/cc.sh` drives a real session in tmux.
+See `CLAUDE.md`. `bun run check` runs everything; `scripts/cc.ts` drives a real session in tmux.
 The project name is a working title: every derived name lives in `plugins/raven/hooks/names.ts`.
 
 ## License
