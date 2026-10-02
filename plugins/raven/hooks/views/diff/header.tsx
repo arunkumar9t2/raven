@@ -93,9 +93,15 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
   )
 }
 
-/** The reserved minimum the change map keeps even at the narrowest docked body (ruling R28) —
- * `changeMapOf`'s own overflow `…` rule still applies on top of this cap. */
-const MIN_MAP_CELLS = 3
+/** The reserved minimum the change map keeps even at the narrowest docked body (rulings R28, R30)
+ * — `changeMapOf`'s own overflow `…` rule still applies on top of this cap. `2`, not `3`: ruling
+ * R30 below keeps nav in the row at every width, which costs 12 more columns than the old
+ * nav-less floor (two `[ x ]` chips, 5 columns each, plus the two extra gaps between a now-5-chip
+ * instead of 3-chip row), and shaving one more cell off the map is part of what closes the
+ * arithmetic back to 38 columns (measured against the R28/R30 test fixtures — 5 files, 2 pending,
+ * `bodyColumns: 38`; a third fixture at 10 pending needed the compact notes summary's own digit
+ * dropped too — see `compactNotesText` below). */
+const MIN_MAP_CELLS = 2
 
 /**
  * `chips`' own icons-mode floor: every chip bare-iconed (`short` when given, else `icon`),
@@ -114,10 +120,10 @@ function iconsWidthOf(chips: readonly Chip[]): number {
 /**
  * Row 2: the change map — one glyph per file, the shape of the whole change at a glance, D10
  * point 4 — and the notes summary on the left; every control chip — nav, refresh, edit & send,
- * the one primary `send N`, and clear — on the right. `chipsLayout` shrinks them one at a time,
- * lowest priority first (nav, then refresh, then clear, then edit & send, then `send N` last),
- * so the row's most important action keeps its words longest; the armed clear keeps its full
- * words regardless (`forceWords`), same as a hunk's armed revert.
+ * the one primary `send N`, and clear — on the right. `chipsLayout` shrinks the chips that can
+ * safely shrink one at a time, lowest priority first (refresh, then clear, then edit & send,
+ * then `send N` last), so the row's most important action keeps its words longest; the armed
+ * clear keeps its full words regardless (`forceWords`), same as a hunk's armed revert.
  *
  * Ruling R27: while a clear is armed, the nav and refresh chips drop from the row entirely
  * (not just shrink to icons) and the map/notes summary on the left drop too — the only thing
@@ -130,36 +136,35 @@ function iconsWidthOf(chips: readonly Chip[]): number {
  * `chipsLayout` ever gets a say (the chips' own `Box` is `flexShrink: 0`; the left side's is
  * `flexShrink: 1`, so it is the one that gives, all the way to 0 if it has to — caught live at a
  * docked pane's real width, see the task report). When the full chip set's own icons floor would
- * do that, nav and refresh — each already a keybinding, not just a chip — give way entirely, the
- * same two the row drops first during an armed confirm (R27), freeing the room the map's
- * guaranteed `MIN_MAP_CELLS` and the summary's compact `✎N` need. The survivors are still sized
- * against the *full* reserve (as if the map and summary were still at their widest): once nav
- * and refresh are gone, the survivors' own icons floor already clears that full reserve, so
- * sizing against the smaller, actual left content here would only hand them back words they were
- * just dropped to icons to make room for.
+ * do that, refresh — already a keybinding, not just a chip — gives way entirely, the same chip
+ * the row drops first during an armed confirm (R27), freeing room for the map's guaranteed
+ * `MIN_MAP_CELLS` and the summary's compact `✎N`.
  *
- * Ruling R30: "give way entirely" above means draw nothing, not unmount — nav's two Buttons are
- * the file list's only carriers of `action="app:diffFileListUp/Down"`, and a Button answers its
- * chord only while mounted, so actually dropping them from the tree would silence the person's
- * ctrl+↑/↓ the moment the row got this narrow (confirmed live: with the Buttons removed, ctrl+↓
- * stopped moving the list's `❯`; with them kept mounted but `hidden`, the chord still moved it —
- * see the task report). `chipsOf` keeps `previous`/`next` in the array at every width and marks
- * them `hidden` instead of omitting them when `includeNavRefresh` is false; `chipRow` draws a
- * `hidden` chip's `Button` inside a zero-drawing `display: "none"` `Box`, so `chipsLayout`'s own
- * width arithmetic (`widthOf`) treats it as `0` — nav costs nothing towards the row's room either
- * way. Refresh has no `action` to protect, so it keeps simply dropping from the array.
+ * Ruling R30: nav (`previous`/`next`) never gives way, in words or icons or by dropping — unlike
+ * every other chip here, nav's two Buttons are the file list's *only* carriers of
+ * `action="app:diffFileListUp/Down"`. An earlier version of this fix kept them mounted but drawn
+ * at zero width (`display: "none"`), reasoning that the chord only needs the Button mounted, not
+ * visible — true as far as it went (live tmux: the chord still moved the list's `❯` through a
+ * `display: "none"` wrapper), but it missed the Tab ring, which walks onto a mounted Button
+ * whether or not it draws anything. Confirmed live with that version: ctrl+x tab, then one more
+ * Tab, opened the Select's dropdown with "HEAD" marked reverse-video; Tab 3 closed it with no
+ * mark anywhere on screen; Tab 4 drew no mark either; Tab 5 finally landed, marked, on `clear`.
+ * Tabs 3 and 4 were the two invisible `previous`/`next` stops — the Tab ring silently passed
+ * through both, which is worse than dropping them: at least an unmounted Button can't strand the
+ * keyboard on nothing the person can see. The engine's `ButtonProps` has no `focusable`/
+ * `tabIndex` escape from this, so nav instead stays visible at every width (this function's own
+ * fallback, named in the original ruling) — confirmed live with the real fix: the same ctrl+x tab
+ * and two Tabs reach the Select exactly as before, but Tab 3 now lands, marked, directly on
+ * `[ ↑ ]`. `MIN_MAP_CELLS` (above) absorbs the extra columns nav's two Buttons always cost now
+ * that they can no longer give way.
  */
 function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text } = kit.ui
   const { pending, confirmingClear } = props
 
-  const chipsOf = (includeNavRefresh: boolean): Chip[] => {
+  const chipsOf = (includeRefresh: boolean): Chip[] => {
     const chips: Chip[] = []
     if (!confirmingClear) {
-      // Previous/next stay mounted even when the row has no room to draw them (`hidden`): their
-      // `action` is the person's only ctrl+↑/↓ chord to the file list (ruling R30), and a Button
-      // only answers its chord while mounted — unlike refresh, which carries no `action` and so
-      // can simply drop from the array when space is tight.
       chips.push(
         {
           key: 'previous',
@@ -168,7 +173,6 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           label: '',
           isDim: true,
           priority: 0,
-          hidden: !includeNavRefresh,
           onPress: props.onPrevious,
         },
         {
@@ -178,11 +182,10 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           label: '',
           isDim: true,
           priority: 0,
-          hidden: !includeNavRefresh,
           onPress: props.onNext,
         },
       )
-      if (includeNavRefresh) {
+      if (includeRefresh) {
         chips.push({
           key: 'refresh',
           icon: '↻',
@@ -229,7 +232,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const maxCells = Math.floor(kit.columns / 3)
   const fullNotesText =
     !confirmingClear && pending > 0 ? `✎ ${countOf(pending, 'note')} pending` : ''
-  const compactNotesText = !confirmingClear && pending > 0 ? `✎${pending}` : ''
+  const compactNotesText = !confirmingClear && pending > 0 ? '✎' : ''
   const fullChips = chipsOf(true)
   const fullMapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
   const fullLeftWidth = fullMapCells.length + (fullNotesText === '' ? 0 : 1 + fullNotesText.length)
