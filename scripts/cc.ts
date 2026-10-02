@@ -3,9 +3,11 @@
 // --settings or CLAUDE_CODE_PLUGIN_DIRS passed explicitly; see scripts/setup-local.ts for the
 // persistent version), so the mod can be exercised and its pane captured without a human at the
 // keyboard. File checkpointing is off so the built-in diff panel does not auto-open over Raven's
-// panes. The caller's own CLAUDE_CODE_*/CLAUDECODE* environment is scrubbed before the session
-// starts, so running this from inside a Claude Code session never leaks that session's plugin
-// dirs or markers into the one it launches.
+// panes. The caller's own CLAUDE_CODE_*/CLAUDECODE*/CLAUDE_PLUGIN_* environment, plus a handful of
+// unprefixed parent-session markers (CLAUDE_PID, CLAUDE_EFFORT, CLAUDE_ENV_FILE,
+// CLAUDE_PROJECT_DIR, AI_AGENT), is scrubbed before the session starts, so running this from
+// inside a Claude Code session never leaks that session's plugin dirs or markers into the one it
+// launches. CLAUDE_CONFIG_DIR is a user choice, not a session marker, and passes through.
 //
 //   scripts/cc.ts start [workdir]          launch (default workdir: a throwaway git repo)
 //   scripts/cc.ts type <text>              type text into the composer and press Enter
@@ -36,13 +38,28 @@ export const HARNESS_ENV = {
   CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING: '1',
 } as const
 
-const SCRUB_PREFIXES = ['CLAUDE_CODE_', 'CLAUDECODE']
+// Prefixes cover a whole family of names (CLAUDE_CODE_PLUGIN_DIRS, CLAUDECODE,
+// CLAUDE_PLUGIN_DATA/_ROOT, …); exact names catch markers that don't share either prefix but are
+// still a parent Claude session's own, not the caller's business to pass down (R34).
+// CLAUDE_CONFIG_DIR is a user choice, not a session marker, and is deliberately left out — it
+// passes through untouched.
+const SCRUB_PREFIXES = ['CLAUDE_CODE_', 'CLAUDECODE', 'CLAUDE_PLUGIN_']
+const SCRUB_EXACT_NAMES = new Set([
+  'CLAUDE_PID',
+  'CLAUDE_EFFORT',
+  'CLAUDE_ENV_FILE',
+  'CLAUDE_PROJECT_DIR',
+  'AI_AGENT',
+])
 
 function isScrubbedName(name: string): boolean {
-  return SCRUB_PREFIXES.some(prefix => name.startsWith(prefix))
+  return SCRUB_PREFIXES.some(prefix => name.startsWith(prefix)) || SCRUB_EXACT_NAMES.has(name)
 }
 
-/** Drops every CLAUDE_CODE_ and CLAUDECODE name (and any undefined value); keeps the rest as-is. */
+/**
+ * Drops every CLAUDE_CODE_/CLAUDECODE/CLAUDE_PLUGIN_ name, every exact marker in
+ * SCRUB_EXACT_NAMES, and any undefined value; keeps the rest as-is (including CLAUDE_CONFIG_DIR).
+ */
 export function scrubEnv(env: Record<string, string | undefined>): Record<string, string> {
   const out: Record<string, string> = {}
   for (const [key, value] of Object.entries(env)) {

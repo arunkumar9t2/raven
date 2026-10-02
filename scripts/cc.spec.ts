@@ -106,19 +106,49 @@ describe('parse', () => {
 })
 
 describe('scrubEnv', () => {
-  test('drops every CLAUDE_CODE_* and CLAUDECODE* name, keeps everything else', () => {
+  test('drops every CLAUDE_CODE_*, CLAUDECODE*, and CLAUDE_PLUGIN_* name, keeps everything else', () => {
     const scrubbed = scrubEnv({
       CLAUDE_CODE_PLUGIN_DIRS: '/somewhere/else',
       CLAUDE_CODE_ENTRYPOINT: 'cli',
       CLAUDECODE: '1',
+      CLAUDE_PLUGIN_DATA: '/data',
+      CLAUDE_PLUGIN_ROOT: '/root',
       PATH: '/usr/bin',
       HOME: '/home/x',
       ANTHROPIC_API_KEY: 'secret',
+      CLAUDE_CONFIG_DIR: '/custom/config',
     })
     expect(scrubbed).toEqual({
       PATH: '/usr/bin',
       HOME: '/home/x',
       ANTHROPIC_API_KEY: 'secret',
+      CLAUDE_CONFIG_DIR: '/custom/config',
+    })
+  })
+
+  test("drops a parent session's unprefixed markers by exact name (R34)", () => {
+    const scrubbed = scrubEnv({
+      CLAUDE_PID: '123',
+      CLAUDE_EFFORT: 'medium',
+      CLAUDE_ENV_FILE: '/tmp/env',
+      CLAUDE_PROJECT_DIR: '/home/x/project',
+      AI_AGENT: 'claude-code_2-1-283_agent',
+      PATH: '/usr/bin',
+    })
+    expect(scrubbed).toEqual({ PATH: '/usr/bin' })
+  })
+
+  test('keeps CLAUDE_CONFIG_DIR, ANTHROPIC_API_KEY, and PATH', () => {
+    const scrubbed = scrubEnv({
+      CLAUDE_CONFIG_DIR: '/custom/config',
+      ANTHROPIC_API_KEY: 'secret',
+      PATH: '/usr/bin',
+      CLAUDE_CODE_PLUGIN_DIRS: '/leak',
+    })
+    expect(scrubbed).toEqual({
+      CLAUDE_CONFIG_DIR: '/custom/config',
+      ANTHROPIC_API_KEY: 'secret',
+      PATH: '/usr/bin',
     })
   })
 
@@ -134,6 +164,17 @@ describe('scrubNames', () => {
       'OTHER',
     ])
     expect(names).toEqual(['CLAUDECODE', 'CLAUDE_CODE_ENTRYPOINT', 'CLAUDE_CODE_PLUGIN_DIRS'])
+  })
+
+  test('also collects CLAUDE_PLUGIN_* names and the exact unprefixed markers (R34)', () => {
+    const names = scrubNames({
+      CLAUDE_PLUGIN_DATA: '/data',
+      CLAUDE_PID: '123',
+      AI_AGENT: 'claude-code_2-1-283_agent',
+      CLAUDE_CONFIG_DIR: '/custom/config',
+      PATH: '/usr/bin',
+    })
+    expect(names).toEqual(['AI_AGENT', 'CLAUDE_PID', 'CLAUDE_PLUGIN_DATA'])
   })
 })
 
