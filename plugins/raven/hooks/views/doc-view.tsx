@@ -87,12 +87,10 @@ export function createDocView(host: Host): DocView {
   }
 
   function body(kit: Kit, shown: Shown): RenderElement {
-    const { Box, Text, Markdown, Code } = kit.ui
+    const { Box, Text, Markdown, Code, Image } = kit.ui
     if (shown.doc.kind === 'file' && isImage(shown.doc.path)) {
       const path = shown.doc.path
       if (!kit.capabilities.canShowImage || !isPng(path)) return <Text dimColor>{path}</Text>
-      // Safe here only: `canShowImage` is true on `terminal` alone, which always carries `Image`.
-      const { Image } = kit.ui as Required<Kit['ui']>
       const columns = Math.max(1, Math.min(kit.columns, 60))
       const rows = Math.max(1, Math.round(columns / 2))
       return (
@@ -159,14 +157,12 @@ export function createDocView(host: Host): DocView {
   }
 
   function render(kit: Kit): RenderElement {
-    const { Box, Text } = kit.ui
+    const { Box, Text, Select } = kit.ui
     const shown = history.find(each => each.key === current)
 
     if (!shown)
       return <Text dimColor>Nothing shown yet. Plans and docs Claude writes open here.</Text>
 
-    // Safe only inside the `canPick` branch below.
-    const { Select } = kit.ui as Required<Kit['ui']>
     const picker =
       history.length <= 1 ? null : kit.capabilities.canPick ? (
         <Select

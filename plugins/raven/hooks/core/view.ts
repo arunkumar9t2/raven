@@ -1,16 +1,18 @@
 import type { Elements, RenderElement, RenderSurface } from 'claude-code'
 
 /**
- * The elements a view draws with; Raven draws on the terminal surface, mobile among them. `Image`,
- * `Input` and `Select` are optional on the type so a view still compiles if it checks for
- * `undefined`, but the engine completes every surface's table to a constructor for every element
- * name, even one that surface doesn't carry (it just draws a fragment there) — so presence
- * (`ui.Input`, `ui.Select`, `ui.Image`) never tells a real control from a completed fragment. A
- * view never checks it; it reads `kit.capabilities` instead, which `capabilitiesOf` derives from
- * the surface name, the one source of truth for what each surface actually carries.
+ * The elements a view draws with; Raven draws on the terminal surface, mobile among them. The
+ * engine always completes every surface's table to a constructor for every element name, even one
+ * that surface doesn't carry (it just draws a fragment there) — so `Image`, `Input` and `Select`
+ * are typed as present here too, never `| undefined`: presence can never tell a real control from
+ * a completed fragment. A view never checks for one; it reads `kit.capabilities` instead, which
+ * `capabilitiesOf` derives from the surface name, the one source of truth for what each surface
+ * actually carries.
  */
-export type Ui = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button' | 'Code' | 'Markdown'> &
-  Partial<Pick<Elements['terminal'], 'Image' | 'Input' | 'Select'>>
+export type Ui = Pick<
+  Elements['terminal'],
+  'Box' | 'Text' | 'Button' | 'Code' | 'Markdown' | 'Image' | 'Input' | 'Select'
+>
 
 /** What a surface's element table lets a view draw: typed text, a picker, an inline image. */
 export type Capabilities = { canType: boolean; canPick: boolean; canShowImage: boolean }

@@ -188,8 +188,9 @@ when one is missing. Caps and behavior worth knowing before drawing:
   pixels (`{file, format: 'rgba'|'rgb', width, height}`); a name pointing at something the terminal
   will not read (not a regular file, under `/proc`/`/sys`/`/dev`, gone, across ssh) draws a blank box
   and logs why to the debug log rather than failing the render. Raven's Doc view draws a shown
-  image's path as dim text on any surface whose table has no `Image` at all, rather than attempt one
-  of these sources blind.
+  image's path as dim text on any surface without `canShowImage` — every surface but `terminal`,
+  see [`settings-and-surfaces.md`](./settings-and-surfaces.md) — rather than attempt one of these
+  sources blind.
 - A `Fragment` inside a row `Box` lays its children out as a box of their own, pushing them onto a new
   line even when they would fit; conditionally drawn siblings in a row are written as separate
   expressions rather than wrapped in `<>…</>`.

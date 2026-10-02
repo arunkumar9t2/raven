@@ -47,10 +47,7 @@ function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
  * list (`app:diffFileListUp`/`Down`).
  */
 export function header(kit: Kit, props: HeaderProps): RenderElement {
-  const { Box, Text, Button } = kit.ui
-  // Safe only inside the `canPick` branch below: `Select` carries `| undefined` in the type,
-  // but the engine's terminal/desktop/vscode tables all provide a real one.
-  const { Select } = kit.ui as Required<Kit['ui']>
+  const { Box, Text, Button, Select } = kit.ui
   const { files, pending } = props
   const adds = files.reduce((sum, file) => sum + file.adds, 0)
   const dels = files.reduce((sum, file) => sum + file.dels, 0)
