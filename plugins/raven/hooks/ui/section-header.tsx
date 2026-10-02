@@ -3,7 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import type { Kit } from '../core/view'
+import type { UiKit } from '../core/view'
 import { badge } from './badge'
 import { dot } from './dot'
 
@@ -22,7 +22,7 @@ export type SectionHeaderProps = {
 }
 
 /** A coloured title, an optional count, dim right-aligned metadata — one row, nowrap. */
-export function sectionHeader(kit: Kit, props: SectionHeaderProps): RenderElement {
+export function sectionHeader(kit: UiKit, props: SectionHeaderProps): RenderElement {
   const { Box, Text } = kit.ui
   const { dot: dotColor, title, color, count, right } = props
 

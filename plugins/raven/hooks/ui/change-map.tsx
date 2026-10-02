@@ -4,7 +4,7 @@
 import type { RenderElement } from 'claude-code'
 
 import { COLORS } from '../core/colors'
-import type { Kit } from '../core/view'
+import type { UiKit } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import { statusMarkOf } from '../views/icons'
 
@@ -45,7 +45,7 @@ export function changeMapOf(
 
 /** The change map as one `Text` of coloured glyph runs, no gaps between cells. */
 export function changeMap(
-  kit: Kit,
+  kit: UiKit,
   files: readonly ChangedFile[],
   editing: ReadonlySet<string>,
   maxCells: number,

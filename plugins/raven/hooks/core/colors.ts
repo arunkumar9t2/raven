@@ -40,3 +40,10 @@ export const TASK_STATE_COLORS: Record<TaskStatus, string> = {
   in_progress: COLORS.accent,
   completed: COLORS.done,
 } as const
+
+/** A task's `TaskStatus` to its state-dot glyph: open, half-full while working, filled when done. */
+export const TASK_STATE_GLYPHS: Record<TaskStatus, string> = {
+  pending: '○',
+  in_progress: '◐',
+  completed: '●',
+} as const

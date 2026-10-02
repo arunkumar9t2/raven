@@ -3,7 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import type { Kit } from '../core/view'
+import type { UiKit } from '../core/view'
 
 export type RowProps = {
   left: RenderElement | string
@@ -19,7 +19,7 @@ export type RowProps = {
  * `Box`) draws bare in a shrinking, clipping `Box` instead — the engine refuses a `Box` nested
  * inside an inline `Text`.
  */
-function slotOf(kit: Kit, value: RenderElement | string, dim: boolean): RenderElement {
+function slotOf(kit: UiKit, value: RenderElement | string, dim: boolean): RenderElement {
   const { Box, Text } = kit.ui
   if (typeof value === 'string') {
     return (
@@ -46,7 +46,7 @@ function slotOf(kit: Kit, value: RenderElement | string, dim: boolean): RenderEl
  * right after the left instead of at the row's far edge (confirmed live: `+1 −1 [ ✎ note ]` with
  * no gap at all).
  */
-export function row(kit: Kit, props: RowProps): RenderElement {
+export function row(kit: UiKit, props: RowProps): RenderElement {
   const { Box } = kit.ui
   const { left, right, key, hover } = props
 

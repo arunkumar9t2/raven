@@ -6,6 +6,10 @@ import type { RenderElement } from 'claude-code'
 import { COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
+import { diffStat } from '../../ui/diff-stat'
+import { dot } from '../../ui/dot'
+import { row } from '../../ui/row'
+import { statBar } from '../../ui/stat-bar'
 import { iconOf, statusMarkOf } from '../icons'
 import { fileWindowOf } from './layout'
 
@@ -42,17 +46,26 @@ export function fileList(kit: Kit, props: FileListProps): RenderElement {
   )
 }
 
+/**
+ * A row: `❯ ● M <icon> path   +a −d ■■□  ◉` — a status dot and letter mark on the left beside
+ * the icon and path, the add/del count and `statBar` right-aligned via `row`, with a trailing
+ * `◉` in the accent when this file was edited this turn. Spelled out as its own glyph rather
+ * than reusing the status dot's `●` — a status dot draws on every row regardless of status, so
+ * the two must read as different marks for a glance to tell "what kind of change" from "is this
+ * happening right now" apart.
+ */
 function fileRow(kit: Kit, file: ChangedFile, props: FileListProps): RenderElement {
   const { Box, Text, Button } = kit.ui
   const icon = iconOf(file.path)
   const mark = statusMarkOf(file.status)
   const isSelected = file.path === props.selected
+  const isEdited = props.edited.has(file.path)
 
-  return (
-    <Box key={`row:${file.path}`} flexDirection="row" gap={1}>
-      <Text color={mark.color}>
-        {isSelected ? '❯' : ' '} {mark.glyph}
-      </Text>
+  const left = (
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      <Text color={mark.color}>{isSelected ? '❯' : ' '}</Text>
+      {dot(kit, mark.color)}
+      <Text color={mark.color}>{mark.glyph}</Text>
       <Text color={icon.color}>{icon.glyph}</Text>
       <Button
         key={`file:${file.path}`}
@@ -60,9 +73,15 @@ function fileRow(kit: Kit, file: ChangedFile, props: FileListProps): RenderEleme
         label={file.oldPath ? `${file.oldPath} → ${file.path}` : file.path}
         onPress={() => props.onSelect(file.path)}
       />
-      <Text color={COLORS.added}>+{file.adds}</Text>
-      <Text color={COLORS.removed}>−{file.dels}</Text>
-      {props.edited.has(file.path) ? <Text color={COLORS.modified}>●</Text> : null}
     </Box>
   )
+  const right = (
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      {diffStat(kit, file.adds, file.dels)}
+      {statBar(kit, file.adds, file.dels)}
+      {isEdited ? <Text color={COLORS.accent}>◉</Text> : null}
+    </Box>
+  )
+
+  return row(kit, { left, right, key: `row:${file.path}` })
 }
