@@ -156,7 +156,7 @@ export function noteButton(
 
 export type HunkActionsProps = {
   anchor: Anchor
-  /** Whether the "＋ note on hunk" control draws: the surface can type and this hunk isn't being composed. */
+  /** Whether the "＋ note" control draws: the surface can type and this hunk isn't being composed. */
   canNote: boolean
   isStaged: boolean
   confirmingRevert: boolean
@@ -166,8 +166,10 @@ export type HunkActionsProps = {
 }
 
 /**
- * A hunk's one row of controls: ＋ note on hunk (when it can draw), stage, revert — each pair
+ * A hunk's one row of controls: ＋ note (when it can draw), stage, revert — each pair
  * separated by a dim `·`. Staging is a no-op once staged, revert confirms on a second press.
+ * The label is the bare "＋ note" so the row, armed confirm included, fits the narrowest
+ * docked pane.
  */
 export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement {
   const { Box, Text, Button } = kit.ui
@@ -180,7 +182,7 @@ export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement
       overflow="hidden"
       flexWrap="nowrap"
     >
-      {props.canNote ? noteButton(kit, anchor, '＋ note on hunk', props.onStartNote) : null}
+      {props.canNote ? noteButton(kit, anchor, '＋ note', props.onStartNote) : null}
       {props.canNote ? <Text dimColor>·</Text> : null}
       <Button
         key={stageKeyOf(anchor)}

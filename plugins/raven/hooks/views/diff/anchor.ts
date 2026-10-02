@@ -8,7 +8,7 @@ export const anchorKeyOf = (anchor: Anchor) => `${anchor.path}|${anchor.hunk ?? 
 
 /** The block key of an anchor's open compose box. */
 export const commentBoxKeyOf = (anchor: Anchor) => `comment-box:${anchorKeyOf(anchor)}`
-/** The element key of the idle "＋ note on file"/"＋ note on hunk" button itself. */
+/** The element key of the idle "＋ note on file"/"＋ note" button itself. */
 export const commentButtonKeyOf = (anchor: Anchor) => `comment:${anchorKeyOf(anchor)}`
 /** The element key of the cancel button under an open compose box. */
 export const cancelKeyOf = (anchor: Anchor) => `cancel:${anchorKeyOf(anchor)}`
