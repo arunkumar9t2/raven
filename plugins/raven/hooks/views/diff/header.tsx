@@ -8,7 +8,7 @@ import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import { changeMap, changeMapOf } from '../../ui/change-map'
-import { type Chip, chipRow, chipsFit } from '../../ui/chips'
+import { type Chip, chipRow, chipsLayout } from '../../ui/chips'
 import { diffStat } from '../../ui/diff-stat'
 import { statBar } from '../../ui/stat-bar'
 import { selectButtons } from '../select-buttons'
@@ -53,10 +53,14 @@ function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
 }
 
 /**
- * Row 1: the counts and change bar on the left; the source picker alone on the right — D10's
- * mockup row 1. The source control is a `Select`/button row, not a chip, and can't shrink the
- * way a chip does, so it gets this row to itself; every chip (nav, refresh, review actions)
- * lives on row 2 instead, where `chipsFit` alone decides words vs. icons.
+ * Row 1: counts, the change bar, a dim `·`, then the source picker — `6 files  +15 −12  ■■■□□
+ * · source HEAD ▾` — all packed on the left with nothing at the row's far right. `justifyContent:
+ * "space-between"` would stretch the picker flush against the pane's right edge, where it reads
+ * as one control fused with the engine's own pane chrome in that corner; this keeps every
+ * control visually inside the row instead. The source control is a `Select`/button row, not a
+ * chip, and can't shrink the way a chip does, so it gets this row to itself; every chip (nav,
+ * refresh, review actions) lives on row 2 instead, where `chipsLayout` shrinks them one at a
+ * time by priority.
  */
 function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text, Select } = kit.ui
@@ -65,21 +69,15 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
   const dels = files.reduce((sum, file) => sum + file.dels, 0)
 
   return (
-    <Box
-      key={SUMMARY_ROW_KEY}
-      flexDirection="row"
-      justifyContent="space-between"
-      gap={2}
-      overflow="hidden"
-      flexWrap="nowrap"
-    >
-      <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
-        <Text bold wrap="truncate-end">
-          {countOf(files.length, 'file')}
-        </Text>
-        {diffStat(kit, adds, dels)}
-        {statBar(kit, adds, dels)}
-      </Box>
+    <Box key={SUMMARY_ROW_KEY} flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
+      <Text bold wrap="truncate-end">
+        {countOf(files.length, 'file')}
+      </Text>
+      {diffStat(kit, adds, dels)}
+      {statBar(kit, adds, dels)}
+      <Text dimColor wrap="truncate-end">
+        ·
+      </Text>
       {kit.capabilities.canPick ? (
         <Select
           key={SOURCE_SELECT_KEY}
@@ -98,38 +96,58 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
 /**
  * Row 2: the change map — one glyph per file, the shape of the whole change at a glance, D10
  * point 4 — and the notes summary on the left; every control chip — nav, refresh, edit & send,
- * the one primary `send N`, and clear — on the right, all through one `chipsFit` so they shrink
- * together. The armed clear keeps its full words even squeezed, same as a hunk's armed revert.
+ * the one primary `send N`, and clear — on the right. `chipsLayout` shrinks them one at a time,
+ * lowest priority first (nav, then refresh, then clear, then edit & send, then `send N` last),
+ * so the row's most important action keeps its words longest; the armed clear keeps its full
+ * words regardless (`forceWords`), same as a hunk's armed revert.
+ *
+ * Ruling R27: while a clear is armed, the nav and refresh chips drop from the row entirely
+ * (not just shrink to icons) and the map/notes summary on the left drop too — the only thing
+ * on this row that matters while the person decides is the confirm itself, and both changes
+ * together are what keeps the confirm's full words inside even the narrowest docked pane.
  */
 function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text } = kit.ui
-  const { pending } = props
+  const { pending, confirmingClear } = props
 
-  const chips: Chip[] = [
-    {
-      key: 'previous',
-      action: 'app:diffFileListUp',
-      icon: '↑',
-      label: '',
-      isDim: true,
-      onPress: props.onPrevious,
-    },
-    {
-      key: 'next',
-      action: 'app:diffFileListDown',
-      icon: '↓',
-      label: '',
-      isDim: true,
-      onPress: props.onNext,
-    },
-    { key: 'refresh', icon: '↻', label: 'refresh', isDim: true, onPress: props.onRefresh },
-  ]
+  const chips: Chip[] = []
+  if (!confirmingClear) {
+    chips.push(
+      {
+        key: 'previous',
+        action: 'app:diffFileListUp',
+        icon: '↑',
+        label: '',
+        isDim: true,
+        priority: 0,
+        onPress: props.onPrevious,
+      },
+      {
+        key: 'next',
+        action: 'app:diffFileListDown',
+        icon: '↓',
+        label: '',
+        isDim: true,
+        priority: 0,
+        onPress: props.onNext,
+      },
+      {
+        key: 'refresh',
+        icon: '↻',
+        label: 'refresh',
+        isDim: true,
+        priority: 1,
+        onPress: props.onRefresh,
+      },
+    )
+  }
   if (pending > 0) {
     chips.push({
       key: 'edit-send',
       icon: '✎',
       label: 'edit & send',
       isDim: true,
+      priority: 3,
       onPress: props.onEditSend,
     })
     chips.push({
@@ -138,28 +156,31 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       short: `➤ ${pending}`,
       label: `send ${pending}`,
       variant: 'primary',
+      priority: 4,
       onPress: props.onSend,
     })
   }
   chips.push({
     key: 'clear',
     icon: '⌫',
-    label: props.confirmingClear ? 'clear all?' : 'clear',
-    isDim: !props.confirmingClear,
-    forceWords: props.confirmingClear,
+    label: confirmingClear ? 'clear all?' : 'clear',
+    isDim: !confirmingClear,
+    forceWords: confirmingClear,
+    priority: 2,
     onPress: props.onClear,
   })
 
-  // `chipsFit`'s room must account for the map and the notes summary sharing this row — they
-  // are real, variable-width content, not reserved chrome like `HEADER_MIN` — else the chips
-  // are measured against room the left side has already spent, and decide "words" fits when it
-  // doesn't (caught live at a docked pane's real width; see the task report).
+  // The map and the notes summary share this row's left side with the chips, so `chipsLayout`'s
+  // room must account for their real (variable) width, not a fixed reserve — else the chips are
+  // measured against room the left side already spent (caught live at a docked pane's real
+  // width; see the task report). While armed, the left side is empty (R27), so this collapses
+  // to 0 and the chips get the whole row.
   const maxCells = Math.floor(kit.columns / 3)
-  const mapWidth = changeMapOf(props.files, props.edited, maxCells).length
-  const notesText = pending > 0 ? `✎ ${countOf(pending, 'note')} pending` : ''
-  const leftWidth = mapWidth + (notesText === '' ? 0 : 1 + notesText.length)
+  const mapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
+  const notesText = !confirmingClear && pending > 0 ? `✎ ${countOf(pending, 'note')} pending` : ''
+  const leftWidth = mapCells.length + (notesText === '' ? 0 : 1 + notesText.length)
   const room = Math.max(0, kit.columns - leftWidth - 2)
-  const mode = chipsFit(chips, room)
+  const modes = chipsLayout(chips, room)
 
   return (
     <Box
@@ -171,14 +192,14 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       flexWrap="nowrap"
     >
       <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap" flexShrink={1}>
-        {changeMap(kit, props.files, props.edited, maxCells)}
+        {confirmingClear ? null : changeMap(kit, props.files, props.edited, maxCells)}
         {notesText !== '' ? (
           <Text color={COLORS.suggestion} wrap="truncate-end">
             {notesText}
           </Text>
         ) : null}
       </Box>
-      <Box flexShrink={0}>{chipRow(kit, chips, mode, ACTIONS_ROW_KEY)}</Box>
+      <Box flexShrink={0}>{chipRow(kit, chips, modes, ACTIONS_ROW_KEY)}</Box>
     </Box>
   )
 }

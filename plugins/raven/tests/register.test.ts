@@ -7,7 +7,7 @@ import {
   revertKeyOf,
   stageKeyOf,
 } from '../hooks/views/diff/anchor'
-import { ACTIONS_ROW_KEY, SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
+import { ACTIONS_ROW_KEY, SOURCE_SELECT_KEY, SUMMARY_ROW_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
 import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
 
@@ -752,6 +752,77 @@ describe('diff header', () => {
     const ui = await mountDiff($)
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
     expect(row?.text?.startsWith('█▁')).toBe(true)
+  })
+
+  test('row 1 packs the picker after the stat bar, nothing stretched to the far right', async ($, on) => {
+    gitWorld(on, {}, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const row = await ui.find({ key: SUMMARY_ROW_KEY })
+    // `.text` only flattens string-drawing leaves; a `Select` isn't one (confirmed live), so
+    // order is read off `children` (document order) instead: the stat bar is the third child
+    // (count, diffStat, statBar), the dim `·`, then the picker last.
+    const children = (row?.children ?? []) as readonly { type: string; props?: { key?: string } }[]
+    const pickerIndex = children.findIndex(child => child.props?.key === 'source')
+    expect(children.length).toBeGreaterThanOrEqual(5)
+    expect(pickerIndex).toBe(children.length - 1)
+    expect(pickerIndex).toBeGreaterThan(2)
+  })
+
+  test('row 2 shrinks refresh before edit & send and send, which keep their words at the default pane', async ($, on) => {
+    // 15 files, so the change map's left-side width (15 cells + the notes text) pushes the
+    // chips' room just under what every chip in words needs, but not so far under that the
+    // shrink has to reach edit & send or send: only refresh (and nav, which looks the same
+    // either way) need to give way.
+    const files = Array.from({ length: 15 }, (_, i) => `f${i}.ts`)
+    const pending = [
+      { id: 'c1', path: 'f0.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'f0.ts', text: 'fix that', status: 'pending', createdAt: 0 },
+    ]
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: pending }, null, files)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'send' }))?.text).toContain('send 2')
+    expect((await ui.find({ key: 'edit-send' }))?.text).toContain('edit & send')
+    expect((await ui.find({ key: 'refresh' }))?.text).not.toContain('refresh')
+  })
+
+  test('an armed clear drops nav and refresh from row 2 and keeps its own words whole, even at the narrowest pane with notes pending', async ($, on) => {
+    const pending = [
+      { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'a.ts', text: 'fix that', status: 'pending', createdAt: 0 },
+    ]
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: pending }, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
+
+    await ui.press({ key: 'clear' })
+
+    expect(await ui.find({ key: 'previous' })).toBeUndefined()
+    expect(await ui.find({ key: 'next' })).toBeUndefined()
+    expect(await ui.find({ key: 'refresh' })).toBeUndefined()
+
+    const row = await ui.find({ key: ACTIONS_ROW_KEY })
+    expect(row?.text).toContain('clear all?')
+    // `.text` is the row's whole drawn content with no clipping applied by this harness, so its
+    // length is the real proxy for "does this actually fit" — same convention as the hunk
+    // toolbar's own narrowest-pane test.
+    expect(row?.text?.length ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(38)
   })
 
   test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {
