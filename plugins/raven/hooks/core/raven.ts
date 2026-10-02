@@ -85,7 +85,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     },
     now,
   )
-  const doc = createDocView(host)
+  const doc = createDocView(host, review, { focus: key => void focusIn(doc, key) }, now)
   const tree = createTreeView(host, { open: path => void showDoc({ kind: 'file', path }) })
   const tasksView = createTasksView(host)
   const views: readonly View[] = [diff, doc, tree, tasksView]

@@ -7,7 +7,13 @@ import { COLORS } from '../core/colors'
 import type { Host } from '../core/host'
 import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
+import type { Review } from '../review/review'
+import { chipRow, chipsFit } from '../ui/chips'
+import { row } from '../ui/row'
+import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
+import { commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
 import { docLinksOf, resolveDocLink } from './doc-links'
+import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName } from './icons'
 import { type DocBlock, docBlocksOf, markdownChunksOf } from './markdown-chunks'
 import { selectButtons } from './select-buttons'
@@ -20,6 +26,14 @@ export type Doc =
 type Shown = { key: string; title: string; doc: Doc; text: string | null; error?: string }
 
 type Chunk = { blocks: readonly DocBlock[]; links?: ReturnType<typeof docLinksOf> }
+
+/** One commentable section, pre-split into its drawable chunks (prose/code, links). */
+type SectionView = { section: DocSection; chunks: readonly Chunk[] }
+
+export type DocActions = {
+  /** Gives the keyboard to the element drawn under `key`, as the diff view's own `focus` does. */
+  focus: (key: string) => void
+}
 
 export type DocView = View & {
   show: (doc: Doc) => Promise<void>
@@ -37,11 +51,24 @@ const isPng = (path: string) => /\.png$/i.test(path)
 const keyOf = (doc: Doc) => (doc.kind === 'file' ? `file:${doc.path}` : `note:${doc.title ?? ''}`)
 const titleOf = (doc: Doc) => doc.title ?? (doc.kind === 'file' ? baseName(doc.path) : 'Note')
 
-export function createDocView(host: Host): DocView {
+/** The anchor for a doc section's controls, keyed by the section's INDEX, not its heading — two
+ * sections sharing a heading never share controls. `hunk` only keys the controls; the comment
+ * itself stores `section` (the heading) and `sectionIndex` (the index), never this string. */
+const sectionAnchorOf = (path: string, index: number): Anchor => ({ path, hunk: `§${index}` })
+
+export function createDocView(
+  host: Host,
+  review: Review,
+  actions: DocActions,
+  now: () => number,
+): DocView {
   let history: readonly Shown[] = []
   let current: string | null = null
-  // A Shown is replaced, never mutated, on a reload, so its chunks are computed once, not per frame.
+  let composing: Anchor | null = null
+  // A Shown is replaced, never mutated, on a reload, so its chunks/sections are computed once,
+  // not per frame.
   const chunksByShown = new WeakMap<Shown, readonly Chunk[]>()
+  const sectionsByShown = new WeakMap<Shown, readonly SectionView[]>()
 
   function chunksOf(shown: Shown, text: string): readonly Chunk[] {
     const cached = chunksByShown.get(shown)
@@ -55,9 +82,46 @@ export function createDocView(host: Host): DocView {
     return chunks
   }
 
+  /** `shown`'s sections, each pre-split into its own drawable chunks — commenting applies only
+   * to a file doc (a comment needs a real path to anchor to; an inline 'note' doc has none). */
+  function sectionsOf(shown: Shown, text: string): readonly SectionView[] {
+    const cached = sectionsByShown.get(shown)
+    if (cached) return cached
+    const doc = shown.doc
+    const sections = docSectionsOf(text).map(section => ({
+      section,
+      chunks: markdownChunksOf(section.text).map(chunk => ({
+        blocks: docBlocksOf(chunk),
+        links: doc.kind === 'file' ? docLinksOf(doc.path, chunk) : undefined,
+      })),
+    }))
+    sectionsByShown.set(shown, sections)
+    return sections
+  }
+
   const pick = (value: string) => {
     current = value
+    composing = null
     host.redraw()
+  }
+
+  function startComposing(anchor: Anchor) {
+    composing = anchor
+    host.redraw()
+    actions.focus(inputKeyOf(anchor))
+  }
+
+  function stopComposing(anchor: Anchor) {
+    composing = null
+    host.redraw()
+    actions.focus(commentButtonKeyOf(anchor))
+  }
+
+  function submitComment(path: string, heading: string, index: number, text: string) {
+    const anchor = sectionAnchorOf(path, index)
+    if (text.trim() !== '')
+      review.add({ path, section: heading, sectionIndex: index, text: text.trim() })
+    stopComposing(anchor)
   }
 
   async function read(doc: Doc): Promise<Pick<Shown, 'text' | 'error'>> {
@@ -75,6 +139,7 @@ export function createDocView(host: Host): DocView {
     const shown: Shown = { key, title: titleOf(doc), doc, ...(await read(doc)) }
     history = [shown, ...history.filter(each => each.key !== key)].slice(0, HISTORY_LIMIT)
     current = key
+    composing = null
     host.redraw()
   }
 
@@ -86,8 +151,141 @@ export function createDocView(host: Host): DocView {
     host.redraw()
   }
 
+  /** A chunk's blocks as drawn elements: prose through `Markdown` (a file's with its pressable
+   * links, following one to the doc it resolves to), code through `Code`. */
+  function chunkElementsOf(
+    kit: Kit,
+    chunks: readonly Chunk[],
+    doc: Doc,
+    keyPrefix: string,
+  ): (RenderElement | null)[] {
+    const { Code, Markdown } = kit.ui
+    return chunks.flatMap((chunk, i) =>
+      chunk.blocks.map((block, j) => {
+        if (block.kind === 'code') {
+          // R2: an empty fence has nothing to draw; the engine may refuse the whole drawing
+          // if `Code` gets an empty source.
+          if (block.text === '') return null
+          return (
+            <Code
+              key={`${keyPrefix}code:${i}:${j}`}
+              source={block.text}
+              language={block.language}
+            />
+          )
+        }
+        return doc.kind === 'file' ? (
+          <Markdown
+            key={`${keyPrefix}md:${i}:${j}`}
+            text={block.text}
+            pressableLinks={chunk.links}
+            onLinkPress={link => {
+              const target = resolveDocLink(doc.path, link.href)
+              if (target) void show({ kind: 'file', path: target })
+            }}
+          />
+        ) : (
+          <Markdown key={`${keyPrefix}md:${i}:${j}`} text={block.text} />
+        )
+      }),
+    )
+  }
+
+  /**
+   * A markdown file's body, per `docSectionsOf` section: its blocks, then its notes (the doc's
+   * comments whose `section`/`sectionIndex` match this section — a comment with no `sectionIndex`
+   * matches the first section with its heading), the compose box while composing, then an idle
+   * `[ ✎ note ]` chip, right-aligned. A comment matching no section (its heading/index both gone)
+   * draws at the end under a dim `Outdated` row instead of being dropped.
+   */
+  function sectionsBody(
+    kit: Kit,
+    shown: Shown,
+    doc: Extract<Doc, { kind: 'file' }>,
+    text: string,
+  ): RenderElement {
+    const { Box } = kit.ui
+    const sections = sectionsOf(shown, text)
+    const comments = review.comments().filter(comment => comment.path === doc.path)
+
+    // The first section carrying each heading, for an un-indexed (made elsewhere) comment to match.
+    const firstIndexByHeading = new Map<string, number>()
+    sections.forEach((sv, index) => {
+      if (!firstIndexByHeading.has(sv.section.heading)) {
+        firstIndexByHeading.set(sv.section.heading, index)
+      }
+    })
+
+    const matchedIds = new Set<string>()
+    const sectionElements = sections.map((sv, index) => {
+      const heading = sv.section.heading
+      const anchor = sectionAnchorOf(doc.path, index)
+      const notes = comments.filter(comment => {
+        if (comment.section !== heading) return false
+        return comment.sectionIndex !== undefined
+          ? comment.sectionIndex === index
+          : firstIndexByHeading.get(heading) === index
+      })
+      notes.forEach(each => {
+        matchedIds.add(each.id)
+      })
+
+      const isComposing =
+        composing !== null && composing.path === anchor.path && composing.hunk === anchor.hunk
+      const canNote = kit.capabilities.canType && !isComposing
+      const chip = canNote ? noteChip(anchor, startComposing) : null
+
+      return (
+        <Box key={`section:${index}`} flexDirection="column">
+          {chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)}
+          {notes.map(comment => note(kit, comment, now(), id => review.remove(id), review.resend))}
+          {isComposing
+            ? commentBox(kit, {
+                anchor,
+                inputKey: inputKeyOf(anchor),
+                hasPicker: false,
+                line: null,
+                columns: kit.columns,
+                onLineChange: () => {},
+                onSubmit: submitted => submitComment(doc.path, heading, index, submitted),
+                onCancel: () => stopComposing(anchor),
+              })
+            : null}
+          {chip
+            ? row(kit, {
+                left: '',
+                // No `scope`: a single chip has no sibling to hover-group with, and a doc's path
+                // is a real filesystem path (often long, unlike a diff's repo-relative one) — a
+                // scope string built from it can run past the engine's 64-character limit.
+                right: chipRow(kit, [chip], chipsFit([chip], kit.columns)),
+                // Distinct from the chip's own key (commentButtonKeyOf) — the row and the chip it
+                // wraps must not share a key, or `ui.press`/`ui.input` can resolve the wrong node.
+                key: `section-note:${anchorKeyOf(anchor)}`,
+              })
+            : null}
+        </Box>
+      )
+    })
+
+    const outdated = comments.filter(comment => !matchedIds.has(comment.id))
+
+    return (
+      <Box flexDirection="column">
+        {sectionElements}
+        {outdated.length > 0 ? (
+          <Box flexDirection="column">
+            {outdatedTitle(kit)}
+            {outdated.map(comment =>
+              note(kit, comment, now(), id => review.remove(id), review.resend),
+            )}
+          </Box>
+        ) : null}
+      </Box>
+    )
+  }
+
   function body(kit: Kit, shown: Shown): RenderElement {
-    const { Box, Text, Markdown, Code, Image } = kit.ui
+    const { Box, Text, Code, Image } = kit.ui
     if (shown.doc.kind === 'file' && isImage(shown.doc.path)) {
       const path = shown.doc.path
       if (!kit.capabilities.canShowImage || !isPng(path)) return <Text dimColor>{path}</Text>
@@ -103,33 +301,15 @@ export function createDocView(host: Host): DocView {
       )
     }
     if (shown.text === null) return <Text color={COLORS.error}>Could not read: {shown.error}</Text>
-    if (shown.doc.kind === 'note' || isMarkdown(shown.doc.path)) {
-      const doc = shown.doc
+    // Commenting applies only to a file doc: a comment anchors to `doc.path`, which an inline
+    // 'note' doc has none of — it keeps the plain, uncommentable rendering it always had.
+    if (shown.doc.kind === 'file' && isMarkdown(shown.doc.path)) {
+      return sectionsBody(kit, shown, shown.doc, shown.text)
+    }
+    if (shown.doc.kind === 'note') {
       return (
         <Box flexDirection="column">
-          {chunksOf(shown, shown.text).flatMap((chunk, i) =>
-            chunk.blocks.map((block, j) => {
-              if (block.kind === 'code') {
-                // R2: an empty fence has nothing to draw; the engine may refuse the whole drawing
-                // if `Code` gets an empty source.
-                if (block.text === '') return null
-                return <Code key={`code:${i}:${j}`} source={block.text} language={block.language} />
-              }
-              return doc.kind === 'file' ? (
-                <Markdown
-                  key={`md:${i}:${j}`}
-                  text={block.text}
-                  pressableLinks={chunk.links}
-                  onLinkPress={link => {
-                    const target = resolveDocLink(doc.path, link.href)
-                    if (target) void show({ kind: 'file', path: target })
-                  }}
-                />
-              ) : (
-                <Markdown key={`md:${i}:${j}`} text={block.text} />
-              )
-            }),
-          )}
+          {chunkElementsOf(kit, chunksOf(shown, shown.text), shown.doc, '')}
         </Box>
       )
     }
