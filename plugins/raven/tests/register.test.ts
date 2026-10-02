@@ -842,8 +842,12 @@ describe('stage and revert a hunk', () => {
   const SECOND_HUNK_HEADER = '@@ -10,2 +10,2 @@'
   const TWO_HUNK_TEXT = `${HUNK_TEXT}${SECOND_HUNK_HEADER}\n x\n-y\n+z\n`
 
-  test('a blank row draws between a file\'s two hunks', async ($, on) => {
-    hunkWorld(on, () => {}, () => TWO_HUNK_TEXT)
+  test("a blank row draws between a file's two hunks", async ($, on) => {
+    hunkWorld(
+      on,
+      () => {},
+      () => TWO_HUNK_TEXT,
+    )
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
