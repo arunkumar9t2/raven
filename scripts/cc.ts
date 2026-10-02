@@ -209,8 +209,17 @@ export function parse(argv: string[]): ParseResult {
 // Everything below runs the real thing; none of it is exercised by the unit tests above, which
 // import only the pure functions. Guarded so importing this file for tests never spawns tmux.
 
-function run(argv: string[], opts: { input?: string } = {}): { code: number; stdout: string } {
-  const result = Bun.spawnSync(argv, { stdin: opts.input ? Buffer.from(opts.input) : undefined })
+function run(
+  argv: string[],
+  opts: { input?: string; env?: Record<string, string> } = {},
+  cwd?: string,
+): { code: number; stdout: string } {
+  const result = Bun.spawnSync(argv, {
+    stdin: opts.input ? Buffer.from(opts.input) : undefined,
+    stderr: 'inherit',
+    ...(opts.env ? { env: opts.env } : {}),
+    ...(cwd ? { cwd } : {}),
+  })
   return { code: result.exitCode, stdout: result.stdout.toString('utf8') }
 }
 
@@ -225,17 +234,21 @@ function readTmuxGlobalEnvNames(): string[] {
   return names
 }
 
-function createSandbox(dir: string): void {
-  Bun.spawnSync(['rm', '-rf', dir])
-  Bun.spawnSync(['mkdir', '-p', dir])
-  Bun.write(`${dir}/a.txt`, 'hello\nold line\n')
-  Bun.spawnSync(['git', 'init', '-q'], { cwd: dir })
-  Bun.spawnSync(['git', 'add', '-A'], { cwd: dir })
-  Bun.spawnSync(
+async function createSandbox(dir: string): Promise<number> {
+  run(['rm', '-rf', dir])
+  run(['mkdir', '-p', dir])
+  await Bun.write(`${dir}/a.txt`, 'hello\nold line\n')
+  run(['git', 'init', '-q'], undefined, dir)
+  const added = run(['git', 'add', '-A'], undefined, dir)
+  if (added.code !== 0) return added.code
+  const committed = run(
     ['git', '-c', 'user.email=raven@local', '-c', 'user.name=raven', 'commit', '-qm', 'init'],
-    { cwd: dir },
+    undefined,
+    dir,
   )
-  Bun.write(`${dir}/a.txt`, 'hello\nnew line\n')
+  if (committed.code !== 0) return committed.code
+  await Bun.write(`${dir}/a.txt`, 'hello\nnew line\n')
+  return 0
 }
 
 async function main(): Promise<number> {
@@ -245,31 +258,33 @@ async function main(): Promise<number> {
     return parsed.code
   }
 
-  const session = process.env.RAVEN_TMUX_SESSION ?? 'raven-e2e'
+  const session = process.env.RAVEN_TMUX_SESSION || 'raven-e2e'
   const { command } = parsed
 
   switch (command.cmd) {
     case 'start': {
-      const sandbox = process.env.RAVEN_SANDBOX ?? '/tmp/raven-sandbox'
+      const sandbox = process.env.RAVEN_SANDBOX || '/tmp/raven-sandbox'
       let workdir = command.workdir
       if (!workdir) {
-        createSandbox(sandbox)
+        const sandboxCode = await createSandbox(sandbox)
+        if (sandboxCode !== 0) return sandboxCode
         workdir = sandbox
       }
-      run(['tmux', 'kill-session', '-t', session])
+      run(['tmux', 'kill-session', '-t', session]) // ignored: fine if there was no prior session
 
       const globalNames = readTmuxGlobalEnvNames()
       const names = scrubNames(process.env, globalNames)
       const paneCommand = buildPaneCommand({
         scrubNames: names,
-        claudeArgs: process.env.RAVEN_CLAUDE_ARGS ?? '',
+        claudeArgs: process.env.RAVEN_CLAUDE_ARGS || '',
       })
-      const cols = Number(process.env.RAVEN_COLS ?? '200')
-      const rows = Number(process.env.RAVEN_ROWS ?? '50')
+      const cols = Number(process.env.RAVEN_COLS || '200')
+      const rows = Number(process.env.RAVEN_ROWS || '50')
       const argv = newSessionArgv({ session, cols, rows, cwd: workdir, paneCommand })
 
       const spawnEnv = scrubEnv(process.env)
-      Bun.spawnSync(argv, { env: spawnEnv })
+      const started = run(argv, { env: spawnEnv })
+      if (started.code !== 0) return started.code
 
       await Bun.sleep(5000)
       const capture = run(['tmux', 'capture-pane', '-t', session, '-p']).stdout
@@ -282,47 +297,68 @@ async function main(): Promise<number> {
       return 0
     }
 
-    case 'type':
-      run(['tmux', 'send-keys', '-t', session, '-l', command.text])
+    case 'type': {
+      const typed = run(['tmux', 'send-keys', '-t', session, '-l', command.text])
+      if (typed.code !== 0) return typed.code
       await Bun.sleep(500)
-      run(['tmux', 'send-keys', '-t', session, 'Enter'])
-      return 0
+      return run(['tmux', 'send-keys', '-t', session, 'Enter']).code
+    }
 
     case 'keys':
-      run(['tmux', 'send-keys', '-t', session, ...command.keys])
-      return 0
+      return run(['tmux', 'send-keys', '-t', session, ...command.keys]).code
 
-    case 'click':
-      run(['tmux', 'send-keys', '-t', session, '-l', `\x1b[<0;${command.col};${command.row}M`])
+    case 'click': {
+      const pressed = run([
+        'tmux',
+        'send-keys',
+        '-t',
+        session,
+        '-l',
+        `\x1b[<0;${command.col};${command.row}M`,
+      ])
+      if (pressed.code !== 0) return pressed.code
       await Bun.sleep(100)
-      run(['tmux', 'send-keys', '-t', session, '-l', `\x1b[<0;${command.col};${command.row}m`])
-      return 0
+      return run([
+        'tmux',
+        'send-keys',
+        '-t',
+        session,
+        '-l',
+        `\x1b[<0;${command.col};${command.row}m`,
+      ]).code
+    }
 
     case 'hover':
-      run(['tmux', 'send-keys', '-t', session, '-l', `\x1b[<35;${command.col};${command.row}M`])
-      return 0
+      return run([
+        'tmux',
+        'send-keys',
+        '-t',
+        session,
+        '-l',
+        `\x1b[<35;${command.col};${command.row}M`,
+      ]).code
 
     case 'wheel': {
       const button = command.dir === 'up' ? 64 : 65
-      run([
+      return run([
         'tmux',
         'send-keys',
         '-t',
         session,
         '-l',
         `\x1b[<${button};${command.col};${command.row}M`,
-      ])
+      ]).code
+    }
+
+    case 'cap': {
+      const captured = run(['tmux', 'capture-pane', '-t', session, '-p'])
+      if (captured.code !== 0) return captured.code
+      process.stdout.write(`${squeezeCapture(captured.stdout)}\n`)
       return 0
     }
 
-    case 'cap':
-      process.stdout.write(
-        `${squeezeCapture(run(['tmux', 'capture-pane', '-t', session, '-p']).stdout)}\n`,
-      )
-      return 0
-
     case 'stop':
-      run(['tmux', 'kill-session', '-t', session])
+      run(['tmux', 'kill-session', '-t', session]) // ignored: fine if the session was already gone
       return 0
   }
 }
