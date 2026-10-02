@@ -15,6 +15,13 @@ export type Chip = {
   isDim?: boolean
   /** Keeps this chip's full "icon label" wording even in icons mode — an armed confirm never clips to its bare icon. */
   forceWords?: boolean
+  /** An engine keybinding action (e.g. `app:diffFileListUp`) the chord presses, same as `ButtonProps.action`. */
+  action?: string
+  /**
+   * The icons-mode text, when it must carry more than the bare `icon` (e.g. `send N`'s icon mode
+   * is `➤ N`, not just `➤`). Defaults to `icon` when omitted.
+   */
+  short?: string
 }
 
 /** `icon` and `label` joined by one space, either of which may be empty (`"✕"`, `"resend"`). */
@@ -78,7 +85,12 @@ export function chipRow(
       {chips.map(chip => (
         <Button
           key={chip.key}
-          label={mode === 'words' || chip.forceWords ? wordsOf(chip.icon, chip.label) : chip.icon}
+          label={
+            mode === 'words' || chip.forceWords
+              ? wordsOf(chip.icon, chip.label)
+              : (chip.short ?? chip.icon)
+          }
+          action={chip.action}
           variant={chip.variant}
           dimColor={chip.isDim}
           hover={chip.isDim && scope !== undefined ? { scope, dimColor: false } : undefined}
