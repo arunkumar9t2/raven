@@ -188,7 +188,12 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
           label={row.node.name}
           onPress={() => open(row.node.path)}
         />
-        {mark ? dot(kit, mark.color) : null}
+        {mark ? (
+          <Box flexDirection="row" gap={1}>
+            {dot(kit, mark.color)}
+            <Text color={mark.color}>{mark.glyph}</Text>
+          </Box>
+        ) : null}
       </Box>
     )
   }

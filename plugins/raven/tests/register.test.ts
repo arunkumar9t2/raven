@@ -423,6 +423,41 @@ describe('review stream', () => {
     expect(row?.text).toContain('■')
   })
 
+  test("a much smaller change's stat bar draws fewer filled cells than the list's biggest change", async ($, on) => {
+    baseWorld(on)
+    on('session.messages', () => ({ value: [] }))
+    on('process.run', ($, e) => {
+      const [cmd, sub] = e.argv
+      if (cmd === 'git' && sub === 'rev-parse' && e.argv.includes('--show-toplevel')) {
+        return ran(0, REPO)
+      }
+      if (cmd === 'git' && sub === 'status') return ran(0, ' M a.ts\0 M b.ts\0')
+      if (cmd === 'git' && e.argv.includes('--numstat')) {
+        // A literal `\0` immediately followed by a digit in one template is a legacy octal
+        // escape in JS (`\01` is code point 1, not NUL then "1"), so each record's own template
+        // ends right after its `\0` and `.join('')` glues the real runtime strings together.
+        const records = [
+          ['a.ts', 1, 1],
+          ['b.ts', 100, 100],
+        ] as const
+        return ran(0, records.map(([path, adds, dels]) => `${adds}\t${dels}\t${path}\0`).join(''))
+      }
+      return ran(1)
+    })
+    on('model.fork', () => ({ value: { isAnswered: false, reason: 'nothing-to-fork' } }))
+    on('turn.complete', ($, e) => ({ text: e.answer }))
+    trackShownPanes(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const small = (await ui.find({ key: 'row:a.ts' }))?.text ?? ''
+    const big = (await ui.find({ key: 'row:b.ts' }))?.text ?? ''
+    const fillCountOf = (text: string) => (text.match(/■/g) ?? []).length
+    expect(fillCountOf(small)).toBeLessThan(fillCountOf(big))
+  })
+
   test("the file being edited this turn draws its section's rail in the accent, not its status colour", async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
@@ -1220,6 +1255,34 @@ describe('the Files tree', () => {
     const row = await ui.find({ key: 'file:src/a.ts' })
     expect(row?.text).toContain('a.ts')
     expect(row?.text).toContain('●')
+  })
+
+  test('an untracked and an added file keep their own status letters, not just the same-coloured dot', async ($, on) => {
+    baseWorld(on)
+    on('session.messages', () => ({ value: [] }))
+    on('process.run', ($, e) => {
+      const [cmd, sub] = e.argv
+      if (cmd === 'git' && sub === 'rev-parse' && e.argv.includes('--show-toplevel')) {
+        return ran(0, REPO)
+      }
+      if (cmd === 'git' && sub === 'status') return ran(0, '?? new.ts\0A  added.ts\0')
+      if (cmd === 'git' && sub === 'ls-files') return ran(0, 'new.ts\0added.ts\0')
+      return ran(1)
+    })
+    trackShownPanes(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: TREE_PANE.id,
+    })
+    expect((await ui.find({ key: 'file:new.ts' }))?.text).toContain('U')
+    expect((await ui.find({ key: 'file:added.ts' }))?.text).toContain('A')
   })
 })
 

@@ -68,6 +68,25 @@ describe('statBarCells', () => {
   test('zero/zero draws all inactive (0,0,5 -> 0/0/5)', () => {
     expect(statBarCells(0, 0, 5)).toEqual({ added: 0, removed: 0, rest: 5 })
   })
+
+  describe('scaled against a max (the file list, mirroring changeMapOf)', () => {
+    test('a small change against a bigger max fills proportionally, split 1/1, rest inactive', () => {
+      expect(statBarCells(1, 1, 5, 6)).toEqual({ added: 1, removed: 1, rest: 3 })
+    })
+
+    test('a change at the max fills every cell', () => {
+      expect(statBarCells(3, 3, 5, 6)).toEqual({ added: 3, removed: 2, rest: 0 })
+    })
+
+    test('zero/zero still draws all inactive with a max given', () => {
+      expect(statBarCells(0, 0, 5, 6)).toEqual({ added: 0, removed: 0, rest: 5 })
+    })
+
+    test('a changed file never floors to zero filled cells, even far below the max', () => {
+      const bar = statBarCells(1, 0, 5, 1000)
+      expect(bar.added + bar.removed).toBeGreaterThanOrEqual(1)
+    })
+  })
 })
 
 describe('progressCells', () => {

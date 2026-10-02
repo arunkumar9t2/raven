@@ -13,23 +13,39 @@ export type StatBarCells = { added: number; removed: number; rest: number }
  * rule this kit pins:
  *
  * 1. Zero/zero gets no added or removed cells at all; `rest` takes every cell.
- * 2. Otherwise each side's share floors to a whole cell (`added / total * cells`, likewise
- *    `removed`), which leaves at most one cell unplaced (the two raw shares sum to exactly
- *    `cells`, so their floors sum to `cells` or `cells - 1`).
- * 3. That one leftover cell, if any, goes first to a side that is non-zero but floored to
- *    nothing — so a real change is never invisible once `cells >= 2` — else to the side with the
- *    larger fractional remainder, ties favouring `added`.
+ * 2. With no `max`, every cell is filled (the whole bar is the file's own total, as the
+ *    header's summary bar scales itself): each side's share floors to a whole cell
+ *    (`added / total * cells`, likewise `removed`), which leaves at most one cell unplaced (the
+ *    two raw shares sum to exactly `cells`, so their floors sum to `cells` or `cells - 1`).
+ * 3. With a `max` given (a file-list row, scaled against the list's biggest change, mirroring
+ *    `changeMapOf`), only `filled` cells draw at all — `round(total / max * cells)`, clamped to
+ *    `[1, cells]` so a real change never floors to nothing — then split the same way, over
+ *    `filled` cells instead of all of them; the rest draws inactive.
+ * 4. Either way, the one leftover cell from the floor/sum gap, if any, goes first to a side
+ *    that is non-zero but floored to nothing — so a real change is never invisible once there
+ *    are at least 2 filled cells — else to the side with the larger fractional remainder, ties
+ *    favouring `added`.
  */
-export function statBarCells(added: number, removed: number, cells: number): StatBarCells {
+export function statBarCells(
+  added: number,
+  removed: number,
+  cells: number,
+  max?: number,
+): StatBarCells {
   const safeCells = Math.max(0, cells)
   const total = added + removed
   if (total <= 0 || safeCells === 0) return { added: 0, removed: 0, rest: safeCells }
 
-  const addedRaw = (added / total) * safeCells
-  const removedRaw = (removed / total) * safeCells
+  const filled =
+    max === undefined
+      ? safeCells
+      : Math.min(safeCells, Math.max(1, Math.round((total / max) * safeCells)))
+
+  const addedRaw = (added / total) * filled
+  const removedRaw = (removed / total) * filled
   let addedCells = Math.floor(addedRaw)
   let removedCells = Math.floor(removedRaw)
-  let remainder = safeCells - addedCells - removedCells
+  let remainder = filled - addedCells - removedCells
 
   while (remainder > 0) {
     if (added > 0 && addedCells === 0) {
@@ -52,9 +68,15 @@ export function statBarCells(added: number, removed: number, cells: number): Sta
 }
 
 /** `■■■□□` — added cells in the added colour, removed in the removed colour, the rest inactive. */
-export function statBar(kit: UiKit, added: number, removed: number, cells = 5): RenderElement {
+export function statBar(
+  kit: UiKit,
+  added: number,
+  removed: number,
+  cells = 5,
+  max?: number,
+): RenderElement {
   const { Text } = kit.ui
-  const bar = statBarCells(added, removed, cells)
+  const bar = statBarCells(added, removed, cells, max)
 
   return (
     <Text wrap="truncate-end">
