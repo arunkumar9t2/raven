@@ -1,6 +1,6 @@
 import type { RenderElement, Timer, TurnCompleteInput } from 'claude-code'
 import { DIFF_PANEL_WARNING } from '../names'
-import { addressedIdsOf, reviewTextOf } from '../review/comments'
+import { addressedIdsOf, type Comment, reviewTextOf } from '../review/comments'
 import { resolvePromptOf } from '../review/resolve'
 import { createReview } from '../review/review'
 import { createDiffView } from '../views/diff-view'
@@ -42,8 +42,19 @@ export type Raven = {
   planNoted: (note: PlanNote) => Promise<void>
   /** Runs the `show` tool's input as a directive; throws on input `directiveOf` rejects. */
   runTool: (input: unknown) => Promise<string>
-  /** Hidden context the next prompt carries: the pending review, which it consumes. */
-  takePromptContext: () => string | undefined
+  /**
+   * Hidden context the next prompt carries: the live pending comments, which it marks sent (a
+   * stale pending comment among them moves to 'open' instead, never riding). `undefined` when
+   * there is nothing live to carry. `ids` is the taken batch, for `restoreCarried` if the prompt
+   * this primes is later dropped.
+   */
+  takePromptContext: () => Promise<
+    { text: string; count: number; ids: readonly string[] } | undefined
+  >
+  /** The prompt `takePromptContext` primed went through: toasts how many comments it carried. */
+  noteCarried: (count: number) => void
+  /** The prompt `takePromptContext` primed was dropped: undoes it, restoring `ids` to pending. */
+  restoreCarried: (ids: readonly string[]) => void
   /**
    * Reacts to a finished main-loop turn: always resets the live feed (clears this turn's edited
    * marks and resumes following); only an answered turn also forks once to learn which sent
@@ -132,6 +143,16 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   }
 
   const takeReviewText = () => reviewTextOf(review.take())
+
+  /**
+   * A pending comment is live when it has a `section` (a doc comment, always live), `known` (the
+   * diff's `knownPaths` at call time) is null (no live git list to check against — a turn source,
+   * or nothing loaded yet), or its path is among those known paths (which include a renamed
+   * file's `oldPath`). Everything else moves to 'open' by `review.take` rather than riding the
+   * prompt silently.
+   */
+  const isLiveComment = (known: ReadonlySet<string> | null) => (comment: Comment) =>
+    comment.section !== undefined || known === null || known.has(comment.path)
 
   /** Forks once to ask which sent comments the finished turn addressed, then marks them. */
   async function resolveSent(): Promise<void> {
@@ -381,13 +402,20 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         throw new Error(`Invalid input for the Raven show tool: ${JSON.stringify(input)}`)
       return runDirective(await resolveDirective(directive))
     },
-    takePromptContext: () => {
-      const taken = review.take()
+    takePromptContext: async () => {
+      // A prompt can carry comments before any pane has ever loaded the review (the band's own
+      // load path, reused here so both see the same `hasLoadedReview` guard).
+      await bandState.ensureReviewLoaded()
+      const taken = review.take(isLiveComment(diff.knownPaths()))
       const text = reviewTextOf(taken)
-      if (text !== undefined) {
-        host.toast(`Raven: ${countOf(taken.length, 'review comment')} sent with this prompt`)
-      }
-      return text
+      if (text === undefined) return undefined
+      return { text, count: taken.length, ids: taken.map(comment => comment.id) }
+    },
+    noteCarried: count => {
+      host.toast(`Raven: ${countOf(count, 'review comment')} sent with this prompt`)
+    },
+    restoreCarried: ids => {
+      if (ids.length > 0) review.restore(ids)
     },
     turnCompleted: async turn => {
       diff.turnEnded()

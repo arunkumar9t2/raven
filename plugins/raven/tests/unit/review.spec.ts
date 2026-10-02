@@ -70,6 +70,15 @@ describe('createReview state transitions', () => {
     expect(review.sent().map(c => c.id)).toEqual([second?.id as string])
   })
 
+  test('take with a filter takes the live comments and opens the rest', async () => {
+    const review = createReview(fakeHost(), () => 1)
+    review.add({ path: 'a.ts', text: 'live' })
+    review.add({ path: 'gone.ts', text: 'stale' })
+    const taken = review.take(comment => comment.path === 'a.ts')
+    expect(taken.map(comment => comment.text)).toEqual(['live'])
+    expect(review.comments().find(comment => comment.path === 'gone.ts')?.status).toBe('open')
+  })
+
   test('take with nothing pending returns empty and leaves sent comments as sent', () => {
     const review = createReview(fakeHost(), () => 1)
     review.add({ path: 'a.ts', text: 'x' })

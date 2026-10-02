@@ -260,10 +260,21 @@ export function register(on: On, options: PluginOptions) {
     },
   )
 
-  // Only a prompt the person sent (typed, or through Remote Control) carries the review.
-  on('prompt.submit', ($, e, next) => {
+  // Only a prompt the person sent (typed, or through Remote Control) carries the review. The
+  // toast only fires once the prompt actually went through: a dropped prompt restores the
+  // comments it carried instead (R5).
+  on('prompt.submit', async ($, e, next) => {
     const isPersons = e.origin.kind === 'composer' || e.origin.kind === 'bridge'
-    const review = isPersons ? raven?.takePromptContext() : undefined
-    return review ? next({ ...e, context: [...(e.context ?? []), review] }) : next(e)
+    const carried = isPersons ? await raven?.takePromptContext() : undefined
+    if (!carried) return next(e)
+    try {
+      const result = await next({ ...e, context: [...(e.context ?? []), carried.text] })
+      if (result.drop === undefined) raven?.noteCarried(carried.count)
+      else raven?.restoreCarried(carried.ids)
+      return result
+    } catch (error) {
+      raven?.restoreCarried(carried.ids)
+      throw error
+    }
   })
 }

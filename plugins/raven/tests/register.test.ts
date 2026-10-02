@@ -1673,14 +1673,18 @@ describe('the built-in diff panel warning', () => {
 })
 
 describe('prompt carries the review', () => {
-  function promptWorld(on: On, comments: readonly unknown[]) {
+  function promptWorld(
+    on: On,
+    comments: readonly unknown[],
+    respond: (text: string) => { text: string } | { drop: string } = text => ({ text }),
+  ) {
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: comments }, null)
     const toasts: string[] = []
     on('ui.toast', ($, e) => {
       toasts.push(e.text)
       return { value: undefined }
     })
-    on('prompt.submit', ($, e) => ({ text: e.text }))
+    on('prompt.submit', ($, e) => respond(e.text))
     return toasts
   }
 
@@ -1705,5 +1709,62 @@ describe('prompt carries the review', () => {
     await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
 
     expect(toasts.filter(text => text.includes('review comment'))).toEqual([])
+  })
+
+  test('a pending comment on a file no longer in the diff does not ride the prompt', async ($, on) => {
+    const toasts = promptWorld(on, [
+      { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'gone.ts', text: 'stale', status: 'pending', createdAt: 1 },
+    ])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+    expect(toasts).toContain('Raven: 1 review comment sent with this prompt')
+  })
+
+  test('a doc comment always rides, even once the diff has loaded', async ($, on) => {
+    const toasts = promptWorld(on, [
+      { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      {
+        id: 'c2',
+        path: '/work/README.md',
+        section: '(top)',
+        text: 'doc note',
+        status: 'pending',
+        createdAt: 1,
+      },
+    ])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+    expect(toasts).toContain('Raven: 2 review comments sent with this prompt')
+  })
+
+  test('before the diff ever loads, every pending comment rides', async ($, on) => {
+    const toasts = promptWorld(on, [
+      { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'gone.ts', text: 'stale', status: 'pending', createdAt: 1 },
+    ])
+    await $.session.start(SESSION)
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+    expect(toasts).toContain('Raven: 2 review comments sent with this prompt')
+  })
+
+  test('a dropped prompt does not toast, and the carried comment rides the next one', async ($, on) => {
+    let shouldDrop = true
+    const toasts = promptWorld(
+      on,
+      [{ id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }],
+      text => (shouldDrop ? { drop: 'queued behind the running turn' } : { text }),
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+    expect(toasts.filter(text => text.includes('review comment'))).toEqual([])
+
+    shouldDrop = false
+    await $.prompt.submit({ text: 'hello again', origin: { kind: 'composer' }, wait: false })
+    expect(toasts).toContain('Raven: 1 review comment sent with this prompt')
   })
 })
