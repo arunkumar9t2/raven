@@ -11,7 +11,9 @@ import {
 import {
   blocksOf,
   fileAtRow,
+  ORPHANS_TITLE_KEY,
   OUTDATED_TITLE_KEY,
+  orphanPathKeyOf,
   STATUS_KEY,
   streamOf,
   TITLE_KEY,
@@ -354,5 +356,63 @@ describe('streamOf', () => {
       stream.blocks.find(block => block.key === `${path}#${TITLE_KEY}`)
     expect(titleOf(file.path)).toMatchObject({ item: { kind: 'title', file } })
     expect(titleOf('b.ts')).toMatchObject({ item: { kind: 'title', file: b } })
+  })
+})
+
+describe('streamOf orphan group', () => {
+  test('a comment on a path matching no stream file draws under a trailing "Not in this diff" group', () => {
+    const orphan = commentOf({ id: 'o1', path: 'gone.ts' })
+    const stream = streamOf([file], () => [hunkA], [orphan], null)
+    const keys = stream.blocks.map(block => block.key)
+    expect(keys).toContain(`orphans#${ORPHANS_TITLE_KEY}`)
+    expect(keys).toContain(`orphans#${orphanPathKeyOf('gone.ts')}`)
+    expect(keys).toContain(`orphans#${noteKeyOf('o1')}`)
+  })
+
+  test('no orphan group when every comment matches a stream file', () => {
+    const stream = streamOf([file], () => [hunkA], [commentOf({})], null)
+    expect(stream.blocks.some(block => block.key.startsWith('orphans#'))).toBe(false)
+  })
+
+  test('a comment on a renamed file’s old path is not orphaned when the new file carries that oldPath', () => {
+    const renamed: ChangedFile = { ...file, path: 'new.ts', oldPath: 'old.ts', status: 'renamed' }
+    const comment = commentOf({ path: 'old.ts' })
+    const stream = streamOf([renamed], () => [hunkA], [comment], null)
+    expect(stream.blocks.some(block => block.key.startsWith('orphans#'))).toBe(false)
+  })
+
+  test('a doc comment (carries a section) never joins the orphans group', () => {
+    const doc = commentOf({ path: '/work/README.md', section: '(top)' })
+    const stream = streamOf([file], () => [hunkA], [doc], null)
+    expect(stream.blocks.some(block => block.key.startsWith('orphans#'))).toBe(false)
+  })
+
+  test('gonePaths marks an orphan path gone when named, not when absent from it', () => {
+    const gone = commentOf({ id: 'o1', path: 'gone.ts' })
+    const here = commentOf({ id: 'o2', path: 'here.ts' })
+    const stream = streamOf([file], () => [hunkA], [gone, here], null, {}, new Set(['gone.ts']))
+    const goneRow = stream.blocks.find(
+      block => block.key === `orphans#${orphanPathKeyOf('gone.ts')}`,
+    )
+    const hereRow = stream.blocks.find(
+      block => block.key === `orphans#${orphanPathKeyOf('here.ts')}`,
+    )
+    expect(goneRow).toMatchObject({ item: { kind: 'orphan-path', isGone: true } })
+    expect(hereRow).toMatchObject({ item: { kind: 'orphan-path', isGone: false } })
+  })
+
+  test('a path never checked (omitted gonePaths) never marks a path gone — fail open', () => {
+    const comment = commentOf({ path: 'gone.ts' })
+    const stream = streamOf([file], () => [hunkA], [comment], null)
+    const row = stream.blocks.find(block => block.key === `orphans#${orphanPathKeyOf('gone.ts')}`)
+    expect(row).toMatchObject({ item: { kind: 'orphan-path', isGone: false } })
+  })
+
+  test('contentRows accounts for the orphan group’s own rows', () => {
+    const comment = commentOf({ path: 'gone.ts' })
+    const withOrphan = streamOf([file], () => [hunkA], [comment], null)
+    const without = streamOf([file], () => [hunkA], [], null)
+    // heading row + path row + 1 note row = 3 extra rows.
+    expect(withOrphan.contentRows).toBe(without.contentRows + 3)
   })
 })

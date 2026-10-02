@@ -17,6 +17,40 @@ export async function toplevelOf(run: Run): Promise<string | null> {
   return outputOf(await run(['git', 'rev-parse', '--show-toplevel']))
 }
 
+/**
+ * Which of `paths` (repository-toplevel-relative, the same frame every `ChangedFile.path` and
+ * stored `Comment.path` is in) currently exist in the working tree — tracked or untracked (but
+ * not gitignored) — one batched `git ls-files` call covering all of them, never one per path.
+ * Run with `-C toplevel`, not the session's cwd: a pathspec is read relative to cwd, and the
+ * session's cwd can sit below the toplevel, which would read every candidate as missing.
+ * `--literal-pathspecs` also keeps a path containing `[`/`*`/`?` from being read as a glob.
+ * `null` means the check itself failed (a non-zero exit), not that nothing exists; callers treat
+ * that the same as "unknown" elsewhere in Raven: fail open rather than risk calling a comment's
+ * file gone over an infra hiccup. `paths` empty needs no call.
+ */
+export async function existingPathsOf(
+  run: Run,
+  toplevel: string,
+  paths: readonly string[],
+): Promise<ReadonlySet<string> | null> {
+  if (paths.length === 0) return new Set()
+  const result = await run([
+    'git',
+    '--literal-pathspecs',
+    '-C',
+    toplevel,
+    'ls-files',
+    '--cached',
+    '--others',
+    '--exclude-standard',
+    '-z',
+    '--',
+    ...paths,
+  ])
+  if (result.exitCode !== 0) return null
+  return new Set(result.stdout.split('\0').filter(token => token.length > 0))
+}
+
 /** What the working tree is diffed against: `HEAD`, or a specific commit (a session start or a merge-base). */
 export type Base = { kind: 'head' } | { kind: 'commit'; sha: string }
 

@@ -1,4 +1,5 @@
 import type { RenderElement, Timer, TurnCompleteInput } from 'claude-code'
+import { existingPathsOf } from '../git/load'
 import { DIFF_PANEL_WARNING } from '../names'
 import { addressedIdsOf, type Comment, reviewTextOf } from '../review/comments'
 import { resolvePromptOf } from '../review/resolve'
@@ -13,7 +14,7 @@ import { coversRavenDock } from './checkpointing'
 import { type CommandKind, type CommandResult, NARROW_TEXT } from './command-glyph'
 import { type Directive, directiveOf } from './directive'
 import { countOf } from './format'
-import type { Host } from './host'
+import { type Host, loggedAs } from './host'
 import type { RavenSettings } from './settings'
 import {
   type Action,
@@ -124,6 +125,12 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     sendReview,
   })
 
+  // Kicked off at session start rather than waiting for the first `AbovePrompt` render or prompt
+  // submit to need it: by the time either happens, the common case already has it loaded.
+  // `ensureReviewLoaded` is idempotent, so the `await` each still does is then a no-op — this
+  // only spares the *first* one from paying for the git read itself.
+  void bandState.ensureReviewLoaded()
+
   /**
    * Once per module instance: warns when the built-in diff panel will cover Raven's dock. Never
    * throws, so a failed check never blocks the command or edit that triggered it.
@@ -145,14 +152,23 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   const takeReviewText = () => reviewTextOf(review.take())
 
   /**
-   * A pending comment is live when it has a `section` (a doc comment, always live), `known` (the
+   * A pending comment is live when it has a `section` (a doc comment, always live); `known` (the
    * diff's `knownPaths` at call time) is null (no live git list to check against — a turn source,
-   * or nothing loaded yet), or its path is among those known paths (which include a renamed
-   * file's `oldPath`). Everything else moves to 'open' by `review.take` rather than riding the
-   * prompt silently.
+   * or nothing loaded yet); its path is among those known paths (which include a renamed file's
+   * `oldPath`); or `existing` says the file is still there — checked only for comments `known`
+   * doesn't already cover (R32: it's the diff moving past a file, not the file being gone, that
+   * stops meaning "stale"). `existing` null (the check never ran, or failed) never counts against
+   * a comment — fail open, same as `known` null. Only a comment whose file is truly gone moves to
+   * 'open' by `review.take`, rather than riding the prompt silently.
    */
-  const isLiveComment = (known: ReadonlySet<string> | null) => (comment: Comment) =>
-    comment.section !== undefined || known === null || known.has(comment.path)
+  const isLiveComment =
+    (known: ReadonlySet<string> | null, existing: ReadonlySet<string> | null) =>
+    (comment: Comment) =>
+      comment.section !== undefined ||
+      known === null ||
+      known.has(comment.path) ||
+      existing === null ||
+      existing.has(comment.path)
 
   /** Forks once to ask which sent comments the finished turn addressed, then marks them. */
   async function resolveSent(): Promise<void> {
@@ -406,7 +422,24 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       // A prompt can carry comments before any pane has ever loaded the review (the band's own
       // load path, reused here so both see the same `hasLoadedReview` guard).
       await bandState.ensureReviewLoaded()
-      const taken = review.take(isLiveComment(diff.knownPaths()))
+      const known = diff.knownPaths()
+      const toplevel = diff.toplevel()
+      let existing: ReadonlySet<string> | null = null
+      if (known !== null && toplevel !== null) {
+        // Only the comments `known` doesn't already resolve need the existence check — one
+        // batched call for all of them together, never one per comment, and skipped entirely
+        // when `known` is null (everything is already live) or there is nothing left to check.
+        const candidates = review
+          .pending()
+          .filter(comment => comment.section === undefined && !known.has(comment.path))
+        if (candidates.length > 0) {
+          const paths = [...new Set(candidates.map(comment => comment.path))]
+          existing = await existingPathsOf(host.run, toplevel, paths).catch(
+            loggedAs(host, 'checking comment file existence', null),
+          )
+        }
+      }
+      const taken = review.take(isLiveComment(known, existing))
       const text = reviewTextOf(taken)
       if (text === undefined) return undefined
       return { text, count: taken.length, ids: taken.map(comment => comment.id) }

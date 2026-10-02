@@ -262,3 +262,22 @@ export function outdatedTitle(kit: Kit): RenderElement {
   const { Text } = kit.ui
   return <Text dimColor>Outdated</Text>
 }
+
+/** The dim title row above the group for comments whose path matches no file in the stream. */
+export function orphansTitle(kit: Kit): RenderElement {
+  const { Text } = kit.ui
+  return <Text dimColor>Not in this diff</Text>
+}
+
+/** An orphaned path's own heading row: the path, plus a dim "file gone" when it no longer exists. */
+export function orphanPathRow(kit: Kit, path: string, isGone: boolean): RenderElement {
+  const { Box, Text } = kit.ui
+  return (
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      <Text bold wrap="truncate-end">
+        {path}
+      </Text>
+      {isGone ? <Text dimColor>file gone</Text> : null}
+    </Box>
+  )
+}

@@ -17,6 +17,11 @@ import { rowsOf } from './layout'
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
 export const OUTDATED_TITLE_KEY = 'outdated-title'
+export const ORPHANS_TITLE_KEY = 'orphans-title'
+/** The block key of an orphaned path's own heading row, inside the `orphans#` group. */
+export const orphanPathKeyOf = (path: string) => `orphan-path:${path}`
+
+const EMPTY_GONE: ReadonlySet<string> = new Set()
 
 /** The header's fixed row count (counts+source, then the action buttons) and the rule below it. */
 const HEADER_ROWS = 2
@@ -42,6 +47,8 @@ export type BodyItem =
   | { kind: 'hunk-header'; anchor: Anchor; hunk: Hunk; canNote: boolean; isReadOnly: boolean }
   | { kind: 'gap' }
   | { kind: 'status'; text: string }
+  | { kind: 'orphans-title' }
+  | { kind: 'orphan-path'; path: string; isGone: boolean }
 
 /** The block key of hunk `index`, unique even across hunks sharing a header (e.g. after a slice). */
 export const hunkKeyOf = (index: number, hunk: Hunk) => `hunk:${index}:${hunk.header}`
@@ -119,6 +126,40 @@ function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
   ]
   for (const [hunk, group] of byHunk) {
     blocks.push(...notesBlocksOf(group, { path: group[0]?.path ?? '', hunk }))
+  }
+  return blocks
+}
+
+/**
+ * The trailing group for comments (any status) whose path matches no file in the current stream
+ * — the diff source moved past it, or it is simply gone: a dim "Not in this diff" heading, then
+ * each such path's own row (its own `${path}#` prefixed later, in `streamOf`) carrying a dim
+ * "file gone" when `gonePaths` names it, and that path's notes beneath it (same
+ * addressed-collapse as `outdatedBlocksOf`, via `notesBlocksOf`). A path `gonePaths` doesn't
+ * name — never checked, or the check failed — never draws "file gone": fail open. Empty
+ * `orphans` emits nothing, so the group is absent entirely rather than a bare heading.
+ */
+function orphanBlocksOf(orphans: Comments, gonePaths: ReadonlySet<string>): Block<BodyItem>[] {
+  if (orphans.length === 0) return []
+
+  const byPath = new Map<string, Comment[]>()
+  for (const comment of orphans) {
+    const group = byPath.get(comment.path)
+    if (group) group.push(comment)
+    else byPath.set(comment.path, [comment])
+  }
+
+  const blocks: Block<BodyItem>[] = [
+    { kind: 'fixed', key: ORPHANS_TITLE_KEY, rows: 1, item: { kind: 'orphans-title' } },
+  ]
+  for (const [path, group] of byPath) {
+    blocks.push({
+      kind: 'fixed',
+      key: orphanPathKeyOf(path),
+      rows: 1,
+      item: { kind: 'orphan-path', path, isGone: gonePaths.has(path) },
+    })
+    blocks.push(...notesBlocksOf(group, { path }))
   }
   return blocks
 }
@@ -226,6 +267,8 @@ export function streamOf(
   comments: Comments,
   composing: Anchor | null,
   options: BlocksOptions = {},
+  /** Which comment paths are confirmed gone, for the trailing orphans group's "file gone" label. */
+  gonePaths: ReadonlySet<string> = EMPTY_GONE,
 ): Stream {
   const blocks: Block<BodyItem>[] = []
   const titleRows = new Map<string, number>()
@@ -241,6 +284,17 @@ export function streamOf(
       row += rowsOf(block)
     }
   })
+
+  // Doc comments (carry `section`) never belong to the diff stream at all; a file-anchored one
+  // belongs here when its path matches a current file's path or (a rename) oldPath.
+  const isOwned = (comment: Comment) =>
+    files.some(file => comment.path === file.path || comment.path === file.oldPath)
+  const orphans = comments.filter(comment => comment.section === undefined && !isOwned(comment))
+  for (const block of orphanBlocksOf(orphans, gonePaths)) {
+    blocks.push({ ...block, key: `orphans#${block.key}` })
+    row += rowsOf(block)
+  }
+
   return { blocks, titleRows, contentRows: row }
 }
 
