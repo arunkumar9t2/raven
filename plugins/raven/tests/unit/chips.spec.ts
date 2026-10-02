@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { chipsFit } from '../../hooks/views/chips'
+import { chipsFit } from '../../hooks/ui/chips'
 
 const TOOLBAR = [
   { icon: '✎', label: 'note' },
