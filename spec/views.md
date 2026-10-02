@@ -47,7 +47,9 @@ file happens to also be open in this pane, stays out: it belongs to the diff pan
 draws only there. Controls are keyed by the section's index rather than its heading text, so two
 sections sharing a heading never share controls or get their notes crossed; the anchor a comment
 carries, and how its "Outdated" group works once a section is gone, is
-[`review.md`](./review.md#anchors-and-composing)'s concern.
+[`review.md`](./review.md#anchors-and-composing)'s concern — that group collapses its own addressed
+comments the same way, grouped by the section identity (heading and index) each one still carries
+even though neither names a section on screen any more.
 Nothing here draws a note control at all for a `note` directive's inline markdown, for a file that
 isn't markdown, or for an image — each keeps the plain, uncommentable rendering it always had.
 

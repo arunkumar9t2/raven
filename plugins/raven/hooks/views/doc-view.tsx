@@ -7,6 +7,7 @@ import { COLORS } from '../core/colors'
 import type { Host } from '../core/host'
 import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
+import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
 import { chipRow, chipsFit } from '../ui/chips'
@@ -283,15 +284,36 @@ export function createDocView(
 
     const outdated = comments.filter(comment => !matchedIds.has(comment.id))
 
+    // Grouped by the section identity each comment still carries (its heading and the index it
+    // was made at, even though neither names a section on screen any more) — the same per-anchor
+    // split and collapse (`splitAddressed`/`addressedRow`) a live section's notes use, so two
+    // addressed comments orphaned from the same gone section still draw as one "N addressed" row.
+    const outdatedGroups = new Map<string, Comment[]>()
+    for (const comment of outdated) {
+      const key = `${comment.section}\u0000${comment.sectionIndex ?? ''}`
+      const group = outdatedGroups.get(key)
+      if (group) group.push(comment)
+      else outdatedGroups.set(key, [comment])
+    }
+
     return (
       <Box flexDirection="column">
         {sectionElements}
         {outdated.length > 0 ? (
           <Box flexDirection="column">
             {outdatedTitle(kit)}
-            {outdated.map(comment =>
-              note(kit, comment, now(), id => review.remove(id), review.resend),
-            )}
+            {[...outdatedGroups.entries()].map(([key, group]) => {
+              const { addressed, visible } = splitAddressed(group)
+              const anchor: Anchor = { path: doc.path, hunk: `§outdated:${key}` }
+              return (
+                <Box key={`outdated:${key}`} flexDirection="column">
+                  {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
+                  {visible.map(comment =>
+                    note(kit, comment, now(), id => review.remove(id), review.resend),
+                  )}
+                </Box>
+              )
+            })}
           </Box>
         ) : null}
       </Box>

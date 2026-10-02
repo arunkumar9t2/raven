@@ -74,6 +74,15 @@ describe('blocksOf', () => {
     expect(noteBlock).toMatchObject({ item: { kind: 'note', comment } })
   })
 
+  test('a doc-section comment never draws in a diff file whose path it happens to share', () => {
+    // The Files tree opens a markdown file in the Doc pane by its git-relative path — the same
+    // string `file.path` already is — so a section comment made there can collide with this file's
+    // own path exactly, with no hunk to tell them apart; only `comment.section` does.
+    const sectionComment = commentOf({ id: 's1', section: 'Notes', sectionIndex: 0 })
+    const blocks = blocksOf(file, [hunkA], [sectionComment], null)
+    expect(blocks.find(b => b.key === noteKeyOf('s1'))).toBeUndefined()
+  })
+
   test('order: title, then each hunk preceded by its own toolbar row, no row between two hunks', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => b.key)).toEqual([

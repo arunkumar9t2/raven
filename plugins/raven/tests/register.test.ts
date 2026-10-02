@@ -406,6 +406,44 @@ describe('options: watched doc paths, defaults', () => {
     expect(await ui.find({ text: /note c2/ })).toBeUndefined()
     expect(await ui.find({ text: 'Outdated' })).toBeUndefined()
   })
+
+  test('two addressed notes on a doc comment whose section is gone still collapse as "2 addressed", under Outdated', async ($, on) => {
+    const path = 'notes.md'
+    const addressedComment = (id: string, createdAt: number) => ({
+      id,
+      path,
+      section: 'Gone',
+      sectionIndex: 0,
+      text: `note ${id}`,
+      status: 'addressed',
+      createdAt,
+    })
+    gitWorld(
+      on,
+      { [commentsStoreKeyOf(REPO)]: [addressedComment('c1', 0), addressedComment('c2', 1)] },
+      null,
+      [],
+    )
+    // The doc the Doc pane actually shows has no 'Gone' heading, so both comments are outdated
+    // the moment they're read, with no live section to draw under.
+    on('fs.read', () => ({ value: '# Still here\n\nnew topic\n' }))
+    showDirective(on, path)
+
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: 'Bash', command: 'raven doc notes.md' })
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    expect(await ui.find({ text: 'Outdated' })).toBeDefined()
+    expect(await ui.find({ text: '✓ 2 addressed' })).toBeDefined()
+    expect(await ui.find({ text: /note c1/ })).toBeUndefined()
+    expect(await ui.find({ text: /note c2/ })).toBeUndefined()
+  })
 })
 
 const PLAN = '/home/u/.claude/plans/x.md'
