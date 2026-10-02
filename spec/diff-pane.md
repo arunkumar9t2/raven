@@ -16,23 +16,25 @@ primary "send N" button (`variant="primary"`, the pane's main action), then clea
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
 trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
 every changed file's section at once — its heading, ending in `＋ note on file`, then its
-file-level notes, then each hunk with its own notes and its one row of controls,
-`＋ note on hunk · stage · revert` — one after another, a blank row between files (`streamOf` in
-`plugins/raven/hooks/views/diff/blocks.ts`). A file's heading carries the same status mark, icon
-and `+adds`/`−dels` as its file-list row and the same bold path (`bodyRowOf`'s `'title'` case in
-`diff-view.tsx`) — except for a renamed file, whose heading shows only its new path; the
-`old → new` label is the file-list row's alone. The whole stream is laid out into one scrollable
-window so wheel and arrow-key scrolling moves through it without redrawing the header or file list
-(`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling body total 2
-(header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a status line, a
-note, the collapsed "✓ N addressed" row, a hunk's one row of controls, the "Outdated" title, and
-the blank row between hunks or between files are each one row; a `＋ note` control draws idle on
-the heading or a hunk's controls row rather than as a row of its own, and opens a compose box in
-its place — two rows (Input plus cancel), three when a hunk's line picker draws above the Input —
-only while that anchor is being composed. A hunk itself takes as many rows as its body has lines,
-sliced into whatever range the current scroll position exposes, and a fixed row only draws once
-its first row falls inside that range. Element caps, focus, and the scroll contract these elements
-draw under are engine facts owned by [`mod-api.md`](./mod-api.md).
+file-level notes, then each hunk in turn: its own notes, then (only while that hunk is being
+composed) its compose box, then its one row of controls, `＋ note on hunk · stage · revert` — a
+blank row between one hunk and the next, a dim rule between one file's section and the next
+(`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). A file's heading carries the same
+status mark, icon and `+adds`/`−dels` as its file-list row and the same bold path (`bodyRowOf`'s
+`'title'` case in `diff-view.tsx`) — except for a renamed file, whose heading shows only its new
+path; the `old → new` label is the file-list row's alone. The whole stream is laid out into one
+scrollable window so wheel and arrow-key scrolling moves through it without redrawing the header
+or file list (`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling
+body total 2 (header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a
+status line, a note, the collapsed "✓ N addressed" row, a hunk's one row of controls, the
+"Outdated" title, the blank row between hunks, and the rule between files are each one row; a
+`＋ note` control draws idle on the heading or a hunk's controls row rather than as a row of its
+own, and opens a compose box in its place — two rows (Input plus cancel), three when a hunk's
+line picker draws above the Input — only while that anchor is being composed. A hunk itself takes
+as many rows as its body has lines, sliced into whatever range the current scroll position
+exposes, and a fixed row only draws once its first row falls inside that range. Element caps,
+focus, and the scroll contract these elements draw under are engine facts owned by
+[`mod-api.md`](./mod-api.md).
 
 A file's section shows only its own comments — and, for a renamed file, comments made under its
 old path too (`blocksOf`'s path filter in `plugins/raven/hooks/views/diff/blocks.ts`); comments
@@ -67,7 +69,7 @@ next refresh rather than dropping it.
 
 ## Sources
 
-A `Select` in the header (falling back to a row of plain buttons on a surface without `Select` —
+A `Select` in the header (falling back to a row of plain buttons on a surface without `canPick` —
 see [`settings-and-surfaces.md`](./settings-and-surfaces.md)) chooses what the working tree is
 diffed against: `HEAD` (default), `session start`, `branch point`, or one `turn N — <prompt>` per
 turn that edited files, newest first. `HEAD`, `session start`, and `branch point` persist per
@@ -144,8 +146,8 @@ rather than jumping to the composer.
 ## Stage and revert one hunk
 
 Each hunk in a non-read-only source carries its one row of controls: `＋ note on hunk` (when the
-surface can type and the hunk isn't being composed), then `stage`, then `revert`. Before either
-runs, Raven re-reads that one file's current hunks and requires an exact header-and-text
+surface has `canType` and the hunk isn't being composed), then `stage`, then `revert`. Before
+either runs, Raven re-reads that one file's current hunks and requires an exact header-and-text
 match against the hunk the button was drawn for. A mismatch — the working tree moved since the
 last render — toasts "The hunk changed — refreshed, try again", refreshes the whole stream with
 the current hunks, and applies nothing.

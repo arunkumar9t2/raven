@@ -178,7 +178,7 @@ when one is missing. Caps and behavior worth knowing before drawing:
   which is what Raven's row accounting in [diff-pane.md](./diff-pane.md) relies on.
 - `Select`'s options are drawn from `SelectOption[]`, one currently-selected value shown collapsed
   against the label until the person opens it; collapsed, it is one row, and its option list opens as
-  an overlay that takes no layout; Raven's own fallback for a surface without `Select` —
+  an overlay that takes no layout; Raven's own fallback for a surface without `canPick` —
   a row of plain buttons — exists because a surface missing the element has no picker at all, not a
   worse-looking one.
 - `Image`'s `source` (`ImageSource`) is base64 bytes the plugin holds directly (`{png}`, at most 2 MiB

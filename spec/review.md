@@ -9,16 +9,16 @@ place the diff is already open.
 
 A comment anchors to `{ path, hunk? }`: a bare path is a file-level comment, a path plus a hunk
 header is scoped to that hunk (`plugins/raven/hooks/views/diff/anchor.ts`). Composing on a hunk
-shows a line picker, on a surface that has `Select`: "whole hunk" plus one option per changed line
+shows a line picker, on a surface with `canPick`: "whole hunk" plus one option per changed line
 in that hunk, each labeled `Lnn -`/`+` its text and truncated to fit the pane
 (`changedLinesOf` in `plugins/raven/hooks/review/comments.ts`, which walks the hunk body tracking
 each side's real line numbers). The chosen line rides with the comment as
 `{ number, side, text }`; a line-anchored note displays `Lnn` before its text.
 
-Without `Input`, a surface draws no comment controls at all — no button, no compose box — while an
-anchor's existing notes still show; without `Select`, a hunk's compose box drops its line picker,
-so every comment made there is a whole-hunk comment. The full surface fallback table is owned by
-[`settings-and-surfaces.md`](./settings-and-surfaces.md).
+Without `canType`, a surface draws no comment controls at all — no button, no compose box — while
+an anchor's existing notes still show; without `canPick`, a hunk's compose box drops its line
+picker, so every comment made there is a whole-hunk comment. The full surface capability table is
+owned by [`settings-and-surfaces.md`](./settings-and-surfaces.md).
 
 A comment whose hunk header no longer matches any of the file's current hunks — Claude edited past
 it — moves into an "Outdated" group, grouped by the stale hunk header, rendered after the file's

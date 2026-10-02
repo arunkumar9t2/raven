@@ -36,9 +36,10 @@ draws nothing. A file that is not markdown renders as one `Code` element instead
 same cap with a "the rest of the file is not shown" note when it overruns.
 
 An image renders as an `Image` element sized to fit the pane's width, but only for `.png` — the one
-format the surface reads straight from a file — and only when the surface's element table carries
-`Image` at all; other image extensions (`.jpg`, `.gif`, `.webp`) and a surface without `Image` both
-fall back to the image's path as dim text.
+format the surface reads straight from a file — and only on a surface with `canShowImage`; other
+image extensions (`.jpg`, `.gif`, `.webp`) and a surface without `canShowImage` both fall back to
+the image's path as dim text. [`settings-and-surfaces.md`](./settings-and-surfaces.md) owns which
+surfaces carry which capability, and why presence of the element itself is never checked.
 
 A relative or `file:` link inside a shown markdown file resolves against that file's own directory
 (`plugins/raven/hooks/views/doc-links.ts`) and opens the target in the Doc view on press; an
