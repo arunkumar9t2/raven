@@ -854,7 +854,9 @@ describe('stage and revert a hunk', () => {
 
     const ui = await mountDiff($)
     const gap = await ui.find({ key: 'a.ts#gap:1' })
-    expect(gap).toBeDefined()
+    // The key alone survives even an empty row (the stream always wraps a block in a keyed Box),
+    // so pin what the gap actually draws: one blank line, same as blocksOf's other fixed rows.
+    expect(gap?.text).toBe(' ')
   })
 })
 
