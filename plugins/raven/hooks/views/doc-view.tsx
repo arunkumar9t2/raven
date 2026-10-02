@@ -7,11 +7,12 @@ import { COLORS } from '../core/colors'
 import type { Host } from '../core/host'
 import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
+import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
 import { chipRow, chipsFit } from '../ui/chips'
 import { row } from '../ui/row'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
+import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName } from './icons'
@@ -196,7 +197,10 @@ export function createDocView(
    * comments whose `section`/`sectionIndex` match this section — a comment with no `sectionIndex`
    * matches the first section with its heading), the compose box while composing, then an idle
    * `[ ✎ note ]` chip, right-aligned. A comment matching no section (its heading/index both gone)
-   * draws at the end under a dim `Outdated` row instead of being dropped.
+   * draws at the end under a dim `Outdated` row instead of being dropped. Only comments carrying a
+   * `section` ever draw here — the same discriminator `blocks.ts`'s orphan group uses — so a diff
+   * comment (hunk- or file-level) on this same path, which carries none, stays out of the Doc pane
+   * entirely and is left for the diff stream alone.
    */
   function sectionsBody(
     kit: Kit,
@@ -206,7 +210,9 @@ export function createDocView(
   ): RenderElement {
     const { Box } = kit.ui
     const sections = sectionsOf(shown, text)
-    const comments = review.comments().filter(comment => comment.path === doc.path)
+    const comments = review
+      .comments()
+      .filter(comment => comment.path === doc.path && comment.section !== undefined)
 
     // The first section carrying each heading, for an un-indexed (made elsewhere) comment to match.
     const firstIndexByHeading = new Map<string, number>()
@@ -235,10 +241,18 @@ export function createDocView(
       const canNote = kit.capabilities.canType && !isComposing
       const chip = canNote ? noteChip(anchor, startComposing) : null
 
+      // Addressed notes collapse to one dim "✓ N addressed" row, same as a diff anchor's own
+      // `notesBlocksOf` (`diff/blocks.ts`) — one shared split (`splitAddressed`), one component
+      // (`addressedRow`), so a section's notes read the same way wherever they draw.
+      const { addressed, visible } = splitAddressed(notes)
+
       return (
         <Box key={`section:${index}`} flexDirection="column">
           {chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)}
-          {notes.map(comment => note(kit, comment, now(), id => review.remove(id), review.resend))}
+          {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
+          {visible.map(comment =>
+            note(kit, comment, now(), id => review.remove(id), review.resend),
+          )}
           {isComposing
             ? commentBox(kit, {
                 anchor,

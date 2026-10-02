@@ -36,12 +36,18 @@ draws nothing. A file that is not markdown renders as one `Code` element instead
 same cap with a "the rest of the file is not shown" note when it overruns.
 
 A markdown file — never a note or any other file kind — is also where [review comments](./review.md)
-attach: each section draws its own notes (the same margin style a diff hunk's notes use) beneath
-its body, then, only on a surface with `canType` and only while that section isn't already being
-composed, a right-aligned `[ ✎ note ]` chip on a row of its own. Controls are keyed by the
-section's index rather than its heading text, so two sections sharing a heading never share
-controls or get their notes crossed; the anchor a comment carries, and how its "Outdated" group
-works once a section is gone, is [`review.md`](./review.md#anchors-and-composing)'s concern.
+attach: each section draws its own notes (the same margin style a diff hunk's notes use, collapsing
+every addressed one into a single dim "✓ N addressed" row exactly as a diff anchor does — one
+shared split, `splitAddressed` in `plugins/raven/hooks/review/comments.ts`) beneath its body, then,
+only on a surface with `canType` and only while that section isn't already being composed, a
+right-aligned `[ ✎ note ]` chip on a row of its own. Only a comment carrying a `section` draws here
+— the same discriminator the diff stream's own orphan group uses to leave doc comments out of
+itself — so a diff comment (file- or hunk-level) on this same path, shown here only because the
+file happens to also be open in this pane, stays out: it belongs to the diff pane's own stream and
+draws only there. Controls are keyed by the section's index rather than its heading text, so two
+sections sharing a heading never share controls or get their notes crossed; the anchor a comment
+carries, and how its "Outdated" group works once a section is gone, is
+[`review.md`](./review.md#anchors-and-composing)'s concern.
 Nothing here draws a note control at all for a `note` directive's inline markdown, for a file that
 isn't markdown, or for an image — each keeps the plain, uncommentable rendering it always had.
 

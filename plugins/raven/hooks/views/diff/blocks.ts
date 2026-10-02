@@ -2,7 +2,7 @@ import { type Capabilities, FULL_CAPABILITIES } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import type { Hunk } from '../../git/hunks'
 import type { Comment, Comments } from '../../review/comments'
-import { groupByAnchor } from '../../review/comments'
+import { groupByAnchor, splitAddressed } from '../../review/comments'
 import {
   type Anchor,
   addressedKeyOf,
@@ -22,6 +22,10 @@ export const ORPHANS_TITLE_KEY = 'orphans-title'
 export const orphanPathKeyOf = (path: string) => `orphan-path:${path}`
 
 const EMPTY_GONE: ReadonlySet<string> = new Set()
+
+/** Whether `comment` is this file's own: its path matches `file`'s current path or, a rename, its old one. */
+const belongsTo = (comment: Comment, file: ChangedFile): boolean =>
+  comment.path === file.path || comment.path === file.oldPath
 
 /** The header's fixed row count (counts+source, then the action buttons) and the rule below it. */
 const HEADER_ROWS = 2
@@ -55,8 +59,7 @@ export const hunkKeyOf = (index: number, hunk: Hunk) => `hunk:${index}:${hunk.he
 
 /** An anchor's notes: addressed ones collapsed to a single "N addressed" row, then each visible one. */
 function notesBlocksOf(notes: Comments, anchor: Anchor): Block<BodyItem>[] {
-  const addressed = notes.filter(comment => comment.status === 'addressed')
-  const visible = notes.filter(comment => comment.status !== 'addressed')
+  const { addressed, visible } = splitAddressed(notes)
 
   const blocks: Block<BodyItem>[] = []
   if (addressed.length > 0) {
@@ -191,9 +194,7 @@ export function blocksOf(
   const isReadOnly = options.readOnly ?? false
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const fileAnchor: Anchor = { path: file.path }
-  const own = comments.filter(
-    comment => comment.path === file.path || comment.path === file.oldPath,
-  )
+  const own = comments.filter(comment => belongsTo(comment, file))
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
   const canNoteFile = !isReadOnly && capabilities.canType && !sameAnchor(composing, fileAnchor)
 
@@ -287,8 +288,7 @@ export function streamOf(
 
   // Doc comments (carry `section`) never belong to the diff stream at all; a file-anchored one
   // belongs here when its path matches a current file's path or (a rename) oldPath.
-  const isOwned = (comment: Comment) =>
-    files.some(file => comment.path === file.path || comment.path === file.oldPath)
+  const isOwned = (comment: Comment) => files.some(file => belongsTo(comment, file))
   const orphans = comments.filter(comment => comment.section === undefined && !isOwned(comment))
   for (const block of orphanBlocksOf(orphans, gonePaths)) {
     blocks.push({ ...block, key: `orphans#${block.key}` })
