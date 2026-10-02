@@ -7,10 +7,19 @@ import { COLORS } from '../../core/colors'
 import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
+import { type Chip, chipRow, chipsFit } from '../../ui/chips'
+import { diffStat } from '../../ui/diff-stat'
+import { statBar } from '../../ui/stat-bar'
 import { selectButtons } from '../select-buttons'
+import { HEADER_MIN } from './comment-box'
 
 /** The source Select's element key, for a test or a focus target. */
 export const SOURCE_SELECT_KEY = 'source'
+
+/** Row 1's own key — counts, the change bar and the view controls (source, nav, refresh). */
+export const SUMMARY_ROW_KEY = 'header:summary'
+/** Row 2's own key — the change map, the notes summary, and the review-action chips. */
+export const ACTIONS_ROW_KEY = 'header:actions'
 
 export type HeaderProps = {
   files: readonly ChangedFile[]
@@ -42,73 +51,139 @@ function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
 }
 
 /**
- * Two fixed rows, neither ever wraps: counts and the source picker on top; navigation, refresh,
- * review and clear below. The ↑/↓ buttons answer the person's own chords for the built-in diff
- * list (`app:diffFileListUp`/`Down`).
+ * Row 1: the counts and change bar on the left; the source picker alone on the right — D10's
+ * mockup row 1. The source control is a `Select`/button row, not a chip, and can't shrink the
+ * way a chip does, so it gets this row to itself; every chip (nav, refresh, review actions)
+ * lives on row 2 instead, where `chipsFit` alone decides words vs. icons.
  */
-export function header(kit: Kit, props: HeaderProps): RenderElement {
-  const { Box, Text, Button, Select } = kit.ui
-  const { files, pending } = props
+function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
+  const { Box, Text, Select } = kit.ui
+  const { files } = props
   const adds = files.reduce((sum, file) => sum + file.adds, 0)
   const dels = files.reduce((sum, file) => sum + file.dels, 0)
 
   return (
-    <Box flexDirection="column">
+    <Box
+      key={SUMMARY_ROW_KEY}
+      flexDirection="row"
+      justifyContent="space-between"
+      gap={2}
+      overflow="hidden"
+      flexWrap="nowrap"
+    >
       <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
         <Text bold wrap="truncate-end">
           {countOf(files.length, 'file')}
         </Text>
-        <Text color={COLORS.added} wrap="truncate-end">
-          +{adds}
-        </Text>
-        <Text color={COLORS.removed} wrap="truncate-end">
-          −{dels}
-        </Text>
-        {kit.capabilities.canPick ? (
-          <Select
-            key={SOURCE_SELECT_KEY}
-            label="source"
-            options={props.sourceOptions}
-            value={props.sourceValue}
-            onSelect={props.onSourceChange}
-          />
-        ) : (
-          sourceButtons(kit, props)
-        )}
+        {diffStat(kit, adds, dels)}
+        {statBar(kit, adds, dels)}
       </Box>
-      <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
-        <Button
-          key="previous"
-          plain
-          dimColor
-          action="app:diffFileListUp"
-          label="↑"
-          onPress={props.onPrevious}
+      {kit.capabilities.canPick ? (
+        <Select
+          key={SOURCE_SELECT_KEY}
+          label="source"
+          options={props.sourceOptions}
+          value={props.sourceValue}
+          onSelect={props.onSourceChange}
         />
-        <Button
-          key="next"
-          plain
-          dimColor
-          action="app:diffFileListDown"
-          label="↓"
-          onPress={props.onNext}
-        />
-        <Button key="refresh" plain dimColor label="↻ refresh" onPress={props.onRefresh} />
-        {/* Siblings, not a Fragment: a Fragment child draws as its own box and wraps this row. */}
-        {pending > 0 ? <Text dimColor>·</Text> : null}
+      ) : (
+        sourceButtons(kit, props)
+      )}
+    </Box>
+  )
+}
+
+/**
+ * Row 2: the change map (wired by `diff-view.tsx` in task 4c) and the notes summary on the
+ * left; every control chip — nav, refresh, edit & send, the one primary `send N`, and clear —
+ * on the right, all through one `chipsFit` so they shrink together. The armed clear keeps its
+ * full words even squeezed, same as a hunk's armed revert.
+ */
+function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
+  const { Box, Text } = kit.ui
+  const { pending } = props
+
+  const chips: Chip[] = [
+    {
+      key: 'previous',
+      action: 'app:diffFileListUp',
+      icon: '↑',
+      label: '',
+      isDim: true,
+      onPress: props.onPrevious,
+    },
+    {
+      key: 'next',
+      action: 'app:diffFileListDown',
+      icon: '↓',
+      label: '',
+      isDim: true,
+      onPress: props.onNext,
+    },
+    { key: 'refresh', icon: '↻', label: 'refresh', isDim: true, onPress: props.onRefresh },
+  ]
+  if (pending > 0) {
+    chips.push({
+      key: 'edit-send',
+      icon: '✎',
+      label: 'edit & send',
+      isDim: true,
+      onPress: props.onEditSend,
+    })
+    chips.push({
+      key: 'send',
+      icon: '➤',
+      short: `➤ ${pending}`,
+      label: `send ${pending}`,
+      variant: 'primary',
+      onPress: props.onSend,
+    })
+  }
+  chips.push({
+    key: 'clear',
+    icon: '⌫',
+    label: props.confirmingClear ? 'clear all? press again' : 'clear',
+    isDim: !props.confirmingClear,
+    forceWords: props.confirmingClear,
+    onPress: props.onClear,
+  })
+  const room = Math.max(0, kit.columns - HEADER_MIN)
+  const mode = chipsFit(chips, room)
+
+  return (
+    <Box
+      key={ACTIONS_ROW_KEY}
+      flexDirection="row"
+      justifyContent="space-between"
+      gap={2}
+      overflow="hidden"
+      flexWrap="nowrap"
+    >
+      <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
         {pending > 0 ? (
-          <Button key="edit-send" plain dimColor label="edit & send" onPress={props.onEditSend} />
+          <Text color={COLORS.suggestion} wrap="truncate-end">
+            ✎ {countOf(pending, 'note')} pending
+          </Text>
         ) : null}
-        {pending > 0 ? (
-          <Button key="send" variant="primary" label={`send ${pending}`} onPress={props.onSend} />
-        ) : null}
-        <Text dimColor>·</Text>
-        {props.confirmingClear ? (
-          <Button key="clear" plain label="clear all? press again" onPress={props.onClear} />
-        ) : (
-          <Button key="clear" plain dimColor label="clear" onPress={props.onClear} />
-        )}
       </Box>
+      {chipRow(kit, chips, mode, ACTIONS_ROW_KEY)}
+    </Box>
+  )
+}
+
+/**
+ * Two fixed rows, neither ever wraps: counts, the change bar and view controls on top; the
+ * change map, the notes summary and the review-action chips below — D10's first-principles
+ * header (point 4's "shape of the change at a glance" and point 5's "quiet controls, loud
+ * intent"). Siblings, not children of a `Fragment`: a `Fragment` draws as its own box and would
+ * wrap this column.
+ */
+export function header(kit: Kit, props: HeaderProps): RenderElement {
+  const { Box } = kit.ui
+  return (
+    <Box flexDirection="column">
+      {summaryRow(kit, props)}
+      {actionsRow(kit, props)}
     </Box>
   )
 }

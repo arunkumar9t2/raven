@@ -57,7 +57,7 @@ export function statBar(kit: Kit, added: number, removed: number, cells = 5): Re
   const bar = statBarCells(added, removed, cells)
 
   return (
-    <Text>
+    <Text wrap="truncate-end">
       {bar.added > 0 ? <Text color={COLORS.added}>{'■'.repeat(bar.added)}</Text> : ''}
       {bar.removed > 0 ? <Text color={COLORS.removed}>{'■'.repeat(bar.removed)}</Text> : ''}
       {bar.rest > 0 ? <Text color={COLORS.inactive}>{'□'.repeat(bar.rest)}</Text> : ''}

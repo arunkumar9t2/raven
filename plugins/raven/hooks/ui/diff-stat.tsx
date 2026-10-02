@@ -12,7 +12,7 @@ export function diffStat(kit: Kit, added: number, removed: number): RenderElemen
   const hasBoth = added > 0 && removed > 0
 
   return (
-    <Text>
+    <Text wrap="truncate-end">
       {added > 0 ? <Text color={COLORS.added}>{`+${added}`}</Text> : ''}
       {hasBoth ? ' ' : ''}
       {removed > 0 ? <Text color={COLORS.removed}>{`−${removed}`}</Text> : ''}

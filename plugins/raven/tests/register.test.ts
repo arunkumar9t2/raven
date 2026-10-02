@@ -692,6 +692,45 @@ describe('diff header', () => {
     expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
   })
 
+  test('the send chip shrinks to its icon and count at the narrowest docked pane', async ($, on) => {
+    const pending = [
+      { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'a.ts', text: 'fix that', status: 'pending', createdAt: 0 },
+    ]
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: pending }, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
+
+    expect((await ui.find({ key: 'send' }))?.text).toContain('➤ 2')
+  })
+
+  test('an armed clear keeps its full confirm words even at the narrowest docked pane', async ($, on) => {
+    gitWorld(on, {}, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
+
+    await ui.press({ key: 'clear' })
+    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
+  })
+
   test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {
     gitWorld(on, {}, null)
 
