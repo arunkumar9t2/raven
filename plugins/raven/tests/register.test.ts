@@ -1275,21 +1275,22 @@ function hunkWorld(
   on: On,
   onApply: (argv: readonly string[], stdin: string | undefined) => void,
   diffTextOf: () => string = () => HUNK_TEXT,
+  path = 'a.ts',
 ) {
   baseWorld(on)
   on('process.run', ($, e) => {
     const [cmd, sub] = e.argv
     if (cmd === 'git' && sub === 'rev-parse') return ran(0, REPO)
-    if (cmd === 'git' && sub === 'status') return ran(0, ' M a.ts\0')
-    if (cmd === 'git' && e.argv.includes('--numstat')) return ran(0, '1\t1\ta.ts\0')
+    if (cmd === 'git' && sub === 'status') return ran(0, ` M ${path}\0`)
+    if (cmd === 'git' && e.argv.includes('--numstat')) return ran(0, `1\t1\t${path}\0`)
     if (cmd === 'git' && sub === 'apply') {
       onApply(e.argv, e.init?.stdin)
       return ran(0)
     }
     // The all-files bulk diff `loadAllHunks` issues (refresh): a real multi-file diff, sectioned
-    // by `diff --git` lines, so `diffSectionsOf` can find a.ts's section.
+    // by `diff --git` lines, so `diffSectionsOf` can find the file's section.
     if (cmd === 'git' && e.argv.includes('-c')) {
-      return ran(0, `diff --git a/a.ts b/a.ts\n--- a/a.ts\n+++ b/a.ts\n${diffTextOf()}`)
+      return ran(0, `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n${diffTextOf()}`)
     }
     // The single-file diff `readHunks` issues (applyHunk's re-check): just the hunk text.
     return ran(0, diffTextOf())
@@ -1357,6 +1358,27 @@ describe('stage and revert a hunk', () => {
     expect(row?.text).toContain('✎ note')
     expect(row?.text).toContain('✓ stage')
     expect(row?.text).toContain('↺ revert')
+  })
+
+  test('a hunk toolbar still draws its stage chip (no hover-scope refusal) when the path and header push the scope past 64 characters', async ($, on) => {
+    // path (81 chars) + '|' + header (77 chars), prefixed by 'hunk-header:', is 171 chars — a
+    // real repo's path plus a git header carrying a function-context suffix routinely does this.
+    const path = `src/${'nested/'.repeat(10)}File.kt`
+    const header = `@@ -1,2 +1,2 @@ ${'x'.repeat(60)}`
+    const diffText = `${header}\n a\n-b\n+c\n`
+    hunkWorld(
+      on,
+      () => {},
+      () => diffText,
+      path,
+    )
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const row = await ui.find({ key: hunkHeaderKeyOf({ path, hunk: header }) })
+    expect(row?.text).toContain('✓ stage')
   })
 
   test('after staging, the stage chip reads "✓ staged"', async ($, on) => {

@@ -4,6 +4,7 @@
 import type { RenderElement } from 'claude-code'
 
 import type { UiKit } from '../core/view'
+import { scopeOf } from './scope'
 
 export type Chip = {
   key: string
@@ -123,6 +124,13 @@ export function chipsLayout(chips: readonly Chip[], room: number): readonly ('wo
  * dropped — `ui.find()` just can't assert it as a prop; the tmux probe above is what actually
  * confirms the behaviour. `ui-kit.test.ts` keeps the no-refusal smoke test for the harness side;
  * this comment is the record of the real-terminal check.
+ *
+ * `scope` is run through `scopeOf` (`hooks/ui/scope.ts`) before it ever reaches a `hover` prop:
+ * a real file path joined with a git hunk header routinely passes 64 characters, past the
+ * engine's "one to 64 characters" limit on `BoxHoverProps`/`TextHoverProps`'s own `scope`, and
+ * the engine refuses the whole Button (drawing its own instead) rather than truncate it itself.
+ * `chipRow` is the one place every chip's hover scope is built, so fixing it here covers every
+ * caller at once.
  */
 export function chipRow(
   kit: UiKit,
@@ -131,6 +139,7 @@ export function chipRow(
   scope?: string,
 ): RenderElement {
   const { Box, Button } = kit.ui
+  const safeScope = scope === undefined ? undefined : scopeOf(scope)
   const modeOf = (index: number): 'words' | 'icons' => {
     if (typeof mode === 'string') return mode
     return mode[index] ?? 'icons'
@@ -148,7 +157,11 @@ export function chipRow(
           action={chip.action}
           variant={chip.variant}
           dimColor={chip.isDim}
-          hover={chip.isDim && scope !== undefined ? { scope, dimColor: false } : undefined}
+          hover={
+            chip.isDim && safeScope !== undefined
+              ? { scope: safeScope, dimColor: false }
+              : undefined
+          }
           onPress={chip.onPress}
         />
       ))}

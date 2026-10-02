@@ -325,4 +325,34 @@ describe('doc comments', () => {
       '/plans/p.md\n§ Notes (2nd)\n- later section, commented first [d1]\n§ Notes\n- earlier section, commented second [d2]',
     )
   })
+
+  test('a legacy comment with no sectionIndex lands in the same group as the first occurrence of its heading', () => {
+    // d1 is legacy (no sectionIndex, as it would have been made before that field existed).
+    // d2 is on the SECOND "Notes" section (sectionIndex 1); d3 is on the FIRST (sectionIndex 0).
+    // The screen (doc-view.tsx's sectionsBody) matches an un-indexed comment to the first section
+    // sharing its heading, so d1 must group with d3 (index 0), not get its own "Notes" group.
+    const text = reviewTextOf([
+      { id: 'd1', path: '/plans/p.md', section: 'Notes', text: 'legacy', ...base, createdAt: 1 },
+      {
+        id: 'd2',
+        path: '/plans/p.md',
+        section: 'Notes',
+        sectionIndex: 1,
+        text: 'second section',
+        ...base,
+        createdAt: 2,
+      },
+      {
+        id: 'd3',
+        path: '/plans/p.md',
+        section: 'Notes',
+        sectionIndex: 0,
+        text: 'first section',
+        ...base,
+        createdAt: 3,
+      },
+    ]) as string
+    expect(text).toContain('§ Notes\n- legacy [d1]\n- first section [d3]')
+    expect(text).toContain('§ Notes (2nd)\n- second section [d2]')
+  })
 })
