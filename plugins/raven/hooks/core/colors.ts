@@ -1,3 +1,6 @@
+import type { CommentStatus } from '../review/comments'
+import type { TaskStatus } from '../review/tasks'
+
 /**
  * Semantic colour names for Raven's chrome, each pinned to a Claude Code theme key so the tree
  * follows the person's active theme (light/dark, `/theme`, or a custom theme) with no code of its
@@ -19,23 +22,21 @@ export const COLORS = {
   accent: 'claude',
   /** Resting chrome: rail and bar cells with nothing to say, a chip at rest. */
   inactive: 'inactive',
-  /** Secondary metadata text — `meta`'s dim `·`-joined parts, a row's dim right side. */
-  subtle: 'subtle',
   /** `progressBar`'s filled cells. */
   done: 'success',
 } as const
 
 /** A note's `CommentStatus` (`hooks/review/comments.ts`) to its `accentBar` colour. */
-export const NOTE_STATE_COLORS = {
+export const NOTE_STATE_COLORS: Record<CommentStatus, string> = {
   pending: COLORS.suggestion,
   sent: COLORS.inactive,
-  addressed: 'success',
-  open: 'warning',
+  addressed: COLORS.done,
+  open: COLORS.modified,
 } as const
 
 /** A task's `TaskStatus` (`hooks/review/tasks.ts`) to its state-dot colour. */
-export const TASK_STATE_COLORS = {
+export const TASK_STATE_COLORS: Record<TaskStatus, string> = {
   pending: COLORS.inactive,
   in_progress: COLORS.accent,
-  completed: 'success',
+  completed: COLORS.done,
 } as const

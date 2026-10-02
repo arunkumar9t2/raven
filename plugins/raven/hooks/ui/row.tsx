@@ -14,9 +14,30 @@ export type RowProps = {
   hover?: { backgroundColor: string }
 }
 
+/**
+ * A string slot truncates in a `Text`; an element slot (a `chipRow`, a `progressBar` — each a
+ * `Box`) draws bare in a shrinking, clipping `Box` instead — the engine refuses a `Box` nested
+ * inside an inline `Text`.
+ */
+function slotOf(kit: Kit, value: RenderElement | string, dim: boolean): RenderElement {
+  const { Box, Text } = kit.ui
+  if (typeof value === 'string') {
+    return (
+      <Text dimColor={dim} wrap="truncate-end">
+        {value}
+      </Text>
+    )
+  }
+  return (
+    <Box flexShrink={1} overflow="hidden">
+      {value}
+    </Box>
+  )
+}
+
 /** A space-between row: left truncates first, nowrap; a keyed row can light on hover. */
 export function row(kit: Kit, props: RowProps): RenderElement {
-  const { Box, Text } = kit.ui
+  const { Box } = kit.ui
   const { left, right, key, hover } = props
 
   return (
@@ -29,8 +50,8 @@ export function row(kit: Kit, props: RowProps): RenderElement {
       flexWrap="nowrap"
       hover={hover}
     >
-      <Text wrap="truncate-end">{left}</Text>
-      {right !== undefined ? <Text dimColor>{right}</Text> : ''}
+      {slotOf(kit, left, false)}
+      {right !== undefined ? slotOf(kit, right, true) : ''}
     </Box>
   )
 }

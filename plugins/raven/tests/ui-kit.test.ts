@@ -79,3 +79,82 @@ describe('the UI kit draws on the terminal surface', () => {
     expect(await ui.find({ text: 'src/api.ts' })).toBeDefined()
   })
 })
+
+/**
+ * `row` and `sectionHeader` draw `chipRow`/`progressBar` (both a `Box`) as `right`/`left`: the
+ * engine refuses a `Box` nested inside an inline `Text`, so these must route an element child
+ * through a `Box`, never through `<Text>{element}</Text>`.
+ */
+function elementSlotWorld(on: On) {
+  baseWorld(on)
+  on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
+    const kit: Kit = {
+      ui: (await $.ui.resolve(e)) as unknown as Ui,
+      columns: 40,
+      rows: 20,
+      capabilities: FULL_CAPABILITIES,
+    }
+    const chips = chipRow(
+      kit,
+      [{ key: 'note', label: 'note', icon: '✎', onPress: () => {} }],
+      'words',
+    )
+
+    return {
+      type: 'Box',
+      props: { flexDirection: 'column' },
+      children: [
+        row(kit, { left: 'src/api.ts', right: progressBar(kit, 3, 5, 5), key: 'row-progress' }),
+        row(kit, { left: chips, right: '+3 −3', key: 'row-chips-left' }),
+        sectionHeader(kit, { title: '6 files', color: COLORS.accent, right: chips }),
+      ],
+    }
+  })
+}
+
+describe('row and sectionHeader take an element as well as text', () => {
+  test('row with a progressBar (a Box) as right draws with no refusal', async ($: Engine, on: On) => {
+    elementSlotWorld(on)
+
+    await $.session.start(SESSION)
+    const ui = await $.ui.mount({
+      plugin: 'raven',
+      surface: 'terminal',
+      component: 'InfoNotice',
+      props: { text: 'kit', command: null },
+    })
+
+    await expect(ui.drawn()).resolves.toBeDefined()
+    expect(await ui.find({ text: 'src/api.ts' })).toBeDefined()
+  })
+
+  test('row with a chipRow (a Box) as left draws with no refusal', async ($: Engine, on: On) => {
+    elementSlotWorld(on)
+
+    await $.session.start(SESSION)
+    const ui = await $.ui.mount({
+      plugin: 'raven',
+      surface: 'terminal',
+      component: 'InfoNotice',
+      props: { text: 'kit', command: null },
+    })
+
+    await expect(ui.drawn()).resolves.toBeDefined()
+    expect(await ui.find({ text: 'note' })).toBeDefined()
+  })
+
+  test('sectionHeader with a chipRow as right draws with no refusal', async ($: Engine, on: On) => {
+    elementSlotWorld(on)
+
+    await $.session.start(SESSION)
+    const ui = await $.ui.mount({
+      plugin: 'raven',
+      surface: 'terminal',
+      component: 'InfoNotice',
+      props: { text: 'kit', command: null },
+    })
+
+    await expect(ui.drawn()).resolves.toBeDefined()
+    expect(await ui.find({ text: '6 files' })).toBeDefined()
+  })
+})
