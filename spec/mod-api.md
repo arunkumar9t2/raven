@@ -14,11 +14,12 @@ authority. A session needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` in its environm
 hooks are read at all. A plugin loads either through normal plugin installation or, for local
 development, by naming its directory in `CLAUDE_CODE_PLUGIN_DIRS` (a `path.delimiter`-joined list) or
 passing `--plugin-dir <path>` on the command line. `scripts/setup-local.ts` does the former,
-idempotently, against `~/.claude/settings.json`'s `env`; `scripts/cc.ts` points `--settings <file>`
-(via `RAVEN_CLAUDE_ARGS`) at a project-local settings file with its own `CLAUDE_CODE_PLUGIN_DIRS`
-for a throwaway tmux session, rather than relying on an inherited env var — it scrubs every
-`CLAUDE_CODE_*`/`CLAUDECODE*` name from the caller's own environment first, precisely so a live
-check never loads whichever checkout the calling session happened to have wired in. A `--plugin-dir`
+idempotently, against `~/.claude/settings.json`'s `env`; `scripts/cc.ts` scrubs every
+`CLAUDE_CODE_*`/`CLAUDECODE*` name from the caller's own environment before starting its throwaway
+tmux session, precisely so a live check never loads whichever checkout the calling session happened
+to have wired in — plugin loading then falls back to `setup:local`'s own persistent settings.json
+entry, or, when the caller passes `RAVEN_CLAUDE_ARGS="--settings <file>"`, to that project-local
+settings file's own `CLAUDE_CODE_PLUGIN_DIRS` instead. A `--plugin-dir`
 plugin's key is its `plugin.json` name, not a marketplace
 entry; `claude plugin validate` names any hook the engine would refuse to register, so a plugin
 author sees the same rejection statically that a live session would raise at load.
