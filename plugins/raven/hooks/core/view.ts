@@ -28,9 +28,17 @@ const CAPABILITIES_BY_SURFACE: Record<RenderSurface, Capabilities> = {
   mobile: { canType: false, canPick: false, canShowImage: false },
 }
 
-/** A surface's capabilities, read off the fixed table above — never off element presence. */
+/** A surface not among the table's known rows draws no typed, picking or imaging controls. */
+const NO_CAPABILITIES: Capabilities = { canType: false, canPick: false, canShowImage: false }
+
+/**
+ * A surface's capabilities, read off the fixed table above — never off element presence. An
+ * unknown future surface (one the table hasn't been taught yet) degrades to `NO_CAPABILITIES`
+ * rather than throwing, so a view still renders, just without controls the surface may not
+ * actually support.
+ */
 export function capabilitiesOf(surface: RenderSurface): Capabilities {
-  return CAPABILITIES_BY_SURFACE[surface]
+  return CAPABILITIES_BY_SURFACE[surface] ?? NO_CAPABILITIES
 }
 
 /** `terminal`'s row, every capability on, so a caller outside a real render can skip the surface. */
