@@ -96,6 +96,12 @@ export type DiffView = View & {
   noteEdited: (absolutePath: string) => void
   /** Clears this turn's edited marks and resumes following, for the controller to call per turn. */
   turnEnded: () => void
+  /**
+   * The paths of the last loaded git-source file list (each file's current path, plus a renamed
+   * file's `oldPath`); `null` before the first load, when the repository is unknown, or while a
+   * turn (read-only) source is selected — a turn's file list is not the live git diff.
+   */
+  knownPaths: () => ReadonlySet<string> | null
 }
 
 export function createDiffView(
@@ -759,6 +765,16 @@ export function createDiffView(
     })
   }
 
+  function knownPaths(): ReadonlySet<string> | null {
+    if (!model.isLoaded || !model.repository || sourceController.isReadOnly()) return null
+    const paths = new Set<string>()
+    for (const file of model.repository.files) {
+      paths.add(file.path)
+      if (file.oldPath !== undefined) paths.add(file.oldPath)
+    }
+    return paths
+  }
+
   return {
     pane: DIFF_PANE,
     subcommand: 'diff',
@@ -768,5 +784,6 @@ export function createDiffView(
     scroll,
     noteEdited,
     turnEnded,
+    knownPaths,
   }
 }

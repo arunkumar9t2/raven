@@ -14,8 +14,12 @@ export type Review = {
   load: (repository: string) => Promise<void>
   add: (input: AddInput) => void
   remove: (id: string) => void
-  /** Hands the pending comments over and marks them sent: they ride exactly one prompt. */
-  take: () => Comments
+  /**
+   * Hands the pending comments `isLive` accepts over and marks them sent: they ride exactly one
+   * prompt. Omitted, every pending comment is live. A pending comment `isLive` rejects moves to
+   * `'open'` instead, where the pane already shows it with a resend button.
+   */
+  take: (isLive?: (comment: Comment) => boolean) => Comments
   /** Undoes `take()` for the named sent comments, moving them back to 'pending'. */
   restore: (ids: readonly string[]) => void
   /** Comments not yet sent to the model. */
@@ -96,12 +100,28 @@ export function createReview(host: Host, now: () => number): Review {
       comments = removeComment(comments, id)
       save()
     },
-    take: () => {
-      const taken = byStatus('pending')
+    take: isLive => {
+      const pending = byStatus('pending')
+      const taken = isLive ? pending.filter(isLive) : pending
+      const rejected = isLive ? pending.filter(comment => !isLive(comment)) : []
+      let changed = false
       if (taken.length > 0) {
-        moveStatus('pending', 'sent')
-        save()
+        moveStatus(
+          'pending',
+          'sent',
+          taken.map(comment => comment.id),
+        )
+        changed = true
       }
+      if (rejected.length > 0) {
+        moveStatus(
+          'pending',
+          'open',
+          rejected.map(comment => comment.id),
+        )
+        changed = true
+      }
+      if (changed) save()
       return taken
     },
     restore: ids => {

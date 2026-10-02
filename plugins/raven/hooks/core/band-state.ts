@@ -21,6 +21,12 @@ export type BandState = {
    * or a Raven pane is already visible (not just open behind another tab).
    */
   band: (kit: Kit, hasSurvey: boolean) => Promise<RenderElement | null>
+  /**
+   * Loads the review once without opening any pane, so a caller that needs the pending comments
+   * before any pane ever loaded them (the band, or a prompt about to carry them) sees a past
+   * session's. A no-op past the first call, successful or not.
+   */
+  ensureReviewLoaded: () => Promise<void>
   /** Records the terminal's width off any `ui.render` Raven sees, for the auto-open gate. */
   noteViewport: (columns: number | undefined) => void
   /** The last width any `ui.render` reported; `undefined` until one has. */
@@ -89,7 +95,7 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
   return {
     band: async (kit, hasSurvey) => {
       if (hasSurvey || kit.rows < 1) return null
-      if (!hasLoadedReview) await ensureReviewLoaded()
+      await ensureReviewLoaded()
       const pendingCount = review.pending().length
       if (pendingCount === 0 && !isDocUpdated) return null
       if (await isAnyPaneShown()) return null
@@ -99,6 +105,7 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
         { open: () => void openFromBand(), send: () => void deps.sendReview() },
       )
     },
+    ensureReviewLoaded,
     noteViewport: columns => {
       if (columns !== undefined) lastViewportColumns = columns
     },
