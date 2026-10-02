@@ -46,8 +46,9 @@ From the marketplace (the repo is private, so this needs GitHub access from your
 ```
 /plugin marketplace add arunkumar9t2/raven
 /plugin install raven@raven
-/reload-plugins
 ```
+
+Then restart Claude Code (or run `/reload-plugins`) to pick it up.
 
 Or run it straight from a checkout, without installing it:
 
