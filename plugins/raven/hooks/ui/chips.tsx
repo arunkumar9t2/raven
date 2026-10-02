@@ -22,6 +22,12 @@ export type Chip = {
    * is `➤ N`, not just `➤`). Defaults to `icon` when omitted.
    */
   short?: string
+  /**
+   * `chipsLayout`'s shrink order: the lowest-priority chip shrinks to icons first, so the row's
+   * most important control keeps its words longest. Defaults to `0`; a `forceWords` chip is
+   * never a candidate regardless of its priority.
+   */
+  priority?: number
 }
 
 /** `icon` and `label` joined by one space, either of which may be empty (`"✕"`, `"resend"`). */
@@ -43,6 +49,50 @@ export function chipsFit(
     chips.reduce((sum, chip) => sum + buttonWidthOf(wordsOf(chip.icon, chip.label)), 0) +
     (chips.length - 1)
   return width <= room ? 'words' : 'icons'
+}
+
+/** `chip`'s drawn width in `mode`, `forceWords` always winning over the mode it's given. */
+function widthOf(
+  chip: Pick<Chip, 'label' | 'icon' | 'short' | 'forceWords'>,
+  mode: 'words' | 'icons',
+): number {
+  return buttonWidthOf(
+    mode === 'words' || chip.forceWords
+      ? wordsOf(chip.icon, chip.label)
+      : (chip.short ?? chip.icon),
+  )
+}
+
+/**
+ * Priority-aware shrinking: every chip starts in `'words'`; while the row's total drawn width
+ * (each chip's width plus one gap between them) exceeds `room`, the lowest-`priority` chip
+ * still in words shrinks to icons, one at a time, until it fits or there is nothing left to
+ * shrink (a `forceWords` chip is never a candidate — it always draws its full words). Ties keep
+ * the chips' own order. Unlike `chipsFit`, this is per-chip, not all-or-nothing: the row's most
+ * important chip (highest `priority`) keeps its words for as long as the room allows any chip
+ * to, and only gives way itself once every lower-priority chip has already shrunk and the row
+ * still doesn't fit.
+ */
+export function chipsLayout(chips: readonly Chip[], room: number): readonly ('words' | 'icons')[] {
+  const modes: ('words' | 'icons')[] = chips.map(() => 'words')
+  const totalWidth = () =>
+    chips.reduce((sum, chip, i) => sum + widthOf(chip, modes[i] as 'words' | 'icons'), 0) +
+    Math.max(0, chips.length - 1)
+
+  const shrinkOrder = chips
+    .map((chip, index) => ({
+      index,
+      priority: chip.priority ?? 0,
+      forceWords: chip.forceWords ?? false,
+    }))
+    .filter(candidate => !candidate.forceWords)
+    .sort((a, b) => a.priority - b.priority)
+
+  for (const { index } of shrinkOrder) {
+    if (totalWidth() <= room) break
+    modes[index] = 'icons'
+  }
+  return modes
 }
 
 /**
@@ -76,17 +126,21 @@ export function chipsFit(
 export function chipRow(
   kit: Kit,
   chips: readonly Chip[],
-  mode: 'words' | 'icons',
+  mode: 'words' | 'icons' | readonly ('words' | 'icons')[],
   scope?: string,
 ): RenderElement {
   const { Box, Button } = kit.ui
+  const modeOf = (index: number): 'words' | 'icons' => {
+    if (typeof mode === 'string') return mode
+    return mode[index] ?? 'icons'
+  }
   return (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-      {chips.map(chip => (
+      {chips.map((chip, index) => (
         <Button
           key={chip.key}
           label={
-            mode === 'words' || chip.forceWords
+            modeOf(index) === 'words' || chip.forceWords
               ? wordsOf(chip.icon, chip.label)
               : (chip.short ?? chip.icon)
           }
