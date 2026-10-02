@@ -77,6 +77,8 @@ file, follow it with `chezmoi add ~/.claude/settings.json`.
 Whichever way it's loaded: `/raven` (diff), `/raven doc`, `/raven send`. To let Claude run the CLI
 without a permission prompt, allow `Bash(raven:*)` in your settings.
 
+Claude runs the commands below through its Bash tool; the plugin's `bin/` directory is on PATH while the plugin is enabled. To use them in your own shell, add `plugins/raven/bin` to your PATH.
+
 ## CLI
 
 ```
@@ -98,7 +100,7 @@ raven comments                    print pending review comments
 
 ## Develop
 
-See `CLAUDE.md`. `bun run check` runs everything; `scripts/cc.ts` drives a real session in tmux.
+See `CLAUDE.md`. `bun run check` runs everything; `bun run cc` drives a real session in tmux.
 The project name is a working title: every derived name lives in `plugins/raven/hooks/names.ts`.
 
 ## License

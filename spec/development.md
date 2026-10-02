@@ -35,16 +35,17 @@ unit-tested with bun without touching the engine's sandboxed module system at al
 ## Scripts and the gate
 
 ```bash
-bun run typecheck    # tsc for the mod (jsx=h, no Node) and the CLI (bun-types), two separate configs
+bun run typecheck    # tsc for the mod (jsx=h, no Node), CLI (bun-types), and scripts (all three configs)
 bun run lint         # biome check .
 bun run lint:fix     # biome check --fix .
-bun run test         # bun test ./plugins/raven/cli ./plugins/raven/tests/unit
+bun run test         # bun test ./plugins/raven/cli ./plugins/raven/tests/unit ./scripts
 bun run test:mod     # CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin test plugins/raven
 bun run validate     # claude plugin validate --strict, both the marketplace and the plugin
 bun run check        # typecheck && lint && test && test:mod && validate — the full gate
 bun run build        # compiles the CLI to plugins/raven/dist/raven (gitignored)
 bun run types:sync   # copies the engine's declarations into types/claude-code.d.ts
 bun run setup:local  # wires this checkout into every local Claude Code session (see below)
+bun run cc           # drives a real Claude Code session in tmux with the mod loaded (see below)
 ```
 
 `bun run check` is the gate: every one of its five steps must pass before a change is considered
@@ -93,9 +94,11 @@ scripts/cc.ts stop                        # kill the tmux session
 (`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1`) so the built-in diff panel does not auto-open over
 Raven's own dock, and `RAVEN_CLAUDE_ARGS` appended for extra flags such as `--allowedTools
 'Bash(raven:*)' Write`. It always runs with the default model — never `/model`, since that rewrites
-the person's own default persistently. Before launching, it drops every `CLAUDE_CODE_*`/
-`CLAUDECODE*` name from the caller's env (and any already sitting in a live tmux server's global
-env from an earlier, unscrubbed launch) and sets only its own three: `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`,
+the person's own default persistently. Before launching, it scrubs every prefixed `CLAUDE_CODE_*/CLAUDECODE*/CLAUDE_PLUGIN_*` 
+name and these exact markers from the caller's env (and any already sitting in a live tmux server's 
+global env from an earlier, unscrubbed launch): `CLAUDE_PID`, `CLAUDE_EFFORT`, `CLAUDE_ENV_FILE`, 
+`CLAUDE_PROJECT_DIR`, `AI_AGENT` — but keeps `CLAUDE_CONFIG_DIR` (a user choice, not a session marker). 
+It then sets only its own three: `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`,
 `CLAUDE_CODE_NO_FLICKER=1`, `CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1`. Plugin loading comes from
 `--settings <file>` (via `RAVEN_CLAUDE_ARGS`) or from `bun run setup:local`'s persistent
 `~/.claude/settings.json` entry — never from an inherited `CLAUDE_CODE_PLUGIN_DIRS` — so the scrub

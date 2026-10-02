@@ -12,5 +12,5 @@
     "allowImportingTsExtensions": true,
     "types": ["bun-types"]
   },
-  "include": ["cc.ts", "cc.spec.ts"]
+  "include": ["cc.ts", "cc.spec.ts", "setup-local.ts"]
 }

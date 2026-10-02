@@ -15,19 +15,21 @@ session on an older Claude Code needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` in i
 before a mod's hooks are read at all. A plugin loads either through normal plugin installation or, for local
 development, by naming its directory in `CLAUDE_CODE_PLUGIN_DIRS` (a `path.delimiter`-joined list) or
 passing `--plugin-dir <path>` on the command line. `scripts/setup-local.ts` does the former,
-idempotently, against `~/.claude/settings.json`'s `env`; `scripts/cc.ts` scrubs every
-`CLAUDE_CODE_*`/`CLAUDECODE*` name from the caller's own environment before starting its throwaway
-tmux session, precisely so a live check never loads whichever checkout the calling session happened
-to have wired in — plugin loading then falls back to `setup:local`'s own persistent settings.json
-entry, or, when the caller passes `RAVEN_CLAUDE_ARGS="--settings <file>"`, to that project-local
-settings file's own `CLAUDE_CODE_PLUGIN_DIRS` instead. A `--plugin-dir`
+idempotently, against `~/.claude/settings.json`'s `env`; `scripts/cc.ts` scrubs the caller's own environment 
+before starting its throwaway tmux session (see the scrub rule below), precisely so a live check never loads 
+whichever checkout the calling session happened to have wired in — plugin loading then falls back to 
+`setup:local`'s own persistent settings.json entry, or, when the caller passes `RAVEN_CLAUDE_ARGS="--settings <file>"`, 
+to that project-local settings file's own `CLAUDE_CODE_PLUGIN_DIRS` instead. A `--plugin-dir`
 plugin's key is its `plugin.json` name, not a marketplace
 entry; `claude plugin validate` names any hook the engine would refuse to register, so a plugin
 author sees the same rejection statically that a live session would raise at load.
 
 A plugin loaded from a directory this way is read live off disk and hot-reloads when its sources
 change during a session — unlike an installed marketplace copy, which is served from a cache and
-does not. Raven depends on this for its own development loop.
+does not. Raven depends on this for its own development loop. `scripts/cc.ts` (run as `bun run cc`) 
+scrubs the caller's own session environment before starting a tmux session to prevent leaking plugin 
+directories or session markers from the outer Claude Code session into the session it launches; see 
+[`development.md`](./development.md)'s closed-loop section for the complete scrub rule.
 
 ## Plugin layout
 
