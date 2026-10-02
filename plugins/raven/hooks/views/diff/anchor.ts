@@ -26,8 +26,8 @@ export const resendKeyOf = (id: string) => `resend:${id}`
 /** The block key of an anchor's collapsed "N addressed" row. */
 export const addressedKeyOf = (anchor: Anchor) => `addressed:${anchorKeyOf(anchor)}`
 
-/** The block key of a hunk's one row of controls: note, stage, and revert together. */
-export const hunkActionsKeyOf = (anchor: Anchor) => `hunk-actions:${anchorKeyOf(anchor)}`
+/** The block key of a hunk's toolbar row: its header label, note, stage and revert chips. */
+export const hunkHeaderKeyOf = (anchor: Anchor) => `hunk-header:${anchorKeyOf(anchor)}`
 /** The element key of a hunk's stage button. */
 export const stageKeyOf = (anchor: Anchor) => `stage:${anchorKeyOf(anchor)}`
 /** The element key of a hunk's revert button. */

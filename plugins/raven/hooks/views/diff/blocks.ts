@@ -7,7 +7,7 @@ import {
   type Anchor,
   addressedKeyOf,
   commentBoxKeyOf,
-  hunkActionsKeyOf,
+  hunkHeaderKeyOf,
   noteKeyOf,
   sameAnchor,
 } from './anchor'
@@ -39,7 +39,7 @@ export type BodyItem =
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean }
-  | { kind: 'hunk-actions'; anchor: Anchor; hunk: Hunk; canNote: boolean }
+  | { kind: 'hunk-header'; anchor: Anchor; hunk: Hunk; canNote: boolean; isReadOnly: boolean }
   | { kind: 'gap' }
   | { kind: 'status'; text: string }
 
@@ -134,9 +134,9 @@ export type BlocksOptions = {
 
 /**
  * The selected file's body as fixed-height and hunk blocks, top to bottom: the title row (carrying
- * the file's own "＋ note on file"), the file-level notes and comment box, then each hunk with its
- * own notes, comment box and one row of controls (note · stage · revert) at its end (no row between
- * two hunks; a later task adds a hunk context row there), then an "Outdated" group for comments
+ * the file's own note chip), the file-level notes and comment box, then each hunk preceded by its
+ * toolbar row (its header label and, unless read-only, the note/stage/revert chips) and followed
+ * by its own notes and comment box (no row after a hunk), then an "Outdated" group for comments
  * whose hunk no longer exists. A file with no hunks (loading, binary, or no textual changes) ends
  * with one status row instead.
  */
@@ -179,6 +179,18 @@ export function blocksOf(
 
   hunks.forEach((hunk, index) => {
     const anchor: Anchor = { path: file.path, hunk: hunk.header }
+    blocks.push({
+      kind: 'fixed',
+      key: hunkHeaderKeyOf(anchor),
+      rows: 1,
+      item: {
+        kind: 'hunk-header',
+        anchor,
+        hunk,
+        canNote: !isReadOnly && capabilities.canType && !sameAnchor(composing, anchor),
+        isReadOnly,
+      },
+    })
     blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
     if (isReadOnly) return
     blocks.push(
@@ -190,17 +202,6 @@ export function blocksOf(
         hunk,
       ),
     )
-    blocks.push({
-      kind: 'fixed',
-      key: hunkActionsKeyOf(anchor),
-      rows: 1,
-      item: {
-        kind: 'hunk-actions',
-        anchor,
-        hunk,
-        canNote: capabilities.canType && !sameAnchor(composing, anchor),
-      },
-    })
   })
 
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated))

@@ -3,6 +3,7 @@
  * `COLORS` (`hooks/core/colors.ts`) so every theme, light or dark, follows — see spec D9.
  */
 export { accentBar } from './accent-bar'
+export { ageOf } from './age'
 export { badge } from './badge'
 export { type Chip, chipRow, chipsFit } from './chips'
 export { diffStat } from './diff-stat'

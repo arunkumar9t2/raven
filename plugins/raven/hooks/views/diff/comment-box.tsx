@@ -3,17 +3,22 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import { COLORS } from '../../core/colors'
+import { NOTE_STATE_COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
-import type { Hunk } from '../../git/hunks'
+import { type Hunk, parseHeader } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf } from '../../review/comments'
+import { accentBar } from '../../ui/accent-bar'
+import { ageOf } from '../../ui/age'
+import { type Chip, chipRow, chipsFit } from '../../ui/chips'
+import { meta } from '../../ui/meta'
+import { row } from '../../ui/row'
 import {
   type Anchor,
   addressedKeyOf,
   cancelKeyOf,
   commentButtonKeyOf,
   dropKeyOf,
-  hunkActionsKeyOf,
+  hunkHeaderKeyOf,
   noteKeyOf,
   resendKeyOf,
   revertKeyOf,
@@ -56,7 +61,7 @@ export type CommentBoxProps = {
  * The compose state for an anchor being written to: a line picker (on a hunk, when `hasPicker`)
  * plus an Input+cancel pair. `blocksOf` emits this block only while the anchor is being composed
  * and only on a surface with `canType`, so this always runs with a real `Input` to draw; the
- * idle "＋ note" control is `noteButton`, drawn by the heading or the hunk's actions row instead.
+ * idle "✎ note" control is `noteChip`, drawn by the heading or the hunk's toolbar instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Button, Input, Select } = kit.ui
@@ -98,112 +103,137 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   )
 }
 
-/** One existing comment: pending plain, sent dim with `⧗`, open with `↻` and a resend button. */
+/**
+ * A note reads as a margin annotation under its code: `accentBar` coloured by its status, the
+ * text, then a dim `L<line> · <age>` and its chips, right-aligned — D10 point 6. `now` (ms) comes
+ * from the view's own clock, never `Date.now()` here.
+ */
 export function note(
   kit: Kit,
   comment: Comment,
+  now: number,
   onRemove: (id: string) => void,
   onResend: () => void,
 ): RenderElement {
-  const { Box, Text, Button } = kit.ui
-  const isDim = comment.status === 'sent' || comment.status === 'open'
-  const prefix = comment.status === 'sent' ? '⧗ ' : comment.status === 'open' ? '↻ ' : ''
-  const lineLabel = comment.line ? `L${comment.line.number} ` : ''
+  const { Box, Text } = kit.ui
+  const lineLabel = comment.line ? `L${comment.line.number}` : ''
+  const age = ageOf(comment.createdAt, now)
 
-  return (
-    <Box key={noteKeyOf(comment.id)} flexDirection="row" gap={1}>
-      <Text color={isDim ? undefined : COLORS.suggestion} dimColor={isDim} wrap="truncate-end">
-        ▍ {prefix}
-        {lineLabel}
-        {comment.text}
-      </Text>
-      {comment.status === 'open' ? (
-        <Button key={resendKeyOf(comment.id)} plain dimColor label="resend" onPress={onResend} />
-      ) : null}
-      <Button
-        key={dropKeyOf(comment.id)}
-        plain
-        dimColor
-        label="✕"
-        onPress={() => onRemove(comment.id)}
-      />
+  const chips: Chip[] = []
+  if (comment.status === 'open') {
+    chips.push({
+      key: resendKeyOf(comment.id),
+      icon: '',
+      label: 'resend',
+      isDim: true,
+      onPress: onResend,
+    })
+  }
+  chips.push({
+    key: dropKeyOf(comment.id),
+    icon: '✕',
+    label: '',
+    isDim: true,
+    onPress: () => onRemove(comment.id),
+  })
+
+  const left = (
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      {accentBar(kit, NOTE_STATE_COLORS[comment.status])}
+      <Text wrap="truncate-end">{comment.text}</Text>
     </Box>
   )
+  const right = (
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      {meta(kit, [lineLabel, age])}
+      {chipRow(kit, chips, 'words')}
+    </Box>
+  )
+  return row(kit, { left, right, key: noteKeyOf(comment.id) })
 }
 
 /**
- * The idle "＋ note" control: the one place that builds the button and its key, drawn by a
- * file's heading row or a hunk's actions row. Never drawn for an anchor already being composed —
- * its caller omits this in that case, leaving room for the compose box below.
+ * The "✎ note" chip descriptor: the one place that builds it and its key, used by a file's
+ * heading and a hunk's toolbar alike. Never drawn for an anchor already being composed — its
+ * caller omits this in that case, leaving room for the compose box below.
  */
-export function noteButton(
-  kit: Kit,
-  anchor: Anchor,
-  label: string,
-  onStart: (anchor: Anchor) => void,
-): RenderElement {
-  const { Button } = kit.ui
-  return (
-    <Button
-      key={commentButtonKeyOf(anchor)}
-      plain
-      dimColor
-      label={label}
-      onPress={() => onStart(anchor)}
-    />
-  )
+export function noteChip(anchor: Anchor, onStart: (anchor: Anchor) => void): Chip {
+  return {
+    key: commentButtonKeyOf(anchor),
+    icon: '✎',
+    label: 'note',
+    isDim: true,
+    onPress: () => onStart(anchor),
+  }
 }
 
-export type HunkActionsProps = {
+export type HunkToolbarProps = {
   anchor: Anchor
-  /** Whether the "＋ note" control draws: the surface can type and this hunk isn't being composed. */
+  hunk: Hunk
+  /** Whether the "✎ note" chip draws: the surface can type and this hunk isn't being composed. */
   canNote: boolean
+  /** A turn's diff is read-only: the row draws the header label alone, no chips. */
+  isReadOnly: boolean
   isStaged: boolean
   confirmingRevert: boolean
+  /** The toolbar's own room, after the rail and its indent — what `chipsFit` sizes against. */
+  columns: number
   onStartNote: (anchor: Anchor) => void
   onStage: () => void
   onRevert: () => void
 }
 
+/** Room `chipsFit` leaves for the header label before shrinking the chips to icons. */
+const HEADER_MIN = 12
+
 /**
- * A hunk's one row of controls: ＋ note (when it can draw), stage, revert — each pair
- * separated by a dim `·`. Staging is a no-op once staged, revert confirms on a second press.
- * The label is the bare "＋ note" so the row, armed confirm included, fits the narrowest
- * docked pane.
+ * A hunk's function context and its new-side line range — `ƒ handleRequest  L2–8`, or the bare
+ * range when git gives no context (a trailing `{`/`(` off a long suffix is dropped). D10 point 3.
  */
-export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement {
-  const { Box, Text, Button } = kit.ui
+function hunkLabelOf(hunk: Hunk): string {
+  const parsed = parseHeader(hunk.header)
+  if (!parsed) return ''
+  const range = `L${parsed.newStart}–${parsed.newStart + Math.max(0, parsed.newCount - 1)}`
+  const suffix = parsed.suffix
+    .trim()
+    .replace(/[{(]+$/, '')
+    .trim()
+  return suffix === '' ? range : `ƒ ${suffix}  ${range}`
+}
+
+/**
+ * A hunk's toolbar row: its header label, then — unless read-only — the note (when it can draw),
+ * stage and revert chips, right-aligned. Staging is a no-op once staged; revert confirms on a
+ * second press, keeping its words (`↺ sure?`) even in icons mode. D10 points 3 and 5.
+ */
+export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
   const { anchor } = props
-  return (
-    <Box
-      key={hunkActionsKeyOf(anchor)}
-      flexDirection="row"
-      gap={1}
-      overflow="hidden"
-      flexWrap="nowrap"
-    >
-      {props.canNote ? noteButton(kit, anchor, '＋ note', props.onStartNote) : null}
-      {props.canNote ? <Text dimColor>·</Text> : null}
-      <Button
-        key={stageKeyOf(anchor)}
-        plain
-        dimColor
-        label={props.isStaged ? 'staged ✓' : 'stage'}
-        onPress={props.isStaged ? () => {} : props.onStage}
-      />
-      <Text dimColor>·</Text>
-      {props.confirmingRevert ? (
-        <Button
-          key={revertKeyOf(anchor)}
-          plain
-          label="revert? press again"
-          onPress={props.onRevert}
-        />
-      ) : (
-        <Button key={revertKeyOf(anchor)} plain dimColor label="revert" onPress={props.onRevert} />
-      )}
-    </Box>
-  )
+  const label = hunkLabelOf(props.hunk)
+
+  if (props.isReadOnly) return row(kit, { left: label, key: hunkHeaderKeyOf(anchor) })
+
+  const chips: Chip[] = []
+  if (props.canNote) chips.push(noteChip(anchor, props.onStartNote))
+  chips.push({
+    key: stageKeyOf(anchor),
+    icon: '✓',
+    label: props.isStaged ? 'staged' : 'stage',
+    isDim: !props.isStaged,
+    onPress: props.isStaged ? () => {} : props.onStage,
+  })
+  chips.push({
+    key: revertKeyOf(anchor),
+    icon: '↺',
+    label: props.confirmingRevert ? 'sure?' : 'revert',
+    isDim: !props.confirmingRevert,
+    forceWords: props.confirmingRevert,
+    onPress: props.onRevert,
+  })
+
+  const room = Math.max(0, props.columns - HEADER_MIN)
+  const mode = chipsFit(chips, room)
+
+  return row(kit, { left: label, right: chipRow(kit, chips, mode), key: hunkHeaderKeyOf(anchor) })
 }
 
 /** The collapsed row for an anchor's addressed comments: "✓ N addressed". */
