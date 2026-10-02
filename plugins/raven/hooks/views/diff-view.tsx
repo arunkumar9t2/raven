@@ -442,14 +442,22 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         const mark = statusMarkOf(item.file.status)
         const icon = iconOf(item.file.path)
         return (
-          <Box flexDirection="row" gap={1}>
-            <Text color={mark.color}>{mark.glyph}</Text>
-            <Text color={icon.color}>{icon.glyph}</Text>
+          <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+            <Text color={mark.color} wrap="truncate-end">
+              {mark.glyph}
+            </Text>
+            <Text color={icon.color} wrap="truncate-end">
+              {icon.glyph}
+            </Text>
             <Text bold wrap="truncate-end">
               {item.file.path}
             </Text>
-            <Text color={COLORS.added}>+{item.file.adds}</Text>
-            <Text color={COLORS.removed}>−{item.file.dels}</Text>
+            <Text color={COLORS.added} wrap="truncate-end">
+              +{item.file.adds}
+            </Text>
+            <Text color={COLORS.removed} wrap="truncate-end">
+              −{item.file.dels}
+            </Text>
             {item.canNote
               ? noteButton(kit, { path: item.file.path }, '＋ note on file', startComposing)
               : null}

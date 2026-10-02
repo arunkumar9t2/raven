@@ -173,7 +173,13 @@ export function hunkActionsRow(kit: Kit, props: HunkActionsProps): RenderElement
   const { Box, Text, Button } = kit.ui
   const { anchor } = props
   return (
-    <Box key={hunkActionsKeyOf(anchor)} flexDirection="row" gap={1}>
+    <Box
+      key={hunkActionsKeyOf(anchor)}
+      flexDirection="row"
+      gap={1}
+      overflow="hidden"
+      flexWrap="nowrap"
+    >
       {props.canNote ? noteButton(kit, anchor, '＋ note on hunk', props.onStartNote) : null}
       {props.canNote ? <Text dimColor>·</Text> : null}
       <Button
