@@ -18,6 +18,15 @@ export type Chip = {
   /** An engine keybinding action (e.g. `app:diffFileListUp`) the chord presses, same as `ButtonProps.action`. */
   action?: string
   /**
+   * Keeps this chip mounted (so its `action` chord still answers) but drawn with zero width —
+   * `Button`'s own `ButtonProps.action` fires "while mounted", a `display: 'none'` `Box` still
+   * mounts its child, just without drawing it (confirmed live: ctrl+↓ still moved the file list's
+   * `❯` with its Button's wrapping `Box` set `display="none"`). Used for a chip whose chord must
+   * keep answering at a width too narrow to draw it (ruling R30) — unlike simply leaving the chip
+   * out of the array, which would unmount its `Button` and the chord with it.
+   */
+  hidden?: boolean
+  /**
    * The icons-mode text, when it must carry more than the bare `icon` (e.g. `send N`'s icon mode
    * is `➤ N`, not just `➤`). Defaults to `icon` when omitted.
    */
@@ -51,11 +60,13 @@ export function chipsFit(
   return width <= room ? 'words' : 'icons'
 }
 
-/** `chip`'s drawn width in `mode`, `forceWords` always winning over the mode it's given. */
+/** `chip`'s drawn width in `mode`, `forceWords` always winning over the mode it's given — `0` for
+ * a `hidden` chip, which draws nothing. */
 function widthOf(
-  chip: Pick<Chip, 'label' | 'icon' | 'short' | 'forceWords'>,
+  chip: Pick<Chip, 'label' | 'icon' | 'short' | 'forceWords' | 'hidden'>,
   mode: 'words' | 'icons',
 ): number {
+  if (chip.hidden) return 0
   return buttonWidthOf(
     mode === 'words' || chip.forceWords
       ? wordsOf(chip.icon, chip.label)
@@ -75,9 +86,10 @@ function widthOf(
  */
 export function chipsLayout(chips: readonly Chip[], room: number): readonly ('words' | 'icons')[] {
   const modes: ('words' | 'icons')[] = chips.map(() => 'words')
+  const visibleCount = chips.filter(chip => !chip.hidden).length
   const totalWidth = () =>
     chips.reduce((sum, chip, i) => sum + widthOf(chip, modes[i] as 'words' | 'icons'), 0) +
-    Math.max(0, chips.length - 1)
+    Math.max(0, visibleCount - 1)
 
   const shrinkOrder = chips
     .map((chip, index) => ({
@@ -138,19 +150,21 @@ export function chipRow(
   return (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
       {chips.map((chip, index) => (
-        <Button
-          key={chip.key}
-          label={
-            modeOf(index) === 'words' || chip.forceWords
-              ? wordsOf(chip.icon, chip.label)
-              : (chip.short ?? chip.icon)
-          }
-          action={chip.action}
-          variant={chip.variant}
-          dimColor={chip.isDim}
-          hover={chip.isDim && scope !== undefined ? { scope, dimColor: false } : undefined}
-          onPress={chip.onPress}
-        />
+        <Box key={`${chip.key}:wrap`} display={chip.hidden ? 'none' : 'flex'}>
+          <Button
+            key={chip.key}
+            label={
+              modeOf(index) === 'words' || chip.forceWords
+                ? wordsOf(chip.icon, chip.label)
+                : (chip.short ?? chip.icon)
+            }
+            action={chip.action}
+            variant={chip.variant}
+            dimColor={chip.isDim}
+            hover={chip.isDim && scope !== undefined ? { scope, dimColor: false } : undefined}
+            onPress={chip.onPress}
+          />
+        </Box>
       ))}
     </Box>
   )

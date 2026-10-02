@@ -330,8 +330,10 @@ const mountDiff = ($: Engine) =>
  * the other narrowest-pane tests use it (see the R28 test above). A `Button` draws `[ label ]`
  * (`types/claude-code.d.ts`'s own documented convention, `chips.tsx`'s `buttonWidthOf`); a row
  * `Box` sums its children plus one `gap` between each; any other `Box` (here, always a single
- * child) is its child's width; a `Text` is the length of its string children, recursing into any
- * nested `Text` (the change map nests one coloured `Text` per glyph).
+ * child) is its child's width, except a `display: 'none'` one (`chipRow`'s per-chip wrapper for a
+ * `hidden` nav chip, ruling R30), which draws as `0` though its `Button` stays mounted so the
+ * chord still answers; a `Text` is the length of its string children, recursing into any nested
+ * `Text` (the change map nests one coloured `Text` per glyph).
  */
 function drawnWidth(
   el: { type: string; props?: Record<string, unknown>; children?: unknown[] } | undefined,
@@ -347,6 +349,7 @@ function drawnWidth(
     )
   }
   if (el.type === 'Box') {
+    if (el.props?.display === 'none') return 0
     const widths = kids.map(child => drawnWidth(child as typeof el))
     if (el.props?.flexDirection === 'row') {
       const gap = (el.props?.gap as number | undefined) ?? 0
@@ -993,6 +996,36 @@ describe('diff header', () => {
     const mapGlyphs = (row?.text ?? '').match(/[▁▂▃▄▅▆▇█…]/g) ?? []
     expect(mapGlyphs.length).toBeGreaterThanOrEqual(3)
     expect(row?.text).toMatch(/✎2|✎ 2 notes pending/)
+    expect(drawnWidth(row)).toBeLessThanOrEqual(38)
+  })
+
+  test('the list chords keep answering even where the narrowest docked pane drops the nav chips (R30)', async ($, on) => {
+    // Same narrow-pane shape as the R28 test above (nav would otherwise give way entirely to
+    // make room for the map and the notes summary) — this asserts the chord survives that: the
+    // previous/next Buttons stay mounted with their `app:diffFileListUp/Down` actions, just drawn
+    // at zero width, so the row still fits 38 columns.
+    const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
+    const pending = [
+      { id: 'c1', path: 'f0.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'f0.ts', text: 'fix that', status: 'pending', createdAt: 0 },
+    ]
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: pending }, null, files)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
+
+    expect((await ui.find({ key: 'previous' }))?.props.action).toBe('app:diffFileListUp')
+    expect((await ui.find({ key: 'next' }))?.props.action).toBe('app:diffFileListDown')
+
+    const row = await ui.find({ key: ACTIONS_ROW_KEY })
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 

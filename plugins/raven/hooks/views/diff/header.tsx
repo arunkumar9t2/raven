@@ -137,6 +137,17 @@ function iconsWidthOf(chips: readonly Chip[]): number {
  * and refresh are gone, the survivors' own icons floor already clears that full reserve, so
  * sizing against the smaller, actual left content here would only hand them back words they were
  * just dropped to icons to make room for.
+ *
+ * Ruling R30: "give way entirely" above means draw nothing, not unmount — nav's two Buttons are
+ * the file list's only carriers of `action="app:diffFileListUp/Down"`, and a Button answers its
+ * chord only while mounted, so actually dropping them from the tree would silence the person's
+ * ctrl+↑/↓ the moment the row got this narrow (confirmed live: with the Buttons removed, ctrl+↓
+ * stopped moving the list's `❯`; with them kept mounted but `hidden`, the chord still moved it —
+ * see the task report). `chipsOf` keeps `previous`/`next` in the array at every width and marks
+ * them `hidden` instead of omitting them when `includeNavRefresh` is false; `chipRow` draws a
+ * `hidden` chip's `Button` inside a zero-drawing `display: "none"` `Box`, so `chipsLayout`'s own
+ * width arithmetic (`widthOf`) treats it as `0` — nav costs nothing towards the row's room either
+ * way. Refresh has no `action` to protect, so it keeps simply dropping from the array.
  */
 function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text } = kit.ui
@@ -144,7 +155,11 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
 
   const chipsOf = (includeNavRefresh: boolean): Chip[] => {
     const chips: Chip[] = []
-    if (!confirmingClear && includeNavRefresh) {
+    if (!confirmingClear) {
+      // Previous/next stay mounted even when the row has no room to draw them (`hidden`): their
+      // `action` is the person's only ctrl+↑/↓ chord to the file list (ruling R30), and a Button
+      // only answers its chord while mounted — unlike refresh, which carries no `action` and so
+      // can simply drop from the array when space is tight.
       chips.push(
         {
           key: 'previous',
@@ -153,6 +168,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           label: '',
           isDim: true,
           priority: 0,
+          hidden: !includeNavRefresh,
           onPress: props.onPrevious,
         },
         {
@@ -162,17 +178,20 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           label: '',
           isDim: true,
           priority: 0,
+          hidden: !includeNavRefresh,
           onPress: props.onNext,
         },
-        {
+      )
+      if (includeNavRefresh) {
+        chips.push({
           key: 'refresh',
           icon: '↻',
           label: 'refresh',
           isDim: true,
           priority: 1,
           onPress: props.onRefresh,
-        },
-      )
+        })
+      }
     }
     if (pending > 0) {
       chips.push(
