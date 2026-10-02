@@ -3,7 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import type { Kit } from '../core/view'
+import type { UiKit } from '../core/view'
 
 export type Chip = {
   key: string
@@ -124,7 +124,7 @@ export function chipsLayout(chips: readonly Chip[], room: number): readonly ('wo
  * prop assertion.
  */
 export function chipRow(
-  kit: Kit,
+  kit: UiKit,
   chips: readonly Chip[],
   mode: 'words' | 'icons' | readonly ('words' | 'icons')[],
   scope?: string,

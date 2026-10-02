@@ -55,6 +55,13 @@ export const ELEMENT_TEXT_LIMIT = 10_000
 export type Kit = { ui: Ui; columns: number; rows: number; capabilities: Capabilities }
 
 /**
+ * What a kit function that draws off `kit.ui` alone needs — the `hooks/ui/` kit's own
+ * components take this rather than the full `Kit`, so a caller holding only `{ ui, columns }`
+ * (the `AbovePrompt` band) can still reach them without a cast.
+ */
+export type UiKit = Pick<Kit, 'ui'>
+
+/**
  * One engine pane Raven draws. The engine shows one pane at a time and tabs the rest, so each
  * view is a tab.
  */

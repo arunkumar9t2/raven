@@ -4,7 +4,7 @@
 import type { RenderElement } from 'claude-code'
 
 import { COLORS } from '../core/colors'
-import type { Kit } from '../core/view'
+import type { UiKit } from '../core/view'
 
 /** `done/total`'s share of `cells`, rounded to the nearest cell and clamped to `[0, cells]`. */
 export function progressCells(done: number, total: number, cells: number): number {
@@ -14,7 +14,7 @@ export function progressCells(done: number, total: number, cells: number): numbe
 }
 
 /** `███░░ 3/5` — the session's todo progress, as the official diff mod's `todoBar`. */
-export function progressBar(kit: Kit, done: number, total: number, cells = 5): RenderElement {
+export function progressBar(kit: UiKit, done: number, total: number, cells = 5): RenderElement {
   const { Box, Text } = kit.ui
   const filled = progressCells(done, total, cells)
 

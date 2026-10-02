@@ -4,7 +4,7 @@
 import type { RenderElement } from 'claude-code'
 
 import { COLORS } from '../core/colors'
-import type { Kit } from '../core/view'
+import type { UiKit } from '../core/view'
 
 export type StatBarCells = { added: number; removed: number; rest: number }
 
@@ -52,7 +52,7 @@ export function statBarCells(added: number, removed: number, cells: number): Sta
 }
 
 /** `■■■□□` — added cells in the added colour, removed in the removed colour, the rest inactive. */
-export function statBar(kit: Kit, added: number, removed: number, cells = 5): RenderElement {
+export function statBar(kit: UiKit, added: number, removed: number, cells = 5): RenderElement {
   const { Text } = kit.ui
   const bar = statBarCells(added, removed, cells)
 

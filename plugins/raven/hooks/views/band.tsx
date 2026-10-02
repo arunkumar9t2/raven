@@ -6,6 +6,8 @@ import { COLORS } from '../core/colors'
 import { countOf } from '../core/format'
 import type { Kit } from '../core/view'
 import { NAME } from '../names'
+import { type Chip, chipRow, chipsLayout } from '../ui/chips'
+import { dot } from '../ui/dot'
 
 /** What the `AbovePrompt` band has to say: pending review comments, an unseen doc, or both. */
 export type BandProps = {
@@ -19,22 +21,50 @@ export type BandActions = {
   send: () => void
 }
 
-/** One row above the prompt: `raven · N comments pending · plan updated`, plain `open`/`send`. */
+/**
+ * One row above the prompt, D9/D10's kit applied: `● raven  2 notes pending · plan updated
+ * [ open ] [ ➤ send ]` — the accent dot and name on the left, the notes/plan summary beside it,
+ * then the controls as chips on the right, `send` the one primary action. `chipsLayout` shrinks
+ * `open` before `send` keeps its words, same priority rule as the diff header's own chips.
+ */
 export function band(kit: Pick<Kit, 'ui' | 'columns'>, state: BandProps, actions: BandActions) {
-  const { Box, Text, Button } = kit.ui
+  const { Box, Text } = kit.ui
   const parts = [
-    NAME,
-    state.pendingCount > 0 ? `${countOf(state.pendingCount, 'comment')} pending` : null,
+    state.pendingCount > 0 ? `${countOf(state.pendingCount, 'note')} pending` : null,
     state.isDocUpdated ? 'plan updated' : null,
   ].filter((part): part is string => part !== null)
 
+  const chips: Chip[] = [
+    { key: 'band:open', icon: '', label: 'open', isDim: true, priority: 0, onPress: actions.open },
+  ]
+  if (state.pendingCount > 0) {
+    chips.push({
+      key: 'band:send',
+      icon: '➤',
+      label: 'send',
+      variant: 'primary',
+      priority: 1,
+      onPress: actions.send,
+    })
+  }
+  const modes = chipsLayout(chips, Math.max(0, kit.columns - NAME.length - 4))
+
   return (
-    <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
-      <Text wrap="truncate-end">{parts.join(' · ')}</Text>
-      <Button key="band:open" plain dimColor label="open" onPress={actions.open} />
-      {state.pendingCount > 0 ? (
-        <Button key="band:send" plain dimColor label="send" onPress={actions.send} />
-      ) : null}
+    <Box
+      flexDirection="row"
+      gap={2}
+      justifyContent="space-between"
+      overflow="hidden"
+      flexWrap="nowrap"
+    >
+      <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+        {dot(kit, COLORS.accent)}
+        <Text wrap="truncate-end">
+          {NAME}
+          {parts.length > 0 ? `  ${parts.join(' · ')}` : ''}
+        </Text>
+      </Box>
+      <Box flexShrink={0}>{chipRow(kit, chips, modes, 'band')}</Box>
     </Box>
   )
 }

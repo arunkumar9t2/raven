@@ -548,7 +548,9 @@ export function createDiffView(
    * Every row of a file's section carries a 2-column left rail, `▌ ` in the file's status
    * colour, drawn here rather than by `bodyRowOf` so that function stays about one row's content.
    * A hunk `Code` slice spans several terminal rows at once, so its rail is a `Text` of that many
-   * `▌ ` lines; the blank gap row between files carries no rail at all.
+   * `▌ ` lines; the blank gap row between files carries no rail at all. D10 point 2: the file
+   * being edited this turn draws its rail in the accent instead, so the live feed is visible
+   * from across the room.
    */
   function placedRowOf(
     kit: Kit,
@@ -562,7 +564,7 @@ export function createDiffView(
     if (!file) return <Box key={block.key} />
 
     const contentWidth = Math.max(1, kit.columns - 2)
-    const railColor = statusMarkOf(file.status).color
+    const railColor = model.edited.has(file.path) ? COLORS.accent : statusMarkOf(file.status).color
 
     if (block.kind === 'hunk') {
       const rows = placed.to - placed.from

@@ -1,6 +1,14 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
-import { commentsStoreKeyOf, DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
+import {
+  commentsStoreKeyOf,
+  DIFF_PANE,
+  DOC_PANE,
+  NAME,
+  TASKS_PANE,
+  TREE_PANE,
+  toolNameOf,
+} from '../hooks/names'
 import {
   commentButtonKeyOf,
   hunkHeaderKeyOf,
@@ -94,6 +102,34 @@ describe('register', () => {
 
     const result = await $.command.run(ravenCommand('tasks'))
     expect(result.text).toBe('Raven tasks shown')
+  })
+
+  test('the Tasks pane draws a progress bar and a state dot per task, coloured by status', async ($, on) => {
+    world(on, '')
+    on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))
+
+    await $.session.start(SESSION)
+    await $.tool.call({
+      tool: 'TodoWrite',
+      todos: [
+        { content: 'write tests', status: 'completed' },
+        { content: 'ship it', status: 'in_progress' },
+        { content: 'tell the owner', status: 'pending' },
+      ],
+    })
+    await $.command.run(ravenCommand('tasks'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: TASKS_PANE.id,
+    })
+    expect(await ui.find({ text: /█/ })).toBeDefined()
+    expect(await ui.find({ text: '●' })).toBeDefined()
+    expect(await ui.find({ text: '◐' })).toBeDefined()
+    expect(await ui.find({ text: '○' })).toBeDefined()
   })
 })
 
@@ -313,6 +349,9 @@ function gitWorld(
     if (cmd === 'git' && e.argv.includes('--numstat')) {
       return ran(0, files.map(path => `1\t1\t${path}\0`).join(''))
     }
+    if (cmd === 'git' && sub === 'ls-files') {
+      return ran(0, files.map(path => `${path}\0`).join(''))
+    }
     // symbolic-ref/verify/merge-base (branch point) and loadHunks all get the same "nothing here".
     return ran(1)
   })
@@ -371,6 +410,34 @@ describe('review stream', () => {
     const ui = await mountDiff($)
     expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
     expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
+  })
+
+  test('a file-list row carries a status dot and the stat bar', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts'])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const row = await ui.find({ key: 'row:a.ts' })
+    expect(row?.text).toContain('●')
+    expect(row?.text).toContain('■')
+  })
+
+  test("the file being edited this turn draws its section's rail in the accent, not its status colour", async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
+
+    const ui = await mountDiff($)
+    const railColorOf = async (titleKey: string) => {
+      const found = await ui.find({ key: titleKey })
+      const rail = found?.children[0] as { props?: { color?: string } } | undefined
+      return rail?.props?.color
+    }
+    expect(await railColorOf('b.ts#title')).toBe('claude')
+    expect(await railColorOf('a.ts#title')).not.toBe('claude')
   })
 
   test("each file's section carries a left rail; a blank gap row (no rail) separates two files", async ($, on) => {
@@ -474,11 +541,11 @@ describe('review stream', () => {
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('●')
-    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('●')
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('◉')
+    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('◉')
 
     await $.turn.complete(mainLoopTurn('done'))
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('●')
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('◉')
   })
 
   test("an edit's refresh follows its file into view when it starts out of view", async ($, on) => {
@@ -601,7 +668,7 @@ describe('review stream', () => {
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('●')
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('◉')
   })
 
   test('a file-list press turns follow off for the rest of the turn', async ($, on) => {
@@ -900,10 +967,10 @@ describe('turn.complete resets the live feed on every reason', () => {
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('●')
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('◉')
 
     await $.turn.complete({ ...mainLoopTurn('done'), reason: 'aborted' })
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('●')
+    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('◉')
   })
 
   test('an aborted turn does not fork to resolve sent comments', async ($, on) => {
@@ -1136,6 +1203,26 @@ const mountBand = ($: Engine) =>
     props: ABOVE_PROMPT_PROPS,
   })
 
+describe('the Files tree', () => {
+  test('a changed file carries its status dot', async ($, on) => {
+    gitWorld(on, {}, null, ['src/a.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: TREE_PANE.id,
+    })
+    const row = await ui.find({ key: 'file:src/a.ts' })
+    expect(row?.text).toContain('a.ts')
+    expect(row?.text).toContain('●')
+  })
+})
+
 describe('the AbovePrompt status band', () => {
   test('shows pending comments when no Raven pane is open', async ($, on) => {
     const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
@@ -1144,7 +1231,7 @@ describe('the AbovePrompt status band', () => {
     await $.session.start(SESSION)
 
     const ui = await mountBand($)
-    expect(await ui.find({ text: /comments? pending/ })).toBeDefined()
+    expect(await ui.find({ text: /notes? pending/ })).toBeDefined()
   })
 
   test('draws nothing while the diff pane is open and shown', async ($, on) => {
@@ -1172,6 +1259,21 @@ describe('the AbovePrompt status band', () => {
 
     const ui = await mountBand($)
     expect(await ui.find({ text: /pending/ })).toBeUndefined()
+  })
+
+  test('draws a coloured dot before the name, and open/send as chips, send primary', async ($, on) => {
+    const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
+
+    await $.session.start(SESSION)
+
+    const ui = await mountBand($)
+    expect(await ui.find({ text: '●' })).toBeDefined()
+    const open = await ui.find({ key: 'band:open' })
+    expect(open?.type).toBe('Button')
+    const send = await ui.find({ key: 'band:send' })
+    expect(send?.type).toBe('Button')
+    expect(send?.props.variant).toBe('primary')
   })
 })
 

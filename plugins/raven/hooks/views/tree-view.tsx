@@ -7,6 +7,7 @@ import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
 import { loadChanges, toplevelOf } from '../git/load'
 import { TREE_PANE } from '../names'
+import { dot } from '../ui/dot'
 import { clampTop } from './diff/layout'
 import { iconOf, statusMarkOf } from './icons'
 import {
@@ -187,7 +188,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
           label={row.node.name}
           onPress={() => open(row.node.path)}
         />
-        {mark ? <Text color={mark.color}>{mark.glyph}</Text> : null}
+        {mark ? dot(kit, mark.color) : null}
       </Box>
     )
   }

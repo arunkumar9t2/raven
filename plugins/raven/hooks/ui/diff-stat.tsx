@@ -4,10 +4,10 @@
 import type { RenderElement } from 'claude-code'
 
 import { COLORS } from '../core/colors'
-import type { Kit } from '../core/view'
+import type { UiKit } from '../core/view'
 
 /** `+N −M` in the diff's word colours; a zero side is left out (as the official diff mod's). */
-export function diffStat(kit: Kit, added: number, removed: number): RenderElement {
+export function diffStat(kit: UiKit, added: number, removed: number): RenderElement {
   const { Text } = kit.ui
   const hasBoth = added > 0 && removed > 0
 
