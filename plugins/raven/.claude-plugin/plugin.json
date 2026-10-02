@@ -6,6 +6,8 @@
   "author": {
     "name": "Arunkumar"
   },
+  "repository": "https://github.com/arunkumar9t2/raven",
+  "homepage": "https://github.com/arunkumar9t2/raven",
   "userConfig": {
     "watchedPaths": {
       "type": "string",

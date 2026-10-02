@@ -28,29 +28,40 @@ inside Claude Code, paired with a Bun CLI and a skill so Claude can drive the pa
 
 ## Requirements
 
-- Claude Code 2.1.259+ with function hooks enabled (early access): `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`
-- The fullscreen layout (`CLAUDE_CODE_NO_FLICKER=1`) and a terminal at least 110 columns wide
+- Claude Code 2.1.287+ (mods load by default there; no environment variable needed)
+- The fullscreen layout and a terminal wide enough to dock: 144 columns or more auto-opens the diff,
+  narrower still works but opens as an overlay instead
 - A Nerd Font for file icons
 - Bun on PATH for the `raven` CLI (or a compiled `plugins/raven/dist/raven` from `bun run build`)
 - The built-in diff panel closed: it takes the dock on the first edit and hides Raven. Close it once
   with its ✕ and Claude Code remembers. (`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1` also stops it,
   at the cost of `/rewind`.)
 
-## Try it
+## Install
+
+From the marketplace (the repo is private, so this needs GitHub access from your Claude Code):
+
+```
+/plugin marketplace add arunkumar9t2/raven
+/plugin install raven@raven
+/reload-plugins
+```
+
+Or run it straight from a checkout, without installing it:
 
 ```bash
 bun install && bun run build
-CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude --plugin-dir ./plugins/raven
+claude --plugin-dir ./plugins/raven
 ```
 
-Or load it in every session, live from this checkout (saves hot-reload):
+Or load this checkout live in every local session (keeps hot-reload on save):
 
 ```bash
 bun run setup:local            # --remove to undo, --dry-run to preview
 ```
 
-It sets `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and adds this plugin folder to
-`CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`'s `env`, and allows `Bash(raven:*)`. With a
+It adds this plugin folder to `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`'s `env` (and,
+for older Claude Code, `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), and allows `Bash(raven:*)`. With a
 chezmoi-managed settings file, follow it with `chezmoi add ~/.claude/settings.json`.
 
 Then `/raven` (diff), `/raven doc`, `/raven send`. To let Claude run the CLI without a permission

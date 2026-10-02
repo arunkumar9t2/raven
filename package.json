@@ -2,6 +2,8 @@
   "name": "raven",
   "version": "0.1.0",
   "license": "Apache-2.0",
+  "repository": "github:arunkumar9t2/raven",
+  "homepage": "https://github.com/arunkumar9t2/raven",
   "private": true,
   "type": "module",
   "scripts": {
