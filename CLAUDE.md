@@ -25,7 +25,7 @@ plugins/raven/
   tests/unit/*.spec.ts            bun tests of the pure modules
   tests/*.test.ts                 mod-kit tests run in the hooks sandbox (`bun run test:mod`)
   cli/                            the `raven` CLI source + tests
-scripts/cc.sh                     drives a real Claude Code session in tmux (closed-loop checks)
+scripts/cc.ts                     drives a real Claude Code session in tmux (closed-loop checks)
 types/claude-code.d.ts            the mod API declarations (from /plugin-types)
 ```
 
@@ -47,14 +47,16 @@ bun run setup:local  # load this checkout's plugin folder in every local session
 
 ## Closed loop
 
-`scripts/cc.sh start` opens a throwaway git repo in tmux running Claude Code with the default model
-(never `/model`: it rewrites the user's default) and the plugin as `bun run setup:local` loads it,
-with file checkpointing off so the native diff panel does not take the dock. `RAVEN_CLAUDE_ARGS`
-passes extra flags (e.g. `--allowedTools 'Bash(raven:*)' Write`).
-`cc.sh type "/raven diff"` (not a bare `/raven`, which the typeahead can complete to the
-`/raven:preview` skill and start a model turn), `cc.sh click <col> <row>` (SGR mouse, presses Buttons and focuses Inputs),
-`cc.sh keys …`, `cc.sh cap`, `cc.sh stop`. Prefer zero-token checks: edit files from the shell and
-use `/raven` rather than prompting the model.
+`bun scripts/cc.ts start` (or `bun run cc start`) opens a throwaway git repo in tmux running Claude
+Code with the default model (never `/model`: it rewrites the user's default), with file
+checkpointing off so the native diff panel does not take the dock. It strips the calling session's
+markers (`CLAUDE_CODE_*`, `CLAUDECODE*`, `CLAUDE_PLUGIN_*`, `CLAUDE_PID`, …) so a check started from
+inside Claude Code loads only the plugin you point it at; `RAVEN_CLAUDE_ARGS` passes extra flags
+(e.g. `--settings .scratch/worktree-settings.json`, `--allowedTools 'Bash(raven:*)' Write`).
+`cc.ts type "/raven diff"` (a bare `/raven` is refused: the typeahead can complete it to the
+`/raven:preview` skill and start a model turn), `cc.ts click|hover <col> <row>` (SGR mouse),
+`cc.ts keys …`, `cc.ts cap`, `cc.ts stop`. Prefer zero-token checks: edit files from the shell and
+use `/raven diff` rather than prompting the model.
 
 This checkout is what every local session loads (`CLAUDE_CODE_PLUGIN_DIRS`), and the mod hot-reloads
 on save, so a broken `hooks/` edit breaks Raven in the session making it too.
