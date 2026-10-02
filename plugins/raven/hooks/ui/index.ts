@@ -5,6 +5,7 @@
 export { accentBar } from './accent-bar'
 export { ageOf } from './age'
 export { badge } from './badge'
+export { type ChangeMapCell, changeMap, changeMapOf } from './change-map'
 export { type Chip, chipRow, chipsFit } from './chips'
 export { diffStat } from './diff-stat'
 export { dot } from './dot'

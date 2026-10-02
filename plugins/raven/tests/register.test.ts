@@ -7,7 +7,7 @@ import {
   revertKeyOf,
   stageKeyOf,
 } from '../hooks/views/diff/anchor'
-import { SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
+import { ACTIONS_ROW_KEY, SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
 import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
 
@@ -729,6 +729,29 @@ describe('diff header', () => {
 
     await ui.press({ key: 'clear' })
     expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
+  })
+
+  test('row 2 starts with the change map, tallest glyph for the biggest change', async ($, on) => {
+    baseWorld(on)
+    on('process.run', ($, e) => {
+      const [cmd, sub] = e.argv
+      if (cmd === 'git' && sub === 'rev-parse' && e.argv.includes('--show-toplevel')) {
+        return ran(0, REPO)
+      }
+      if (cmd === 'git' && sub === 'status') return ran(0, ' M a.ts\0 M b.ts\0')
+      if (cmd === 'git' && e.argv.includes('--numstat')) {
+        return ran(0, '9\t1\ta.ts\x001\t0\tb.ts\0')
+      }
+      return ran(1)
+    })
+    trackShownPanes(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const row = await ui.find({ key: ACTIONS_ROW_KEY })
+    expect(row?.text?.startsWith('█▁')).toBe(true)
   })
 
   test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {

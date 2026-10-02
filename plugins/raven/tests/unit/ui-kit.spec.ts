@@ -1,7 +1,23 @@
 import { describe, expect, test } from 'bun:test'
+import { COLORS } from '../../hooks/core/colors'
+import type { ChangedFile } from '../../hooks/git/changes'
 import { ageOf } from '../../hooks/ui/age'
+import { changeMapOf } from '../../hooks/ui/change-map'
 import { progressCells } from '../../hooks/ui/progress-bar'
 import { statBarCells } from '../../hooks/ui/stat-bar'
+
+const fileOf = (
+  path: string,
+  adds: number,
+  dels: number,
+  status: ChangedFile['status'] = 'modified',
+): ChangedFile => ({
+  path,
+  status,
+  adds,
+  dels,
+  isBinary: false,
+})
 
 describe('ageOf', () => {
   test('under a minute reads "now"', () => {
@@ -65,5 +81,44 @@ describe('progressCells', () => {
 
   test('done beyond total clamps to every cell', () => {
     expect(progressCells(8, 5, 5)).toBe(5)
+  })
+})
+
+describe('changeMapOf', () => {
+  test('the largest file draws the tallest glyph, a tenth of it the shortest', () => {
+    const files = [fileOf('big.ts', 90, 10), fileOf('small.ts', 1, 0)]
+    const cells = changeMapOf(files, new Set(), 10)
+    expect(cells[0]?.glyph).toBe('█')
+    expect(cells[1]?.glyph).toBe('▁')
+  })
+
+  test('a changed file never draws below ▁, even a tiny one next to a huge one', () => {
+    const files = [fileOf('big.ts', 999, 0), fileOf('tiny.ts', 1, 0)]
+    const cells = changeMapOf(files, new Set(), 10)
+    expect(cells[1]?.glyph).toBe('▁')
+  })
+
+  test('colours by status, the rail colours', () => {
+    const files = [fileOf('a.ts', 1, 0, 'added'), fileOf('b.ts', 1, 0, 'deleted')]
+    const cells = changeMapOf(files, new Set(), 10)
+    expect(cells[0]?.color).toBe(COLORS.added)
+    expect(cells[1]?.color).toBe(COLORS.removed)
+  })
+
+  test('the file being edited this turn draws in the accent, overriding its status colour', () => {
+    const files = [fileOf('a.ts', 1, 0, 'modified')]
+    const cells = changeMapOf(files, new Set(['a.ts']), 10)
+    expect(cells[0]?.color).toBe(COLORS.accent)
+  })
+
+  test('more files than maxCells keeps the first maxCells - 1 and ends with one dim "…" cell', () => {
+    const files = [fileOf('a.ts', 1, 0), fileOf('b.ts', 1, 0), fileOf('c.ts', 1, 0)]
+    const cells = changeMapOf(files, new Set(), 2)
+    expect(cells.length).toBe(2)
+    expect(cells[1]?.glyph).toBe('…')
+  })
+
+  test('no files draws no cells', () => {
+    expect(changeMapOf([], new Set(), 10)).toEqual([])
   })
 })

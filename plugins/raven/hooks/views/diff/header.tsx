@@ -7,6 +7,7 @@ import { COLORS } from '../../core/colors'
 import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
+import { changeMap } from '../../ui/change-map'
 import { type Chip, chipRow, chipsFit } from '../../ui/chips'
 import { diffStat } from '../../ui/diff-stat'
 import { statBar } from '../../ui/stat-bar'
@@ -23,6 +24,8 @@ export const ACTIONS_ROW_KEY = 'header:actions'
 
 export type HeaderProps = {
   files: readonly ChangedFile[]
+  /** Paths an edit touched this turn; the change map draws that file's cell in the accent. */
+  edited: ReadonlySet<string>
   pending: number
   confirmingClear: boolean
   sourceValue: string
@@ -94,10 +97,10 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
 }
 
 /**
- * Row 2: the change map (wired by `diff-view.tsx` in task 4c) and the notes summary on the
- * left; every control chip — nav, refresh, edit & send, the one primary `send N`, and clear —
- * on the right, all through one `chipsFit` so they shrink together. The armed clear keeps its
- * full words even squeezed, same as a hunk's armed revert.
+ * Row 2: the change map — one glyph per file, the shape of the whole change at a glance, D10
+ * point 4 — and the notes summary on the left; every control chip — nav, refresh, edit & send,
+ * the one primary `send N`, and clear — on the right, all through one `chipsFit` so they shrink
+ * together. The armed clear keeps its full words even squeezed, same as a hunk's armed revert.
  */
 function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text } = kit.ui
@@ -160,6 +163,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       flexWrap="nowrap"
     >
       <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+        {changeMap(kit, props.files, props.edited, Math.floor(kit.columns / 3))}
         {pending > 0 ? (
           <Text color={COLORS.suggestion} wrap="truncate-end">
             ✎ {countOf(pending, 'note')} pending
