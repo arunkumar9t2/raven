@@ -330,10 +330,8 @@ const mountDiff = ($: Engine) =>
  * the other narrowest-pane tests use it (see the R28 test above). A `Button` draws `[ label ]`
  * (`types/claude-code.d.ts`'s own documented convention, `chips.tsx`'s `buttonWidthOf`); a row
  * `Box` sums its children plus one `gap` between each; any other `Box` (here, always a single
- * child) is its child's width, except a `display: 'none'` one (`chipRow`'s per-chip wrapper for a
- * `hidden` nav chip, ruling R30), which draws as `0` though its `Button` stays mounted so the
- * chord still answers; a `Text` is the length of its string children, recursing into any nested
- * `Text` (the change map nests one coloured `Text` per glyph).
+ * child) is its child's width; a `Text` is the length of its string children, recursing into any
+ * nested `Text` (the change map nests one coloured `Text` per glyph).
  */
 function drawnWidth(
   el: { type: string; props?: Record<string, unknown>; children?: unknown[] } | undefined,
@@ -349,7 +347,6 @@ function drawnWidth(
     )
   }
   if (el.type === 'Box') {
-    if (el.props?.display === 'none') return 0
     const widths = kids.map(child => drawnWidth(child as typeof el))
     if (el.props?.flexDirection === 'row') {
       const gap = (el.props?.gap as number | undefined) ?? 0
@@ -358,6 +355,23 @@ function drawnWidth(
     return Math.max(0, ...widths)
   }
   return 0
+}
+
+/**
+ * Whether any `Box` in the subtree draws `display: "none"` — the narrowest-pane R30 test's own
+ * guard, independent of `drawnWidth`'s arithmetic: a `display: "none"` wrapper around a nav
+ * Button would still happen to measure `0` and so wouldn't fail the `<= 38` assertion on its own
+ * (that was ruling R30's *first* fix, fix round 1, before a live Tab-focus probe found the
+ * ring silently stopping on it with no visible mark — see the task report), so this walks the raw
+ * tree directly rather than trusting a width proxy to notice a chip has gone invisible.
+ */
+function anyDisplayNone(
+  el: { type: string; props?: Record<string, unknown>; children?: unknown[] } | undefined,
+): boolean {
+  if (!el) return false
+  if (el.props?.display === 'none') return true
+  const kids = (el.children ?? []) as readonly unknown[]
+  return kids.some(child => anyDisplayNone(child as typeof el))
 }
 
 /**
@@ -994,16 +1008,54 @@ describe('diff header', () => {
 
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
     const mapGlyphs = (row?.text ?? '').match(/[▁▂▃▄▅▆▇█…]/g) ?? []
-    expect(mapGlyphs.length).toBeGreaterThanOrEqual(3)
-    expect(row?.text).toMatch(/✎2|✎ 2 notes pending/)
+    // `MIN_MAP_CELLS` is `2`, not `3` (ruling R30: nav no longer gives way to make room, so one
+    // more cell has to) — 5 files over that cap draw one bar glyph plus the dim `…` overflow cell.
+    expect(mapGlyphs.length).toBeGreaterThanOrEqual(2)
+    // The compact summary is a bare `✎` here, not `✎2` (fix round 2): `send N` right next to it
+    // already carries the count, and at 10+ pending `✎10` was the one character the arithmetic
+    // couldn't afford once nav stopped giving way (ruling R30) — see the test below.
+    expect(row?.text).toMatch(/✎|✎ 2 notes pending/)
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
-  test('the list chords keep answering even where the narrowest docked pane drops the nav chips (R30)', async ($, on) => {
-    // Same narrow-pane shape as the R28 test above (nav would otherwise give way entirely to
-    // make room for the map and the notes summary) — this asserts the chord survives that: the
-    // previous/next Buttons stay mounted with their `app:diffFileListUp/Down` actions, just drawn
-    // at zero width, so the row still fits 38 columns.
+  test('the compact notes summary stays a bare ✎ at 10+ pending, where a digit would overflow 38 columns', async ($, on) => {
+    // Live-measured (fix round 2): with nav never giving way (R30) the row's own floor is tight
+    // enough that `✎10` (2 digits) pushed drawnWidth to 40 before this fix — `send N` already
+    // carries the exact count, so the summary doesn't need to repeat it.
+    const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
+    const pending = Array.from({ length: 10 }, (_, i) => ({
+      id: `c${i}`,
+      path: 'f0.ts',
+      text: 'fix this',
+      status: 'pending' as const,
+      createdAt: 0,
+    }))
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: pending }, null, files)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
+
+    const row = await ui.find({ key: ACTIONS_ROW_KEY })
+    expect(row?.text).not.toContain('✎10')
+    expect((await ui.find({ key: 'send' }))?.text).toContain('➤ 10')
+    expect(drawnWidth(row)).toBeLessThanOrEqual(38)
+  })
+
+  test('the list chords keep working at the narrowest docked pane: nav never gives way (R30)', async ($, on) => {
+    // Same narrow-pane shape as the R28 test above. Ruling R30 (fix round 2): a live tmux probe
+    // showed a Tab ring walking onto a `display: "none"` Button with no visible focus mark — the
+    // engine's `ButtonProps` has no way to make a mounted chip unreachable by Tab — so nav instead
+    // stays fully visible (not hidden, not dropped) at every width; `MIN_MAP_CELLS` above absorbs
+    // the cost. Asserts both halves: the Buttons carry their chord actions, and they actually draw
+    // (non-empty text, not a zero-width `display: "none"` stand-in), while the row still fits 38.
     const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
     const pending = [
       { id: 'c1', path: 'f0.ts', text: 'fix this', status: 'pending', createdAt: 0 },
@@ -1022,10 +1074,17 @@ describe('diff header', () => {
       requestId: DIFF_PANE.id,
     })
 
-    expect((await ui.find({ key: 'previous' }))?.props.action).toBe('app:diffFileListUp')
-    expect((await ui.find({ key: 'next' }))?.props.action).toBe('app:diffFileListDown')
+    const previous = await ui.find({ key: 'previous' })
+    const next = await ui.find({ key: 'next' })
+    expect(previous?.props.action).toBe('app:diffFileListUp')
+    expect(next?.props.action).toBe('app:diffFileListDown')
+    expect(previous?.text).toBe('↑')
+    expect(next?.text).toBe('↓')
 
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
+    // Independent of the width arithmetic below: a `display: "none"` wrapper (ruling R30's first,
+    // abandoned fix) would still measure 0 and could pass `drawnWidth <= 38` by accident.
+    expect(anyDisplayNone(row)).toBe(false)
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
