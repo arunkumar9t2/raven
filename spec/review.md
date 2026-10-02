@@ -27,16 +27,22 @@ rides the next review send.
 
 ## Status
 
-A comment's status moves `pending` → `sent` → `addressed` or `open`:
+A comment's status moves `pending` → `sent` → `addressed` or `open`. A note row reads as a margin
+annotation (D10 point 6): a left accent bar `▎` (`plugins/raven/hooks/ui/accent-bar.tsx`) coloured
+by the status below (`NOTE_STATE_COLORS`), the comment's text, then dim `Lnn · age` and its chips
+right-aligned — `▎ text ··· L12 · 2m [ resend ] [ ✕ ]`. No separate status glyph draws; the
+accent bar's colour is the only status mark.
 
-- **pending** — not yet sent; this is the only status a header's "send N" count includes.
-- **sent** — dim, marked `⧗`, once it has ridden a prompt.
-- **addressed** — collapsed with every other addressed comment at the same anchor into one dim
-  "✓ N addressed" row, once a resolution names it.
-- **open** — marked `↻` with a plain `resend` button, once a main-loop turn finished without naming
-  it. The button is not scoped to the row it sits on: pressing resend on any one open comment moves
-  every open comment back to `pending` — there is no per-comment resend, only a resend-all
-  triggered from any open row.
+- **pending** — the accent bar reads `suggestion`-coloured; not yet sent, and the only status a
+  header's "send N" count includes.
+- **sent** — the accent bar dims to `inactive`, once it has ridden a prompt.
+- **addressed** — the accent bar reads `success`-coloured, collapsed with every other addressed
+  comment at the same anchor into one dim "✓ N addressed" row, once a resolution names it.
+- **open** — the accent bar reads `warning`-coloured (the same colour as the `M` status mark), with
+  a `[ resend ]` chip, once a main-loop turn finished without naming it. The chip is not scoped to
+  the row it sits on: pressing resend on any one open comment moves every open comment back to
+  `pending` — there is no per-comment resend, only a resend-all triggered from any open row. Every
+  note row also carries a `[ ✕ ]` chip that removes it outright, regardless of status.
 
 ## Delivery
 

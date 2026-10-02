@@ -2,16 +2,21 @@
 
 A live preview pane for Claude Code. Raven docks beside the transcript and shows:
 
-- **Diff** — the working tree against `HEAD`, one scrolling stream of every changed file's icon
-  and syntax-highlighted hunks, refreshed as Claude edits and runs commands; a file Claude is
-  editing this turn marks `●` in the file list and scrolls into view. Comment on a file or a
-  hunk; your comments ride the next prompt as a review, or go at once with **Send to Claude**.
+- **Diff** — the working tree against `HEAD`, coloured by Claude Code's own theme keys: a change
+  map sketches the shape of every file's edits at a glance, each file's section carries a
+  status-coloured left rail, and a file Claude is editing this turn lights up in the accent colour
+  across the file list, the map and its rail. One scrolling stream of every changed file's icon
+  and syntax-highlighted hunks, each hunk labelled by its function context, refreshed as Claude
+  edits and runs commands. Comment on a file or a hunk; your comments ride the next prompt as a
+  review, or go at once with the primary **send** chip.
 - **Review tools** — the header and file list stay pinned while the stream scrolls, and the list
-  stays in sync with whichever file is at the top; every control is reachable by click or
-  Tab+Enter, no letter keys; comments on a single diff line; after Claude replies, Raven checks
-  which comments it addressed and marks them ✓; stage or revert one hunk; compare against HEAD,
-  the session's start, the branch point, or one turn's edits.
-- **Files** and **Tasks** — the repository tree with change marks, and Claude's task list.
+  stays in sync with whichever file is at the top; every control is a chip, dim at rest and
+  reachable by click or Tab+Enter, no letter keys, shrinking to icons on a narrow pane; comments on
+  a single diff line, shown as margin notes; after Claude replies, Raven checks which comments it
+  addressed and marks them ✓; stage or revert one hunk; compare against HEAD, the session's start,
+  the branch point, or one turn's edits.
+- **Files** and **Tasks** — the repository tree with status-coloured change marks, and Claude's
+  task list with a progress bar and state dots.
 - **Status band** — pending comments and updated plans show above the prompt when the pane is closed.
 - **Doc** — plans and specs rendered as Claude writes them (`docs/superpowers/`, `.superpowers/`,
   and plan mode's plan file, wherever plans are kept), plus anything Claude chooses to show with the

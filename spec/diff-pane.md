@@ -8,33 +8,52 @@ Claude to describe what it changed.
 
 ## Layout
 
-Two fixed rows form the header: counts (`N files`, `+adds`, `−dels`) and the source picker on top;
-file navigation (`↑`/`↓`), refresh, then — once a comment is pending — "edit & send" and the
-primary "send N" button (`variant="primary"`, the pane's main action), then clear, below
-(`plugins/raven/hooks/views/diff/header.tsx`). Beneath it sits the file list
+Two fixed rows form the header (`plugins/raven/hooks/views/diff/header.tsx`): row 1 is counts and
+source — `N files  +adds −dels ■■■□□ · source <picker>`, the stat bar scaled to the whole diff's
+own total (no `max`); row 2 is the change map (one glyph per file, the shape of the whole change
+at a glance — see [below](#the-change-map)), the pending-notes summary, and the action chips —
+`[ ↑ ] [ ↓ ] [ ↻ refresh ]`, then — once a comment is pending — `[ ✎ edit & send ]` and the
+primary `[ ➤ send N ]` (the pane's main action), then `[ ⌫ clear ]` — laid out by `chipsLayout`,
+which shrinks the lowest-priority chip to its bare icon first so `send N` keeps its words longest.
+While a clear is armed, row 2 drops the nav/refresh chips and the map/notes summary entirely —
+nothing competes with the confirm while the person decides. Beneath it sits the file list
 (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
 trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
-every changed file's section at once — its heading, ending in `＋ note on file`, then its
-file-level notes, then each hunk in turn: its own notes, then (only while that hunk is being
-composed) its compose box, then its one row of controls, `＋ note · stage · revert` — a
-blank row between one hunk and the next, a dim rule between one file's section and the next
-(`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). A file's heading carries the same
-status mark, icon and `+adds`/`−dels` as its file-list row and the same bold path (`bodyRowOf`'s
-`'title'` case in `diff-view.tsx`) — except for a renamed file, whose heading shows only its new
-path; the `old → new` label is the file-list row's alone. The whole stream is laid out into one
-scrollable window so wheel and arrow-key scrolling moves through it without redrawing the header
-or file list (`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling
-body total 2 (header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a
-status line, a note, the collapsed "✓ N addressed" row, a hunk's one row of controls, the
-"Outdated" title, the blank row between hunks, and the rule between files are each one row; a
-`＋ note` control draws idle on the heading or a hunk's controls row rather than as a row of its
-own, and opens a compose box in its place — two rows (Input plus cancel), three when a hunk's
-line picker draws above the Input — only while that anchor is being composed. A hunk itself takes
-as many rows as its body has lines, sliced into whatever range the current scroll position
-exposes, and a fixed row only draws once its first row falls inside that range. Element caps,
-focus, and the scroll contract these elements draw under are engine facts owned by
-[`mod-api.md`](./mod-api.md).
+every changed file's section at once — its heading (status mark, icon, bold path, `+adds` `−dels`,
+and a right-aligned `[ ✎ note ]` chip), then its file-level notes, then each hunk in turn: its
+toolbar row (the hunk's function context and line range, and — unless read-only — right-aligned
+`[ ✎ note ] [ ✓ stage ] [ ↺ revert ]` chips), its code, its own notes, then (only while that hunk
+is being composed) its compose box — a blank row between one file's section and the next, no
+blank row between hunks (`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). Every row of a
+file's section — heading, notes, each hunk's toolbar and code — draws behind a 2-column left rail,
+`▌ `, in the file's status colour; the file being edited this turn draws its rail in the accent
+colour instead, so the live feed is visible without reading any text (see
+[Live feed](#live-feed)). A file's heading carries the same status mark, icon and `+adds`/`−dels`
+as its file-list row and the same bold path (`bodyRowOf`'s `'title'` case in `diff-view.tsx`) —
+except for a renamed file, whose heading shows only its new path; the `old → new` label is the
+file-list row's alone. The whole stream is laid out into one scrollable window so wheel and
+arrow-key scrolling moves through it without redrawing the header or file list
+(`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling body total 2
+(header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a status line, a
+note, the collapsed "✓ N addressed" row, a hunk's toolbar row, the "Outdated" title, and the blank
+row between files are each one row; a note chip draws idle on the heading or a hunk's toolbar row
+rather than as a row of its own, and opens a compose box in its place — two rows (Input plus
+cancel), three when a hunk's line picker draws above the Input — only while that anchor is being
+composed. A hunk itself takes as many rows as its body has lines, sliced into whatever range the
+current scroll position exposes, and a fixed row only draws once its first row falls inside that
+range. Element caps, focus, and the scroll contract these elements draw under are engine facts
+owned by [`mod-api.md`](./mod-api.md).
+
+### The change map
+
+Row 2's left side draws a change map (`plugins/raven/hooks/ui/change-map.tsx`): one glyph per
+changed file, chosen from `▁▂▃▄▅▆▇█` by that file's share of the diff's changed lines — a skyline
+of the change set before reading any of it (D10 point 4). Each glyph is coloured by the file's
+status; the file being edited this turn draws in the accent colour, same as its rail. A changed
+file never draws below `▁` even next to a much larger one, so nothing goes invisible. More files
+than fit the row's share of `kit.columns` keep the first few and end with one dim `…` cell rather
+than wrapping or dropping files silently.
 
 A file's section shows only its own comments — and, for a renamed file, comments made under its
 old path too (`blocksOf`'s path filter in `plugins/raven/hooks/views/diff/blocks.ts`); comments
@@ -55,8 +74,10 @@ list order and scroll to it the same way pressing its row does.
 ## Live feed
 
 A file an `Edit`/`Write`/`NotebookEdit`/`MultiEdit` call changes during the current turn — from the
-main loop or a subagent — draws `●` in `COLORS.modified` in its file-list row, after its
-`+adds`/`−dels` counts (`plugins/raven/hooks/views/diff/file-list.tsx`). The mark clears once the
+main loop or a subagent — draws a trailing `◉` in `COLORS.accent` in its file-list row, after its
+`+adds`/`−dels` counts and stat bar (`plugins/raven/hooks/views/diff/file-list.tsx`); the same file
+also draws its stream section's left rail and its change-map glyph in the accent colour, so the
+live feed is visible from the file list, the map, or the stream itself. The mark clears once the
 turn ends, on any main-loop turn-completion reason — an answer, an interrupt, or an error — not
 only a clean answer.
 
@@ -138,29 +159,31 @@ checked.
 No control carries a letter hotkey; every action is reachable by click and by Tab+Enter. The file
 list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
 the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
-file's comment button, on its heading row, reads "＋ note on file"; a hunk's, on its controls
-row, reads just "＋ note" — the heading names what it attaches to in full, the hunk row stays
-short so the row (including the armed revert confirm) fits the narrowest docked pane. Submitting
-or cancelling a comment
-returns the keyboard to that anchor's comment button, so Esc/Enter flow stays inside the pane
-rather than jumping to the composer.
+file's note chip, right-aligned on its heading row, reads `[ ✎ note ]`; a hunk's, on its toolbar
+row alongside `[ ✓ stage ]` and `[ ↺ revert ]`, reads the same `[ ✎ note ]` — both shrink to their
+bare icon (`[ ✎ ]`) under `chipsFit`/`chipsLayout` when the row is too narrow for every chip's
+words, the heading's path giving way first. Submitting or cancelling a comment returns the
+keyboard to that anchor's note chip, so Esc/Enter flow stays inside the pane rather than jumping
+to the composer.
 
 ## Stage and revert one hunk
 
-Each hunk in a non-read-only source carries its one row of controls: `＋ note` (when the
-surface has `canType` and the hunk isn't being composed), then `stage`, then `revert`. Before
-either runs, Raven re-reads that one file's current hunks and requires an exact header-and-text
-match against the hunk the button was drawn for. A mismatch — the working tree moved since the
-last render — toasts "The hunk changed — refreshed, try again", refreshes the whole stream with
-the current hunks, and applies nothing.
+Each hunk in a non-read-only source carries its toolbar's right-aligned chips: `[ ✎ note ]` (when
+the surface has `canType` and the hunk isn't being composed), then `[ ✓ stage ]`, then
+`[ ↺ revert ]` — icons only (`[ ✎ ] [ ✓ ] [ ↺ ]`) once the row is too narrow for every chip's
+words. Before either runs, Raven re-reads that one file's current hunks and requires an exact
+header-and-text match against the hunk the button was drawn for. A mismatch — the working tree
+moved since the last render — toasts "The hunk changed — refreshed, try again", refreshes the
+whole stream with the current hunks, and applies nothing.
 
 `stage` runs `git apply --cached --recount` against a patch built for that one hunk
-(`plugins/raven/hooks/git/patch.ts`); once it succeeds the button reads `staged ✓` and stops
-responding until a refresh drops the mark, which happens once the hunk's header no longer appears
-in a fresh load. `revert` runs `git apply -R --recount` on the same patch, restoring the working
-tree; the first press relabels the button "revert? press again", shown at full strength (no colour
-change — `Button` has no colour prop), and any other action anywhere in the pane — including a
-background refresh or a scroll, not only a deliberate one — resets that arming, so a second,
+(`plugins/raven/hooks/git/patch.ts`); once it succeeds the chip reads `[ ✓ staged ]` (`[ ✓ ]` in
+icons mode) in the added colour and stops responding until a refresh drops the mark, which happens
+once the hunk's header no longer appears in a fresh load. `revert` runs `git apply -R --recount`
+on the same patch, restoring the working tree; the first press relabels the chip `[ ↺ sure? ]`,
+shown at full strength and keeping its words even in icons mode (`forceWords`; `Button` has no
+colour prop, so there is no colour change), and any other action anywhere in the pane — including
+a background refresh or a scroll, not only a deliberate one — resets that arming, so a second,
 immediately-following press is what applies it. Reverting an added or untracked file's
 one hunk deletes the file outright: its forward patch is "create this file", so `git apply -R`
 undoes that. Either way, success re-reads and re-renders every file's hunks — the same refresh
