@@ -43,6 +43,13 @@ export function commentsOn(comments: Comments, path: string, hunk?: string): Com
 
 const PREAMBLE = "These are the user's review comments on files and docs. Address them."
 
+/** "2nd", "3rd", "4th", … — the English ordinal suffix for `n` (`n` is always ≥ 2 here). */
+function ordinalOf(n: number): string {
+  if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`
+  const suffix = ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
+  return `${n}${suffix}`
+}
+
 function commentLinesOf(comment: Comment): string {
   const suffix = `[${comment.id}]`
   if (!comment.line) return `- ${comment.text} ${suffix}`
@@ -68,13 +75,44 @@ export function reviewTextOf(comments: Comments): string | undefined {
 
     if (forPath.every(comment => comment.section !== undefined)) {
       const sorted = [...forPath].sort((a, b) => a.createdAt - b.createdAt)
-      const order = [...new Set(sorted.map(comment => comment.section as string))]
-      const groups = order.map(section => {
+      // Two sections can share a heading (duplicate headings in the doc); `sectionIndex`, when
+      // present, keys them apart so their comments never merge into one group for Claude — the
+      // heading text alone stays what Claude reads, a repeat just gets an ordinal suffix.
+      const keyOf = (comment: Comment) =>
+        comment.sectionIndex !== undefined
+          ? `${comment.section}\u0000${comment.sectionIndex}`
+          : (comment.section as string)
+      // A group's order of appearance (first commented on) is independent of its ordinal label:
+      // the label ranks groups by their `sectionIndex` ascending — the section's actual position
+      // in the doc — so Claude reads "(2nd)" as "further down the doc", never "commented on
+      // second".
+      const indicesByHeading = new Map<string, number[]>()
+      for (const comment of sorted) {
+        if (comment.sectionIndex === undefined) continue
+        const heading = comment.section as string
+        const indices = indicesByHeading.get(heading) ?? []
+        if (!indices.includes(comment.sectionIndex)) indices.push(comment.sectionIndex)
+        indicesByHeading.set(heading, indices)
+      }
+      const rankOf = new Map<string, number>()
+      for (const [heading, indices] of indicesByHeading) {
+        const ascending = [...indices].sort((a, b) => a - b)
+        ascending.forEach((index, i) => {
+          rankOf.set(`${heading}\u0000${index}`, i + 1)
+        })
+      }
+
+      const order = [...new Set(sorted.map(keyOf))]
+      const groups = order.map(key => {
+        const sample = sorted.find(comment => keyOf(comment) === key) as Comment
+        const heading = sample.section as string
+        const rank = sample.sectionIndex !== undefined ? (rankOf.get(key) ?? 1) : 1
+        const label = rank === 1 ? heading : `${heading} (${ordinalOf(rank)})`
         const lines = sorted
-          .filter(comment => comment.section === section)
+          .filter(comment => keyOf(comment) === key)
           .map(commentLinesOf)
           .join('\n')
-        return `§ ${section}\n${lines}`
+        return `§ ${label}\n${lines}`
       })
       return `${path}\n${groups.join('\n')}`
     }

@@ -271,4 +271,58 @@ describe('doc comments', () => {
     expect(text).toContain('/plans/p.md\n§ Goals\n- tighten [d1]\n§ (top)\n- add a summary [d2]')
     expect(text).toContain('a.ts\n- rename this [c1]')
   })
+
+  test('two same-heading sections group separately, by sectionIndex: the second is "(2nd)"', () => {
+    const text = reviewTextOf([
+      {
+        id: 'd1',
+        path: '/plans/p.md',
+        section: 'Notes',
+        sectionIndex: 0,
+        text: 'a',
+        ...base,
+        createdAt: 1,
+      },
+      {
+        id: 'd2',
+        path: '/plans/p.md',
+        section: 'Notes',
+        sectionIndex: 1,
+        text: 'b',
+        ...base,
+        createdAt: 2,
+      },
+    ]) as string
+    expect(text).toContain('/plans/p.md\n§ Notes\n- a [d1]\n§ Notes (2nd)\n- b [d2]')
+  })
+
+  test('the ordinal ranks by sectionIndex (doc position), not by comment order', () => {
+    // d1 comments on the LATER section (index 1) FIRST; d2 comments on the EARLIER section
+    // (index 0) second. The label still reads by doc position: index 0 is plain, index 1 "(2nd)".
+    const text = reviewTextOf([
+      {
+        id: 'd1',
+        path: '/plans/p.md',
+        section: 'Notes',
+        sectionIndex: 1,
+        text: 'later section, commented first',
+        ...base,
+        createdAt: 1,
+      },
+      {
+        id: 'd2',
+        path: '/plans/p.md',
+        section: 'Notes',
+        sectionIndex: 0,
+        text: 'earlier section, commented second',
+        ...base,
+        createdAt: 2,
+      },
+    ]) as string
+    // Groups still emit in first-commented order (d1's group first), but d1's label is "(2nd)"
+    // (sectionIndex 1) and d2's is plain (sectionIndex 0).
+    expect(text).toContain(
+      '/plans/p.md\n§ Notes (2nd)\n- later section, commented first [d1]\n§ Notes\n- earlier section, commented second [d2]',
+    )
+  })
 })
