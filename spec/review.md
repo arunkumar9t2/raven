@@ -28,7 +28,8 @@ rides the next review send.
 ## Status
 
 A comment's status moves `pending` → `sent` → `addressed` or `open`. A note row reads as a margin
-annotation (D10 point 6): a left accent bar `▎` (`plugins/raven/hooks/ui/accent-bar.tsx`) coloured
+annotation under its code, not a dialog of its own: a left accent bar `▎`
+(`plugins/raven/hooks/ui/accent-bar.tsx`) coloured
 by the status below (`NOTE_STATE_COLORS`), the comment's text, then dim `Lnn · age` and its chips
 right-aligned — `▎ text ··· L12 · 2m [ resend ] [ ✕ ]`. No separate status glyph draws; the
 accent bar's colour is the only status mark.

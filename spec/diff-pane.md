@@ -48,12 +48,14 @@ owned by [`mod-api.md`](./mod-api.md).
 ### The change map
 
 Row 2's left side draws a change map (`plugins/raven/hooks/ui/change-map.tsx`): one glyph per
-changed file, chosen from `▁▂▃▄▅▆▇█` by that file's share of the diff's changed lines — a skyline
-of the change set before reading any of it (D10 point 4). Each glyph is coloured by the file's
-status; the file being edited this turn draws in the accent colour, same as its rail. A changed
-file never draws below `▁` even next to a much larger one, so nothing goes invisible. More files
-than fit the row's share of `kit.columns` keep the first few and end with one dim `…` cell rather
-than wrapping or dropping files silently.
+changed file, chosen from `▁▂▃▄▅▆▇█` by that file's share of the *largest single file's* change
+in the set (`max = Math.max(1, ...sizes)`, `ratio = size / max` — the file with the most changed
+lines always draws `█`, every other file scaled against it, not against the diff's total) — a
+skyline of the change set before reading any of it. Each glyph is coloured by the file's status;
+the file being edited this turn draws in the accent colour, same as its rail. A changed file
+never draws below `▁` even next to a much larger one, so nothing goes invisible. More files than
+fit the row's share of `kit.columns` keep the first few and end with one dim `…` cell rather than
+wrapping or dropping files silently.
 
 A file's section shows only its own comments — and, for a renamed file, comments made under its
 old path too (`blocksOf`'s path filter in `plugins/raven/hooks/views/diff/blocks.ts`); comments
@@ -178,8 +180,10 @@ whole stream with the current hunks, and applies nothing.
 
 `stage` runs `git apply --cached --recount` against a patch built for that one hunk
 (`plugins/raven/hooks/git/patch.ts`); once it succeeds the chip reads `[ ✓ staged ]` (`[ ✓ ]` in
-icons mode) in the added colour and stops responding until a refresh drops the mark, which happens
-once the hunk's header no longer appears in a fresh load. `revert` runs `git apply -R --recount`
+icons mode) at full strength instead of dim — `Chip` carries no colour field, so staging flips
+`isDim` off rather than recolouring the chip — and stops responding until a refresh drops the
+mark, which happens once the hunk's header no longer appears in a fresh load. `revert` runs
+`git apply -R --recount`
 on the same patch, restoring the working tree; the first press relabels the chip `[ ↺ sure? ]`,
 shown at full strength and keeping its words even in icons mode (`forceWords`; `Button` has no
 colour prop, so there is no colour change), and any other action anywhere in the pane — including

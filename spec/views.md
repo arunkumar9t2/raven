@@ -110,7 +110,8 @@ Above the prompt (`AbovePrompt`), one row reads `● raven  N notes pending · p
 [ open ] [ ➤ send ]` (`plugins/raven/hooks/views/band.tsx`, state in
 `plugins/raven/hooks/core/band-state.ts`): an accent `dot` and the name on the left, the
 notes/plan summary beside it, then `[ open ]` and — only while comments are pending — the primary
-`[ ➤ send ]` as right-aligned chips, D9/D10's kit applied. It draws only when something is
+`[ ➤ send ]` as right-aligned chips, drawn with the same `hooks/ui/` kit every view uses. It draws
+only when something is
 pending — pending review comments, or a doc/plan shown since the pane was last visible — and only
 while no Raven pane is currently visible, whether the dock is closed or a Raven pane is open
 behind another tab. It never draws while a survey holds the band, and sizes itself to the
