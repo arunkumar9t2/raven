@@ -41,11 +41,7 @@ export type BodyItem =
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean }
   | { kind: 'hunk-actions'; anchor: Anchor; hunk: Hunk; canNote: boolean }
   | { kind: 'gap' }
-  | { kind: 'rule' }
   | { kind: 'status'; text: string }
-
-/** The block key of the blank row between hunk `index` and the one before it. */
-export const gapKeyOf = (index: number) => `gap:${index}`
 
 /** The block key of hunk `index`, unique even across hunks sharing a header (e.g. after a slice). */
 export const hunkKeyOf = (index: number, hunk: Hunk) => `hunk:${index}:${hunk.header}`
@@ -139,9 +135,10 @@ export type BlocksOptions = {
 /**
  * The selected file's body as fixed-height and hunk blocks, top to bottom: the title row (carrying
  * the file's own "＋ note on file"), the file-level notes and comment box, then each hunk with its
- * own notes, comment box and one row of controls (note · stage · revert) at its end, one blank row
- * between hunks, then an "Outdated" group for comments whose hunk no longer exists. A file with no
- * hunks (loading, binary, or no textual changes) ends with one status row instead.
+ * own notes, comment box and one row of controls (note · stage · revert) at its end (no row between
+ * two hunks; a later task adds a hunk context row there), then an "Outdated" group for comments
+ * whose hunk no longer exists. A file with no hunks (loading, binary, or no textual changes) ends
+ * with one status row instead.
  */
 export function blocksOf(
   file: ChangedFile,
@@ -181,9 +178,6 @@ export function blocksOf(
   }
 
   hunks.forEach((hunk, index) => {
-    if (index > 0) {
-      blocks.push({ kind: 'fixed', key: gapKeyOf(index), rows: 1, item: { kind: 'gap' } })
-    }
     const anchor: Anchor = { path: file.path, hunk: hunk.header }
     blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
     if (isReadOnly) return
@@ -222,7 +216,7 @@ export type Stream = {
 }
 
 /**
- * The files' `blocksOf` one after another, a dim rule between files; each block's key is
+ * The files' `blocksOf` one after another, a blank gap row between files; each block's key is
  * prefixed with its file's path so keys stay unique across the stream.
  */
 export function streamOf(
@@ -237,7 +231,7 @@ export function streamOf(
   let row = 0
   files.forEach((each, index) => {
     if (index > 0) {
-      blocks.push({ kind: 'fixed', key: `${each.path}#sep`, rows: 1, item: { kind: 'rule' } })
+      blocks.push({ kind: 'fixed', key: `${each.path}#sep`, rows: 1, item: { kind: 'gap' } })
       row += 1
     }
     titleRows.set(each.path, row)

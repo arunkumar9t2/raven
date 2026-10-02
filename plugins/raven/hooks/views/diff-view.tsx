@@ -434,8 +434,18 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     return stream
   }
 
-  /** One fixed row's element, by its payload kind: a `gap` draws one blank row, a `rule` a dim line. */
-  function bodyRowOf(kit: Kit, item: BodyItem, file: ChangedFile): RenderElement {
+  /**
+   * One fixed row's element, by its payload kind: a `gap` draws one blank row, between files.
+   * `contentWidth` is the row's room beside the file's left rail (`kit.columns - 2`), for whatever
+   * here measures text instead of `kit.columns` — the rail itself is drawn by the caller,
+   * `placedRowOf`.
+   */
+  function bodyRowOf(
+    kit: Kit,
+    item: BodyItem,
+    file: ChangedFile,
+    contentWidth: number,
+  ): RenderElement {
     const { Box, Text } = kit.ui
     switch (item.kind) {
       case 'title': {
@@ -468,10 +478,6 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
         return <Text dimColor>{item.text}</Text>
       case 'gap':
         return <Text> </Text>
-      case 'rule':
-        // One short of the full width: a line exactly `columns` wide risks the terminal itself
-        // wrapping it onto a second row, which would throw off this row's own accounting.
-        return <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
       case 'outdated-title':
         return outdatedTitle(kit)
       case 'addressed':
@@ -485,7 +491,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           hunk: item.hunk,
           hasPicker: item.hasPicker,
           line: model.composingLine,
-          columns: kit.columns,
+          columns: contentWidth,
           onLineChange: line => update({ composingLine: line }),
           onSubmit: text => submitComment(item.anchor, text),
           onCancel: () => stopComposing(item.anchor),
@@ -503,31 +509,58 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
     }
   }
 
-  /** A placed block's element; the file it belongs to is found by its key's `path#...` prefix. */
+  /**
+   * A placed block's element; the file it belongs to is found by its key's `path#...` prefix.
+   * Every row of a file's section carries a 2-column left rail, `▌ ` in the file's status
+   * colour, drawn here rather than by `bodyRowOf` so that function stays about one row's content.
+   * A hunk `Code` slice spans several terminal rows at once, so its rail is a `Text` of that many
+   * `▌ ` lines; the blank gap row between files carries no rail at all.
+   */
   function placedRowOf(
     kit: Kit,
     placed: Placed<BodyItem>,
     filesByPath: ReadonlyMap<string, ChangedFile>,
   ): RenderElement {
-    const { Box, Code } = kit.ui
+    const { Box, Code, Text } = kit.ui
     const { block } = placed
     const path = block.key.slice(0, block.key.indexOf('#'))
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
 
+    const contentWidth = Math.max(1, kit.columns - 2)
+    const railColor = statusMarkOf(file.status).color
+
     if (block.kind === 'hunk') {
+      const rows = placed.to - placed.from
+      const rail = `${'▌ \n'.repeat(Math.max(0, rows - 1))}▌ `
       return (
-        <Code
-          key={block.key}
-          source={sliceHunk(block.hunk, placed.from, placed.to).text}
-          format="diff"
-          path={file.path}
-          wrap="truncate-end"
-        />
+        <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+          <Text color={railColor}>{rail}</Text>
+          <Box flexGrow={1} overflow="hidden">
+            <Code
+              source={sliceHunk(block.hunk, placed.from, placed.to).text}
+              format="diff"
+              path={file.path}
+              wrap="truncate-end"
+            />
+          </Box>
+        </Box>
       )
     }
 
-    return <Box key={block.key}>{bodyRowOf(kit, block.item, file)}</Box>
+    const { item } = block
+    if (item.kind === 'gap') {
+      return <Box key={block.key}>{bodyRowOf(kit, item, file, contentWidth)}</Box>
+    }
+
+    return (
+      <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+        <Text color={railColor}>▌ </Text>
+        <Box flexGrow={1} overflow="hidden">
+          {bodyRowOf(kit, item, file, contentWidth)}
+        </Box>
+      </Box>
+    )
   }
 
   function render(kit: Kit): RenderElement {

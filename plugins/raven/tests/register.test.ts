@@ -368,12 +368,46 @@ describe('review stream', () => {
     expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
   })
 
-  test('a rule row separates files and draws', async ($, on) => {
+  test("each file's section carries a left rail; a blank gap row (no rail) separates two files", async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'b.ts#sep' }))?.text).toContain('─')
+
+    expect((await ui.find({ key: 'a.ts#title' }))?.text.startsWith('▌')).toBe(true)
+    expect((await ui.find({ key: 'a.ts#status' }))?.text.startsWith('▌')).toBe(true)
+    expect((await ui.find({ key: 'b.ts#sep' }))?.text.startsWith('▌')).toBe(false)
+  })
+
+  test("a file's section keeps its left rail deep into a scroll, past its own title and most of its hunk", async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    // kit.rows = 6; minus 2 header + 1 list + 1 rule leaves 2 body rows: fewer than a.ts's 5-row
+    // section (title, HUNK_TEXT's 3 code lines, hunk-actions), so scrolling clamps to a top that
+    // scrolls the title and most of the hunk's code out of view.
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 6 } },
+      requestId: DIFF_PANE.id,
+    })
+    await $.ui.scroll({
+      component: 'Pane',
+      requestId: DIFF_PANE.id,
+      offset: 0,
+      by: 4,
+      bodyRows: 2,
+      contentRows: 5,
+      origin: { kind: 'person' },
+    })
+
+    expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
+    const actionsKey = `a.ts#${hunkActionsKeyOf({ path: 'a.ts', hunk: HUNK_HEADER })}`
+    const actions = await ui.find({ key: actionsKey })
+    expect(actions?.text.startsWith('▌')).toBe(true)
   })
 
   test('pressing a file row scrolls its heading to the top of the stream', async ($, on) => {
@@ -858,7 +892,7 @@ describe('stage and revert a hunk', () => {
   const SECOND_HUNK_HEADER = '@@ -10,2 +10,2 @@'
   const TWO_HUNK_TEXT = `${HUNK_TEXT}${SECOND_HUNK_HEADER}\n x\n-y\n+z\n`
 
-  test("a blank row draws between a file's two hunks", async ($, on) => {
+  test("no row draws between a file's two hunks (a later task adds a hunk context row there)", async ($, on) => {
     hunkWorld(
       on,
       () => {},
@@ -869,10 +903,8 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const gap = await ui.find({ key: 'a.ts#gap:1' })
-    // The key alone survives even an empty row (the stream always wraps a block in a keyed Box),
-    // so pin what the gap actually draws: one blank line, same as blocksOf's other fixed rows.
-    expect(gap?.text).toBe(' ')
+    expect(await ui.find({ key: 'a.ts#gap:1' })).toBeUndefined()
+    expect(await ui.find({ key: `a.ts#hunk:1:${SECOND_HUNK_HEADER}` })).toBeDefined()
   })
 })
 
