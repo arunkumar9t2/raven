@@ -426,9 +426,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       const toplevel = diff.toplevel()
       let existing: ReadonlySet<string> | null = null
       if (known !== null && toplevel !== null) {
-        // Only the comments `known` doesn't already resolve need the existence check — one
-        // batched call for all of them together, never one per comment, and skipped entirely
-        // when `known` is null (everything is already live) or there is nothing left to check.
+        // Only the comments `known` doesn't already resolve need the existence check —
+        // `existingPathsOf` batches all of them together (chunked, never one call per comment),
+        // and this is skipped entirely when `known` is null (everything is already live) or
+        // there is nothing left to check.
         const candidates = review
           .pending()
           .filter(comment => comment.section === undefined && !known.has(comment.path))

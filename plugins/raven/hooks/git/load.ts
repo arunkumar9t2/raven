@@ -17,16 +17,23 @@ export async function toplevelOf(run: Run): Promise<string | null> {
   return outputOf(await run(['git', 'rev-parse', '--show-toplevel']))
 }
 
+/** `existingPathsOf`'s own cap on paths per `git ls-files` call, so one very large candidate list still goes out as several ordinary-sized calls rather than one with an unbounded argv. */
+export const EXISTENCE_CHUNK_SIZE = 200
+
 /**
  * Which of `paths` (repository-toplevel-relative, the same frame every `ChangedFile.path` and
- * stored `Comment.path` is in) currently exist in the working tree — tracked or untracked (but
- * not gitignored) — one batched `git ls-files` call covering all of them, never one per path.
- * Run with `-C toplevel`, not the session's cwd: a pathspec is read relative to cwd, and the
- * session's cwd can sit below the toplevel, which would read every candidate as missing.
+ * stored `Comment.path` is in) currently exist in the working tree — tracked or untracked —
+ * batched `git ls-files` calls, `EXISTENCE_CHUNK_SIZE` paths per call rather than one per path
+ * (or one unbounded call for every candidate at once). No `--exclude-standard`: the pathspec
+ * already limits the listing to the candidates, so `--exclude-standard` would only ever drop a
+ * candidate that is itself gitignored but still on disk — exactly the file this check must not
+ * call gone. Run with `-C toplevel`, not the session's cwd: a pathspec is read relative to cwd,
+ * and the session's cwd can sit below the toplevel, which would read every candidate as missing.
  * `--literal-pathspecs` also keeps a path containing `[`/`*`/`?` from being read as a glob.
- * `null` means the check itself failed (a non-zero exit), not that nothing exists; callers treat
- * that the same as "unknown" elsewhere in Raven: fail open rather than risk calling a comment's
- * file gone over an infra hiccup. `paths` empty needs no call.
+ * `null` means the check itself failed (a non-zero exit, on any chunk) — fail open, as if no
+ * check had run — not that nothing exists; callers treat that the same as "unknown" elsewhere in
+ * Raven, rather than risk calling a comment's file gone over an infra hiccup. `paths` empty needs
+ * no call.
  */
 export async function existingPathsOf(
   run: Run,
@@ -34,21 +41,25 @@ export async function existingPathsOf(
   paths: readonly string[],
 ): Promise<ReadonlySet<string> | null> {
   if (paths.length === 0) return new Set()
-  const result = await run([
-    'git',
-    '--literal-pathspecs',
-    '-C',
-    toplevel,
-    'ls-files',
-    '--cached',
-    '--others',
-    '--exclude-standard',
-    '-z',
-    '--',
-    ...paths,
-  ])
-  if (result.exitCode !== 0) return null
-  return new Set(result.stdout.split('\0').filter(token => token.length > 0))
+  const existing = new Set<string>()
+  for (let start = 0; start < paths.length; start += EXISTENCE_CHUNK_SIZE) {
+    const chunk = paths.slice(start, start + EXISTENCE_CHUNK_SIZE)
+    const result = await run([
+      'git',
+      '--literal-pathspecs',
+      '-C',
+      toplevel,
+      'ls-files',
+      '--cached',
+      '--others',
+      '-z',
+      '--',
+      ...chunk,
+    ])
+    if (result.exitCode !== 0) return null
+    for (const token of result.stdout.split('\0')) if (token.length > 0) existing.add(token)
+  }
+  return existing
 }
 
 /** What the working tree is diffed against: `HEAD`, or a specific commit (a session start or a merge-base). */
