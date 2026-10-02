@@ -72,35 +72,26 @@ describe('blocksOf', () => {
     expect(noteBlock).toMatchObject({ item: { kind: 'note', comment } })
   })
 
-  test('a gap block carries the gap kind', () => {
-    const blocks = blocksOf(file, [hunkA, hunkB], [], null)
-    const gap = blocks.find(b => b.key === 'gap:1')
-    expect(gap).toMatchObject({ item: { kind: 'gap' } })
-  })
-
-  test('order: title, then each hunk with its own actions row, gap between', () => {
+  test('order: title, then each hunk with its own actions row, no row between two hunks', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => b.key)).toEqual([
       TITLE_KEY,
       'hunk:0:@@ -1,2 +1,2 @@',
       hunkActionsKeyOf({ path: file.path, hunk: hunkA.header }),
-      'gap:1',
       'hunk:1:@@ -10,1 +10,1 @@',
       hunkActionsKeyOf({ path: file.path, hunk: hunkB.header }),
     ])
   })
 
-  test('order by item kind mirrors the key order, and exactly one gap sits between two hunks', () => {
+  test('order by item kind mirrors the key order, with no block between two hunks', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => (b.kind === 'hunk' ? 'hunk' : b.item.kind))).toEqual([
       'title',
       'hunk',
       'hunk-actions',
-      'gap',
       'hunk',
       'hunk-actions',
     ])
-    expect(blocks.filter(b => b.kind === 'fixed' && b.item.kind === 'gap')).toHaveLength(1)
   })
 
   test('a note per comment adds one fixed row each, at the right anchor', () => {
@@ -134,11 +125,11 @@ describe('blocksOf', () => {
     expect(fileBox).toMatchObject({ rows: 2 })
   })
 
-  test('row total matches title + notes + hunk lines + gaps + actions rows', () => {
+  test('row total matches title + notes + hunk lines + actions rows', () => {
     const comments: Comments = [commentOf({ id: 'n1' })]
     const blocks = blocksOf(file, [hunkA, hunkB], comments, null)
-    // title(1) + note(1) + hunkA(3 lines) + hunkAactions(1) + gap(1) + hunkB(2 lines) + hunkBactions(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 1 + 2 + 1)
+    // title(1) + note(1) + hunkA(3 lines) + hunkAactions(1) + hunkB(2 lines) + hunkBactions(1)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 2 + 1)
   })
 
   test('row total with a note and an active compose box together', () => {
@@ -297,7 +288,7 @@ describe('blocksOf for a turn source', () => {
     expect(
       blocks.some(b => b.key === hunkActionsKeyOf({ path: file.path, hunk: hunkA.header })),
     ).toBe(false)
-    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'hunk', 'fixed', 'hunk'])
+    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'hunk', 'hunk'])
   })
 
   test('drops outdated comments too, since a turn has none of its own', () => {
@@ -316,7 +307,16 @@ describe('streamOf', () => {
     const keys = stream.blocks.map(block => block.key)
     expect(new Set(keys).size).toBe(keys.length)
     expect(keys[0]).toBe(`${file.path}#${TITLE_KEY}`)
+    expect(keys).toContain(`b.ts#sep`)
     expect(keys).toContain(`b.ts#${TITLE_KEY}`)
+  })
+
+  test('contentRows is the files’ own rows plus 1 per separator', () => {
+    const stream = streamOf([file, b], () => [hunkA], [], null)
+    const ownRows =
+      contentRowsOf(blocksOf(file, [hunkA], [], null)) +
+      contentRowsOf(blocksOf(b, [hunkA], [], null))
+    expect(stream.contentRows).toBe(ownRows + 1)
   })
 
   test('records each file title row and the total', () => {
