@@ -62,10 +62,11 @@ Two test kinds live side by side and are told apart by extension, not by directo
   both key off this suffix.
 - **Mod tests** (`*.test.ts`, run by `claude plugin test`) exercise the function-hooks module against
   the engine's own test harness (`claude-code/testing`, whose `describe`/`test`/`tier`/`mock` mimic
-  `bun:test`'s shape but drive a real `On` registration and a fake `Engine`). These need
-  `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` and live directly under `plugins/raven/tests/`
-  (`register.test.ts`, `surfaces.test.ts`), not under `tests/unit/`, so `claude plugin test` can find
-  them without also trying to load the bun-only suites.
+  `bun:test`'s shape but drive a real `On` registration and a fake `Engine`). `test:mod`'s script
+  sets `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` for older Claude Code; on 2.1.287, where mods load by
+  default, the same suite passes with the variable unset. They live directly under
+  `plugins/raven/tests/` (`register.test.ts`, `surfaces.test.ts`), not under `tests/unit/`, so
+  `claude plugin test` can find them without also trying to load the bun-only suites.
 
 ## The closed-loop tmux harness
 
