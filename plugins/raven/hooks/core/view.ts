@@ -3,30 +3,46 @@ import type { Elements, RenderElement, RenderSurface } from 'claude-code'
 /**
  * The elements a view draws with; Raven draws on the terminal surface, mobile among them. `Image`,
  * `Input` and `Select` are optional on the type so a view still compiles if it checks for
- * `undefined`, but the engine completes every surface's table to a constructor, even one it
- * doesn't carry (it just draws a fragment) — so `capabilitiesOf` reads the surface name instead,
- * never `ui.Input`/`ui.Select` presence, to tell a real control from a completed fragment.
+ * `undefined`, but the engine completes every surface's table to a constructor for every element
+ * name, even one that surface doesn't carry (it just draws a fragment there) — so presence
+ * (`ui.Input`, `ui.Select`, `ui.Image`) never tells a real control from a completed fragment. A
+ * view never checks it; it reads `kit.capabilities` instead, which `capabilitiesOf` derives from
+ * the surface name, the one source of truth for what each surface actually carries.
  */
 export type Ui = Pick<Elements['terminal'], 'Box' | 'Text' | 'Button' | 'Code' | 'Markdown'> &
   Partial<Pick<Elements['terminal'], 'Image' | 'Input' | 'Select'>>
 
-/** What a surface's element table lets a view draw: typed text, a picker. */
-export type Capabilities = { canType: boolean; canPick: boolean }
+/** What a surface's element table lets a view draw: typed text, a picker, an inline image. */
+export type Capabilities = { canType: boolean; canPick: boolean; canShowImage: boolean }
 
-/** Every surface but `mobile` carries a real `Input` and `Select`; mobile carries neither. */
-export function capabilitiesOf(surface: RenderSurface): Capabilities {
-  const has = surface !== 'mobile'
-  return { canType: has, canPick: has }
+/**
+ * The fixed, per-surface element table (`Elements` in `claude-code`): every surface carries
+ * `Input` and `Select` but `mobile`; only `terminal` carries `Image`.
+ */
+const CAPABILITIES_BY_SURFACE: Record<RenderSurface, Capabilities> = {
+  terminal: { canType: true, canPick: true, canShowImage: true },
+  desktop: { canType: true, canPick: true, canShowImage: false },
+  vscode: { canType: true, canPick: true, canShowImage: false },
+  mobile: { canType: false, canPick: false, canShowImage: false },
 }
 
-/** Every surface has `Input` and `Select`, so a caller can skip `capabilities`. */
-export const FULL_CAPABILITIES: Capabilities = { canType: true, canPick: true }
+/** A surface's capabilities, read off the fixed table above — never off element presence. */
+export function capabilitiesOf(surface: RenderSurface): Capabilities {
+  return CAPABILITIES_BY_SURFACE[surface]
+}
+
+/** `terminal`'s row, every capability on, so a caller outside a real render can skip the surface. */
+export const FULL_CAPABILITIES: Capabilities = CAPABILITIES_BY_SURFACE.terminal
 
 /** The engine refuses a `Markdown`, `Code` or `Text` element whose text is longer than this. */
 export const ELEMENT_TEXT_LIMIT = 10_000
 
-/** What a view's render is handed: the elements, the pane body's width and rows in cells, the surface it draws for. */
-export type Kit = { ui: Ui; columns: number; rows: number; surface: RenderSurface }
+/**
+ * What a view's render is handed: the elements, the pane body's width and rows in cells, and the
+ * capabilities its surface carries — computed once in `register.ts`'s `kitOf`, so a view never
+ * calls `capabilitiesOf` or checks an element's presence itself.
+ */
+export type Kit = { ui: Ui; columns: number; rows: number; capabilities: Capabilities }
 
 /**
  * One engine pane Raven draws. The engine shows one pane at a time and tabs the rest, so each

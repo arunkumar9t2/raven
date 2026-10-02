@@ -31,7 +31,7 @@ export type HeaderProps = {
 // button row omits turns and offers HEAD/session/branch point only.
 const TURN_PREFIX = 'turn:'
 
-/** The source options as a row of plain buttons, for a surface with no `Select`. */
+/** The source options as a row of plain buttons, for a surface without `canPick`. */
 function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
   return selectButtons(kit, {
     key: 'source',
@@ -47,7 +47,10 @@ function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
  * list (`app:diffFileListUp`/`Down`).
  */
 export function header(kit: Kit, props: HeaderProps): RenderElement {
-  const { Box, Text, Button, Select } = kit.ui
+  const { Box, Text, Button } = kit.ui
+  // Safe only inside the `canPick` branch below: `Select` carries `| undefined` in the type,
+  // but the engine's terminal/desktop/vscode tables all provide a real one.
+  const { Select } = kit.ui as Required<Kit['ui']>
   const { files, pending } = props
   const adds = files.reduce((sum, file) => sum + file.adds, 0)
   const dels = files.reduce((sum, file) => sum + file.dels, 0)
@@ -64,7 +67,7 @@ export function header(kit: Kit, props: HeaderProps): RenderElement {
         <Text color={COLORS.removed} wrap="truncate-end">
           −{dels}
         </Text>
-        {Select ? (
+        {kit.capabilities.canPick ? (
           <Select
             key={SOURCE_SELECT_KEY}
             label="source"
