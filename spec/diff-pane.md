@@ -16,7 +16,11 @@ at a glance — see [below](#the-change-map)), the pending-notes summary, and th
 primary `[ ➤ send N ]` (the pane's main action), then `[ ⌫ clear ]` — laid out by `chipsLayout`,
 which shrinks the lowest-priority chip to its bare icon first so `send N` keeps its words longest.
 While a clear is armed, row 2 drops the nav/refresh chips and the map/notes summary entirely —
-nothing competes with the confirm while the person decides. Beneath it sits the file list
+nothing competes with the confirm while the person decides. With nothing armed, the same row
+degrades instead of vanishing as the pane narrows: `[ ↑ ] [ ↓ ]` never give way, in words, icons,
+or by dropping, since they are the file list's only carriers of the person's own list chords, so
+`refresh` gives way first; the change map keeps a floor of 2 cells; and the notes summary compacts
+from `✎ N pending` to a bare `✎` (the send chip's own `➤ N` still carries the count). Beneath it sits the file list
 (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
 trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
@@ -60,6 +64,18 @@ wrapping or dropping files silently.
 A file's section shows only its own comments — and, for a renamed file, comments made under its
 old path too (`blocksOf`'s path filter in `plugins/raven/hooks/views/diff/blocks.ts`); comments
 themselves are [`review.md`](./review.md)'s concern.
+
+### Comments outside the diff
+
+A comment whose path matches no file in the stream at all — the selected source moved past it, or
+the file is gone from the working tree — never disappears: it draws instead in a closing "Not in
+this diff" group at the end of the stream, a dim title row followed by each such path's own row
+(the bare path, with a dim "file gone" beside it only once a batched existence check has confirmed
+it — a path never checked, or one a failed check couldn't confirm, draws no "file gone" label:
+fail open) and that path's notes beneath it, same resend/✕ chips and addressed-collapse as a live
+comment's (`orphanBlocksOf` in `plugins/raven/hooks/views/diff/blocks.ts`). An empty group draws
+nothing, rather than a bare heading. [`review.md`](./review.md#delivery) owns when a comment is
+treated as live versus carried here only as something to look at later.
 
 ## The file list navigates the stream
 

@@ -35,6 +35,16 @@ surrounding prose, so code reads as code rather than as part of the markdown tex
 draws nothing. A file that is not markdown renders as one `Code` element instead, truncated at the
 same cap with a "the rest of the file is not shown" note when it overruns.
 
+A markdown file — never a note or any other file kind — is also where [review comments](./review.md)
+attach: each section draws its own notes (the same margin style a diff hunk's notes use) beneath
+its body, then, only on a surface with `canType` and only while that section isn't already being
+composed, a right-aligned `[ ✎ note ]` chip on a row of its own. Controls are keyed by the
+section's index rather than its heading text, so two sections sharing a heading never share
+controls or get their notes crossed; the anchor a comment carries, and how its "Outdated" group
+works once a section is gone, is [`review.md`](./review.md#anchors-and-composing)'s concern.
+Nothing here draws a note control at all for a `note` directive's inline markdown, for a file that
+isn't markdown, or for an image — each keeps the plain, uncommentable rendering it always had.
+
 An image renders as an `Image` element sized to fit the pane's width, but only for `.png` — the one
 format the surface reads straight from a file — and only on a surface with `canShowImage`; other
 image extensions (`.jpg`, `.gif`, `.webp`) and a surface without `canShowImage` both fall back to
