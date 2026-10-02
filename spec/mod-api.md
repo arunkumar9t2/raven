@@ -196,6 +196,14 @@ a view reads it. Caps and behavior worth knowing before drawing:
 - A `Fragment` inside a row `Box` lays its children out as a box of their own, pushing them onto a new
   line even when they would fit; conditionally drawn siblings in a row are written as separate
   expressions rather than wrapped in `<>…</>`.
+- A `Box`/`Text`'s `scope` prop (`BoxHoverProps`/`TextHoverProps`) — the key the engine groups
+  hover lighting by — must be 1 to 64 characters with no control character; the engine refuses a
+  render carrying one outside that rule rather than degrading it. Every `scope` Raven passes goes
+  through `scopeOf` (`plugins/raven/hooks/ui/scope.ts`) first: a key already inside the rule passes
+  through unchanged, and anything else — too long, empty, or carrying a control character, which a
+  git path can — becomes a deterministic prefix-plus-hash of the same key instead, so distinct
+  long or unusual keys still land in distinct, stable hover groups rather than failing the render
+  or colliding into one.
 
 ### Colours and the theme
 
