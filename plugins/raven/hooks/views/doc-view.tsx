@@ -254,9 +254,9 @@ export function createDocView(
           {chip
             ? row(kit, {
                 left: '',
-                // No `scope`: a single chip has no sibling to hover-group with, and a doc's path
-                // is a real filesystem path (often long, unlike a diff's repo-relative one) — a
-                // scope string built from it can run past the engine's 64-character limit.
+                // No `scope`: a single chip has no sibling in this row to hover-group with —
+                // `chipRow` itself now runs any `scope` through `scopeOf` (hooks/ui/scope.ts),
+                // so a doc's (often long) path is no longer the reason to omit one.
                 right: chipRow(kit, [chip], chipsFit([chip], kit.columns)),
                 // Distinct from the chip's own key (commentButtonKeyOf) — the row and the chip it
                 // wraps must not share a key, or `ui.press`/`ui.input` can resolve the wrong node.

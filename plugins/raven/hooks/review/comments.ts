@@ -77,11 +77,24 @@ export function reviewTextOf(comments: Comments): string | undefined {
       const sorted = [...forPath].sort((a, b) => a.createdAt - b.createdAt)
       // Two sections can share a heading (duplicate headings in the doc); `sectionIndex`, when
       // present, keys them apart so their comments never merge into one group for Claude — the
-      // heading text alone stays what Claude reads, a repeat just gets an ordinal suffix.
-      const keyOf = (comment: Comment) =>
-        comment.sectionIndex !== undefined
-          ? `${comment.section}\u0000${comment.sectionIndex}`
-          : (comment.section as string)
+      // heading text alone stays what Claude reads, a repeat just gets an ordinal suffix. A
+      // legacy comment with no `sectionIndex` (made before that field existed) matches the first
+      // section with its heading on screen (`doc-view.tsx`'s `sectionsBody`), so it groups the
+      // same way here: as the first occurrence's index, when one exists for that heading.
+      const firstIndexByHeading = new Map<string, number>()
+      for (const comment of forPath) {
+        if (comment.sectionIndex === undefined) continue
+        const heading = comment.section as string
+        const current = firstIndexByHeading.get(heading)
+        if (current === undefined || comment.sectionIndex < current) {
+          firstIndexByHeading.set(heading, comment.sectionIndex)
+        }
+      }
+      const keyOf = (comment: Comment) => {
+        const heading = comment.section as string
+        const index = comment.sectionIndex ?? firstIndexByHeading.get(heading)
+        return index !== undefined ? `${heading}\u0000${index}` : heading
+      }
       // A group's order of appearance (first commented on) is independent of its ordinal label:
       // the label ranks groups by their `sectionIndex` ascending — the section's actual position
       // in the doc — so Claude reads "(2nd)" as "further down the doc", never "commented on
