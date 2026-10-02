@@ -1,7 +1,12 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
 import { commentsStoreKeyOf, DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
-import { hunkActionsKeyOf, revertKeyOf, stageKeyOf } from '../hooks/views/diff/anchor'
+import {
+  commentButtonKeyOf,
+  hunkHeaderKeyOf,
+  revertKeyOf,
+  stageKeyOf,
+} from '../hooks/views/diff/anchor'
 import { SOURCE_SELECT_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
 import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
@@ -385,7 +390,7 @@ describe('review stream', () => {
     await $.command.run(ravenCommand('diff'))
 
     // kit.rows = 6; minus 2 header + 1 list + 1 rule leaves 2 body rows: fewer than a.ts's 5-row
-    // section (title, HUNK_TEXT's 3 code lines, hunk-actions), so scrolling clamps to a top that
+    // section (title, hunk-header, HUNK_TEXT's 3 code lines), so scrolling clamps to a top that
     // scrolls the title and most of the hunk's code out of view.
     const ui = await $.ui.mount({
       plugin: NAME,
@@ -405,9 +410,10 @@ describe('review stream', () => {
     })
 
     expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
-    const actionsKey = `a.ts#${hunkActionsKeyOf({ path: 'a.ts', hunk: HUNK_HEADER })}`
-    const actions = await ui.find({ key: actionsKey })
-    expect(actions?.text.startsWith('▌')).toBe(true)
+    // The header row (row 1) scrolls out of view too; what's left is the hunk's own (partially
+    // sliced) code block, still carrying the rail.
+    const hunkCode = await ui.find({ key: `a.ts#hunk:0:${HUNK_HEADER}` })
+    expect(hunkCode?.text.startsWith('▌')).toBe(true)
   })
 
   test('pressing a file row scrolls its heading to the top of the stream', async ($, on) => {
@@ -686,14 +692,14 @@ describe('diff header', () => {
     expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
   })
 
-  test('the file-level comment button names its target', async ($, on) => {
+  test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {
     gitWorld(on, {}, null)
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect(await ui.find({ text: '＋ note on file' })).toBeDefined()
+    expect((await ui.find({ key: commentButtonKeyOf({ path: 'a.ts' }) }))?.text).toContain('✎ note')
     expect(await ui.find({ text: /comment on this/ })).toBeUndefined()
   })
 })
@@ -860,33 +866,54 @@ describe('stage and revert a hunk', () => {
     expect(toasts).toContain('The hunk changed — refreshed, try again')
   })
 
-  test('a hunk has one row of controls: note, stage, revert', async ($, on) => {
+  test('a hunk toolbar carries its header label and three chips: note, stage, revert, in words at the default 100-column pane', async ($, on) => {
     hunkWorld(on, () => {})
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const row = await ui.find({ key: hunkActionsKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
-    expect(row?.text).toContain('＋ note')
-    expect(row?.text).toContain('stage')
-    expect(row?.text).toContain('revert')
+    const row = await ui.find({ key: hunkHeaderKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+    expect(row?.text).toContain('✎ note')
+    expect(row?.text).toContain('✓ stage')
+    expect(row?.text).toContain('↺ revert')
   })
 
-  test('the armed revert confirm fits the narrowest docked pane', async ($, on) => {
+  test('after staging, the stage chip reads "✓ staged"', async ($, on) => {
     hunkWorld(on, () => {})
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
+    await ui.press({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+
+    const row = await ui.find({ key: hunkHeaderKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+    expect(row?.text).toContain('✓ staged')
+  })
+
+  test('the armed revert confirm fits the narrowest docked pane, shrinking the toolbar to icons', async ($, on) => {
+    hunkWorld(on, () => {})
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
     const anchor = { path: 'a.ts', hunk: HUNK_HEADER }
     await ui.press({ key: revertKeyOf(anchor) })
 
-    const row = await ui.find({ key: hunkActionsKeyOf(anchor) })
-    expect(row?.text).toContain('＋ note')
-    expect(row?.text).toContain('revert? press again')
-    expect(row?.text?.length).toBeLessThanOrEqual(38)
+    const row = await ui.find({ key: hunkHeaderKeyOf(anchor) })
+    expect(row?.text).toContain('↺ sure?')
+    expect(row?.text).toContain('✓')
+    // 38 minus the card's four edge columns (the 2-column rail and the toolbar's own 2-column
+    // indent) leaves 34 for the toolbar's own text.
+    expect(row?.text?.length).toBeLessThanOrEqual(34)
   })
 
   const SECOND_HUNK_HEADER = '@@ -10,2 +10,2 @@'

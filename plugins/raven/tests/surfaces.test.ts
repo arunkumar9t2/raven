@@ -50,8 +50,9 @@ describe('surface safety', () => {
 
       if (surface === 'mobile') {
         expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
-        expect(await ui.findAll({ type: 'Button', text: /＋ note/ })).toHaveLength(0)
+        expect(await ui.find({ text: '✎' })).toBeUndefined()
         expect(await ui.find({ text: 'stage' })).toBeDefined()
+        expect(await ui.find({ text: /↺ revert/ })).toBeDefined()
       }
 
       await ui.unmount()

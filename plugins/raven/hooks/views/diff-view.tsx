@@ -13,14 +13,16 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
+import { chipRow } from '../ui/chips'
+import { row } from '../ui/row'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { type BodyItem, fileAtRow, fixedRowsOf, type Stream, streamOf } from './diff/blocks'
 import {
   addressedRow,
   commentBox,
-  hunkActionsRow,
+  hunkToolbar,
   note,
-  noteButton,
+  noteChip,
   outdatedTitle,
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
@@ -95,7 +97,12 @@ export type DiffView = View & {
   turnEnded: () => void
 }
 
-export function createDiffView(host: Host, review: Review, actions: DiffActions): DiffView {
+export function createDiffView(
+  host: Host,
+  review: Review,
+  actions: DiffActions,
+  now: () => number,
+): DiffView {
   let model: Model = {
     repository: null,
     isLoaded: false,
@@ -451,7 +458,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       case 'title': {
         const mark = statusMarkOf(item.file.status)
         const icon = iconOf(item.file.path)
-        return (
+        const left = (
           <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
             <Text color={mark.color} wrap="truncate-end">
               {mark.glyph}
@@ -468,11 +475,13 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
             <Text color={COLORS.removed} wrap="truncate-end">
               −{item.file.dels}
             </Text>
-            {item.canNote
-              ? noteButton(kit, { path: item.file.path }, '＋ note on file', startComposing)
-              : null}
           </Box>
         )
+        const anchor: Anchor = { path: item.file.path }
+        const right = item.canNote
+          ? chipRow(kit, [noteChip(anchor, startComposing)], 'words')
+          : undefined
+        return row(kit, { left, right, key: `title-row:${item.file.path}` })
       }
       case 'status':
         return <Text dimColor>{item.text}</Text>
@@ -483,7 +492,14 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       case 'addressed':
         return addressedRow(kit, item.anchor, item.count)
       case 'note':
-        return note(kit, item.comment, id => review.remove(id), review.resend)
+        return (
+          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
+            <Text> </Text>
+            <Box flexGrow={1} overflow="hidden">
+              {note(kit, item.comment, now(), id => review.remove(id), review.resend)}
+            </Box>
+          </Box>
+        )
       case 'comment-box':
         return commentBox(kit, {
           anchor: item.anchor,
@@ -496,16 +512,26 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           onSubmit: text => submitComment(item.anchor, text),
           onCancel: () => stopComposing(item.anchor),
         })
-      case 'hunk-actions':
-        return hunkActionsRow(kit, {
-          anchor: item.anchor,
-          canNote: item.canNote,
-          isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
-          confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
-          onStartNote: startComposing,
-          onStage: () => void applyHunk(file, item.hunk, 'stage'),
-          onRevert: () => pressRevert(file, item.hunk, item.anchor),
-        })
+      case 'hunk-header':
+        return (
+          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
+            <Text> </Text>
+            <Box flexGrow={1} overflow="hidden">
+              {hunkToolbar(kit, {
+                anchor: item.anchor,
+                hunk: item.hunk,
+                canNote: item.canNote,
+                isReadOnly: item.isReadOnly,
+                isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
+                confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
+                columns: Math.max(1, contentWidth - 2),
+                onStartNote: startComposing,
+                onStage: () => void applyHunk(file, item.hunk, 'stage'),
+                onRevert: () => pressRevert(file, item.hunk, item.anchor),
+              })}
+            </Box>
+          </Box>
+        )
     }
   }
 

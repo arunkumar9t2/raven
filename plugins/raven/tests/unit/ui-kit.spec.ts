@@ -1,6 +1,29 @@
 import { describe, expect, test } from 'bun:test'
+import { ageOf } from '../../hooks/ui/age'
 import { progressCells } from '../../hooks/ui/progress-bar'
 import { statBarCells } from '../../hooks/ui/stat-bar'
+
+describe('ageOf', () => {
+  test('under a minute reads "now"', () => {
+    expect(ageOf(0, 59_000)).toBe('now')
+  })
+
+  test('minutes, floored', () => {
+    expect(ageOf(0, 2 * 60_000 + 30_000)).toBe('2m')
+  })
+
+  test('hours, floored, once past 60 minutes', () => {
+    expect(ageOf(0, 3 * 60 * 60_000)).toBe('3h')
+  })
+
+  test('days, floored, once past 24 hours', () => {
+    expect(ageOf(0, 2 * 24 * 60 * 60_000)).toBe('2d')
+  })
+
+  test('createdAt after now (clock skew) still reads "now", never negative', () => {
+    expect(ageOf(10_000, 0)).toBe('now')
+  })
+})
 
 describe('statBarCells', () => {
   // The rounding rule (see stat-bar.tsx's doc comment): floor each side's proportional share,

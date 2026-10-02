@@ -5,7 +5,7 @@ import type { Comment, Comments } from '../../hooks/review/comments'
 import {
   addressedKeyOf,
   commentBoxKeyOf,
-  hunkActionsKeyOf,
+  hunkHeaderKeyOf,
   noteKeyOf,
 } from '../../hooks/views/diff/anchor'
 import {
@@ -72,14 +72,14 @@ describe('blocksOf', () => {
     expect(noteBlock).toMatchObject({ item: { kind: 'note', comment } })
   })
 
-  test('order: title, then each hunk with its own actions row, no row between two hunks', () => {
+  test('order: title, then each hunk preceded by its own toolbar row, no row between two hunks', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => b.key)).toEqual([
       TITLE_KEY,
+      hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header }),
       'hunk:0:@@ -1,2 +1,2 @@',
-      hunkActionsKeyOf({ path: file.path, hunk: hunkA.header }),
+      hunkHeaderKeyOf({ path: file.path, hunk: hunkB.header }),
       'hunk:1:@@ -10,1 +10,1 @@',
-      hunkActionsKeyOf({ path: file.path, hunk: hunkB.header }),
     ])
   })
 
@@ -87,10 +87,10 @@ describe('blocksOf', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => (b.kind === 'hunk' ? 'hunk' : b.item.kind))).toEqual([
       'title',
+      'hunk-header',
       'hunk',
-      'hunk-actions',
+      'hunk-header',
       'hunk',
-      'hunk-actions',
     ])
   })
 
@@ -103,9 +103,9 @@ describe('blocksOf', () => {
     expect(blocks.map(b => b.key)).toEqual([
       TITLE_KEY,
       noteKeyOf('file-note'),
+      hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header }),
       'hunk:0:@@ -1,2 +1,2 @@',
       noteKeyOf('hunk-note'),
-      hunkActionsKeyOf({ path: file.path, hunk: hunkA.header }),
     ])
   })
 
@@ -125,18 +125,18 @@ describe('blocksOf', () => {
     expect(fileBox).toMatchObject({ rows: 2 })
   })
 
-  test('row total matches title + notes + hunk lines + actions rows', () => {
+  test('row total matches title + notes + toolbar + hunk lines', () => {
     const comments: Comments = [commentOf({ id: 'n1' })]
     const blocks = blocksOf(file, [hunkA, hunkB], comments, null)
-    // title(1) + note(1) + hunkA(3 lines) + hunkAactions(1) + hunkB(2 lines) + hunkBactions(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 2 + 1)
+    // title(1) + note(1) + hunkAheader(1) + hunkA(3 lines) + hunkBheader(1) + hunkB(2 lines)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + 1 + 2)
   })
 
   test('row total with a note and an active compose box together', () => {
     const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
     const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
-    // title(1) + hunkA(3 lines) + note(1) + composebox(3, with the line picker) + actions(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 3 + 1 + 3 + 1)
+    // title(1) + hunkAheader(1) + hunkA(3 lines) + note(1) + composebox(3, with the line picker)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 3)
   })
 
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
@@ -162,7 +162,7 @@ describe('blocksOf', () => {
     })
     // Not rendered under hunkA's own (unrelated) anchor.
     expect(
-      blocks.findIndex(b => b.key === hunkActionsKeyOf({ path: file.path, hunk: hunkA.header })),
+      blocks.findIndex(b => b.key === hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header })),
     ).toBeLessThan(titleIndex)
   })
 
@@ -221,15 +221,15 @@ describe('blocksOf', () => {
     })
   })
 
-  test('a hunk-actions row follows every hunk, carrying its anchor and hunk', () => {
+  test('a hunk-header row precedes every hunk, carrying its anchor, hunk and canNote', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     const anchorA = { path: file.path, hunk: hunkA.header }
     const anchorB = { path: file.path, hunk: hunkB.header }
-    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorA))).toMatchObject({
-      item: { kind: 'hunk-actions', anchor: anchorA, hunk: hunkA },
+    expect(blocks.find(b => b.key === hunkHeaderKeyOf(anchorA))).toMatchObject({
+      item: { kind: 'hunk-header', anchor: anchorA, hunk: hunkA, canNote: true, isReadOnly: false },
     })
-    expect(blocks.find(b => b.key === hunkActionsKeyOf(anchorB))).toMatchObject({
-      item: { kind: 'hunk-actions', anchor: anchorB, hunk: hunkB },
+    expect(blocks.find(b => b.key === hunkHeaderKeyOf(anchorB))).toMatchObject({
+      item: { kind: 'hunk-header', anchor: anchorB, hunk: hunkB, canNote: true, isReadOnly: false },
     })
   })
 })
@@ -280,15 +280,18 @@ describe('blocksOf with degraded capabilities', () => {
 })
 
 describe('blocksOf for a turn source', () => {
-  test('titles the file with its own path (the header names the turn) and drops comment/stage/revert rows', () => {
+  test('titles the file with its own path (the header names the turn), drops comment/stage/revert rows, but keeps a header-only toolbar per hunk', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null, { readOnly: true })
 
     expect(blocks[0]).toMatchObject({ item: { kind: 'title', file } })
     expect(blocks.some(b => b.key === commentBoxKeyOf({ path: file.path }))).toBe(false)
-    expect(
-      blocks.some(b => b.key === hunkActionsKeyOf({ path: file.path, hunk: hunkA.header })),
-    ).toBe(false)
-    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'hunk', 'hunk'])
+    const headerA = blocks.find(
+      b => b.key === hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header }),
+    )
+    expect(headerA).toMatchObject({
+      item: { kind: 'hunk-header', canNote: false, isReadOnly: true },
+    })
+    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'fixed', 'hunk', 'fixed', 'hunk'])
   })
 
   test('drops outdated comments too, since a turn has none of its own', () => {

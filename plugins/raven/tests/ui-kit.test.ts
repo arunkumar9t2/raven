@@ -112,6 +112,66 @@ function elementSlotWorld(on: On) {
   })
 }
 
+/**
+ * `chipRow`'s quiet chips: an `isDim` chip draws `dimColor` (whose own documented behaviour is
+ * "full strength under the pointer or the focus" — D10's "quiet controls" without an explicit
+ * `hover` override, see `chips.tsx`'s NEEDS_CONTEXT note); a `forceWords` chip keeps its words
+ * in icons mode.
+ */
+function chipHoverWorld(on: On) {
+  baseWorld(on)
+  on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
+    const kit: Kit = {
+      ui: (await $.ui.resolve(e)) as unknown as Ui,
+      columns: 40,
+      rows: 20,
+      capabilities: FULL_CAPABILITIES,
+    }
+    return row(kit, {
+      key: 'toolbar-row',
+      left: 'L1–2',
+      right: chipRow(
+        kit,
+        [
+          { key: 'quiet', label: 'note', icon: '✎', isDim: true, onPress: () => {} },
+          { key: 'armed', label: 'sure?', icon: '↺', forceWords: true, onPress: () => {} },
+        ],
+        'icons',
+      ),
+    })
+  })
+}
+
+describe("chipRow's quiet chips", () => {
+  test('a dim chip draws dimColor', async ($: Engine, on: On) => {
+    chipHoverWorld(on)
+    await $.session.start(SESSION)
+    const ui = await $.ui.mount({
+      plugin: 'raven',
+      surface: 'terminal',
+      component: 'InfoNotice',
+      props: { text: 'kit', command: null },
+    })
+
+    const quiet = await ui.find({ key: 'quiet' })
+    expect(quiet?.props.dimColor).toBe(true)
+  })
+
+  test('a forceWords chip keeps its words even when the row draws icons', async ($: Engine, on: On) => {
+    chipHoverWorld(on)
+    await $.session.start(SESSION)
+    const ui = await $.ui.mount({
+      plugin: 'raven',
+      surface: 'terminal',
+      component: 'InfoNotice',
+      props: { text: 'kit', command: null },
+    })
+
+    expect((await ui.find({ key: 'armed' }))?.text).toContain('↺ sure?')
+    expect((await ui.find({ key: 'quiet' }))?.text).not.toContain('note')
+  })
+})
+
 describe('row and sectionHeader take an element as well as text', () => {
   test('row with a progressBar (a Box) as right draws with no refusal', async ($: Engine, on: On) => {
     elementSlotWorld(on)

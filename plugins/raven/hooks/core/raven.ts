@@ -75,11 +75,16 @@ const REFUSAL_TEXTS: Record<'no_composer' | 'dialog', string> = {
 
 export function createRaven(host: Host, settings: RavenSettings, now: () => number): Raven {
   const review = createReview(host, now)
-  const diff = createDiffView(host, review, {
-    send: () => void sendReview(),
-    editAndSend: () => void editAndSend(),
-    focus: key => void focusIn(diff, key),
-  })
+  const diff = createDiffView(
+    host,
+    review,
+    {
+      send: () => void sendReview(),
+      editAndSend: () => void editAndSend(),
+      focus: key => void focusIn(diff, key),
+    },
+    now,
+  )
   const doc = createDocView(host)
   const tree = createTreeView(host, { open: path => void showDoc({ kind: 'file', path }) })
   const tasksView = createTasksView(host)

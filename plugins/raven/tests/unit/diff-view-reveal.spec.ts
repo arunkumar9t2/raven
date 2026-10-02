@@ -93,7 +93,7 @@ describe('createDiffView', () => {
   test("pressing a file row applies even when a follow's pendingReveal is still latched", async () => {
     const host = fakeHost({ run: runOf() })
     const review = createReview(host, () => 0)
-    const view = createDiffView(host, review, NO_ACTIONS)
+    const view = createDiffView(host, review, NO_ACTIONS, () => 0)
 
     await view.refresh()
     // rows=7: fixedRowsOf(2 files, 8) = 5, leaving 2 body rows — exactly a.ts's title+status, so
@@ -120,7 +120,7 @@ describe('createDiffView', () => {
   test("scrolling applies even when a follow's pendingReveal is still latched", async () => {
     const host = fakeHost({ run: runOf() })
     const review = createReview(host, () => 0)
-    const view = createDiffView(host, review, NO_ACTIONS)
+    const view = createDiffView(host, review, NO_ACTIONS, () => 0)
 
     await view.refresh()
     view.render(KIT)
