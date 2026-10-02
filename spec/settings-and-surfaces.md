@@ -44,28 +44,52 @@ session, not the current one, since `createRaven` and its triggers are built onc
 ## Surfaces
 
 Raven draws with a fixed element set — `Box`, `Text`, `Button`, `Code`, `Markdown` — that every
-surface is assumed to carry, plus three optional elements — `Image`, `Input`, `Select` — that a
-surface's own element table may omit. `plugins/raven/hooks/core/view.ts` types this as `Ui`, and
-`capabilitiesOf` reads a surface's actual table into `{ canType, canPick }` by checking whether
-`Input` and `Select` are present, rather than assuming a fixed feature set per surface kind.
+surface carries, plus three elements — `Image`, `Input`, `Select` — that only some surfaces do.
+`plugins/raven/hooks/core/view.ts` types the full set as `Ui`, with the three optional on the type
+so a view still compiles if it names one; but **presence can never tell a real control from a
+missing one**, because the engine completes every surface's element table to a constructor for
+every element name — one a surface doesn't actually carry just draws a fragment there, it is never
+literally `undefined`. So no view ever writes `ui.Input`, `ui.Select`, `ui.Image`, or any
+`X ? … : …`/`!X` branch keyed on one of those three; destructuring them in order to draw is fine,
+but which branch to take is decided below, never by checking the element itself.
+
+The one source of truth is a fixed, per-surface table (`CAPABILITIES_BY_SURFACE` in
+`core/view.ts`, mirroring the engine's own `Elements` type) that `capabilitiesOf` reads by surface
+name:
+
+| Surface | `Input`/`Select` (`canType`/`canPick`) | `Image` (`canShowImage`) |
+| --- | --- | --- |
+| `terminal` | yes | yes |
+| `desktop` | yes | no |
+| `vscode` | yes | no |
+| `mobile` | no | no |
+
+`register.ts`'s `kitOf` computes this once per `ui.render` event, off `e.surface`, and puts it on
+`Kit` as `kit.capabilities` — the only thing any view reads to decide whether it can type, pick, or
+show an image; a view never calls `capabilitiesOf` itself.
 
 A view checks a capability before drawing the element that needs it, and degrades rather than
 crashing or drawing nothing useful:
 
-- Without `Input`, a comment control draws no compose box and no submit button at all; an anchor's
-  existing notes still render normally.
-- Without `Select`, a picker falls back to a row of plain buttons over the same options
+- Without `canType`, the diff pane draws no "＋ note" control anywhere — not on a file's heading,
+  not on a hunk's controls row — and no compose box opens; a hunk's `stage` and `revert` still draw
+  and work, since staging and reverting need no typing. An anchor's existing notes still render
+  normally either way.
+- Without `canPick`, a picker falls back to a row of plain buttons over the same options
   (`plugins/raven/hooks/views/select-buttons.tsx`) — the diff's source picker (HEAD, session start,
   branch point; a turn source has no name short enough for a button and is left off), and the Doc
   view's history picker (its 3 most recent documents instead of the full list). A hunk's compose box
-  without `Select` also drops its line picker, so every comment on that surface anchors to the whole
-  hunk rather than one line.
-- Without `Image`, or for any non-PNG image format, the Doc view shows the image's path as dim text
-  instead of attempting to render it.
+  without `canPick` also drops its line picker, so every comment on that surface anchors to the
+  whole hunk rather than one line.
+- Without `canShowImage`, or for any non-PNG image format even with it, the Doc view shows the
+  image's path as dim text instead of attempting to render it.
 
-`FULL_CAPABILITIES` in the same file is the fixed `{ canType: true, canPick: true }` a caller can
-assume when it already knows the surface carries everything — the terminal surface Raven ships
-against does.
+`FULL_CAPABILITIES` in the same file is `terminal`'s row, every capability on — for a caller
+outside a real render (a default in `blocksOf`'s options) that can assume the richest surface
+rather than take one as an argument.
+
+See [`diff-pane.md`](./diff-pane.md) and [`views.md`](./views.md) for how each view's own layout
+reads these capabilities.
 
 ## The native built-in diff panel toast
 
