@@ -326,6 +326,86 @@ describe('options: watched doc paths, defaults', () => {
     expect(await ui.find({ text: 'Outdated' })).toBeDefined()
     expect(await ui.find({ text: /orphan/ })).toBeDefined()
   })
+
+  /** Issues the `show` directive for `path`, the way `raven doc <path>` prints it on stdout. */
+  const showDirective = (on: On, path: string) =>
+    on('tool.call', { tool: 'Bash' }, () => ({
+      result: {
+        stdout: `::raven::${JSON.stringify({ op: 'show', path })}\n${FALLBACK}\n`,
+        stderr: '',
+        interrupted: false,
+      },
+    }))
+
+  test('a diff comment on a file also shown in the Doc pane never draws there, and still shows in the diff', async ($, on) => {
+    const path = 'notes.md'
+    gitWorld(
+      on,
+      {
+        [commentsStoreKeyOf(REPO)]: [
+          { id: 'c1', path, text: 'fix this hunk', status: 'pending', createdAt: 0 },
+        ],
+      },
+      null,
+      [path],
+    )
+    on('fs.read', () => ({ value: '# Notes\n\nbody\n' }))
+    showDirective(on, path)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.tool.call({ tool: 'Bash', command: 'raven doc notes.md' })
+
+    const docUi = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    expect(await docUi.find({ text: /notes\.md/ })).toBeDefined()
+    expect(await docUi.find({ text: /fix this hunk/ })).toBeUndefined()
+    expect(await docUi.find({ text: 'Outdated' })).toBeUndefined()
+
+    const diffUi = await mountDiff($)
+    expect(await diffUi.find({ text: /fix this hunk/ })).toBeDefined()
+  })
+
+  test('two addressed notes on one doc section draw as one "2 addressed" row', async ($, on) => {
+    const path = 'notes.md'
+    const addressedComment = (id: string, createdAt: number) => ({
+      id,
+      path,
+      section: 'Notes',
+      sectionIndex: 0,
+      text: `note ${id}`,
+      status: 'addressed',
+      createdAt,
+    })
+    gitWorld(
+      on,
+      { [commentsStoreKeyOf(REPO)]: [addressedComment('c1', 0), addressedComment('c2', 1)] },
+      null,
+      [],
+    )
+    on('fs.read', () => ({ value: '# Notes\n\nbody\n' }))
+    showDirective(on, path)
+
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: 'Bash', command: 'raven doc notes.md' })
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    expect(await ui.find({ text: '✓ 2 addressed' })).toBeDefined()
+    expect(await ui.find({ text: /note c1/ })).toBeUndefined()
+    expect(await ui.find({ text: /note c2/ })).toBeUndefined()
+    expect(await ui.find({ text: 'Outdated' })).toBeUndefined()
+  })
 })
 
 const PLAN = '/home/u/.claude/plans/x.md'

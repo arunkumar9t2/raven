@@ -41,6 +41,18 @@ export function commentsOn(comments: Comments, path: string, hunk?: string): Com
   return comments.filter(comment => comment.path === path && comment.hunk === hunk)
 }
 
+/**
+ * Splits one anchor's comments into their addressed ones and the rest, each keeping its order —
+ * the one implementation every anchor that collapses addressed comments into a single "✓ N
+ * addressed" row (a diff anchor's `notesBlocksOf`, a doc section's own notes) builds on.
+ */
+export function splitAddressed(comments: Comments): { addressed: Comments; visible: Comments } {
+  return {
+    addressed: comments.filter(comment => comment.status === 'addressed'),
+    visible: comments.filter(comment => comment.status !== 'addressed'),
+  }
+}
+
 const PREAMBLE = "These are the user's review comments on files and docs. Address them."
 
 /** "2nd", "3rd", "4th", … — the English ordinal suffix for `n` (`n` is always ≥ 2 here). */
