@@ -69,9 +69,10 @@ The listing is a dir/file tree, directories sorted before files at each level, b
 A directory row carries an expand arrow and, dimmed, a count of its changed descendants; a directory
 containing a change starts expanded, every other directory starts collapsed, and the person's manual
 expand/collapse choices persist across refreshes once they have expanded anything. A file row
-carries its type icon and a change-status mark — added, modified, deleted, renamed, untracked —
-computed against `HEAD`. Clicking a directory row toggles it; clicking a file row opens it in the
-Doc view.
+carries its type icon and a change-status dot and letter mark — added, modified, deleted, renamed,
+untracked — computed against `HEAD`, coloured by status the same way the diff pane's file list and
+change map are (`hooks/ui/dot.tsx`). Clicking a directory row toggles it; clicking a file row opens
+it in the Doc view.
 
 Raven colours its chrome — status marks, add/remove counts, errors, comment text — by Claude Code
 theme key via `plugins/raven/hooks/core/colors.ts`'s `COLORS` map, never a raw colour; the file-type
@@ -94,8 +95,10 @@ input, else its position in the list; `TaskUpdate` patches the task matching its
 when the update's status is `deleted`. Any input `tasksAfter` cannot parse leaves the list
 unchanged rather than clearing it.
 
-The view draws a progress header ("N/M done") and one row per task: `☐` pending, `◐` in_progress
-(showing the task's `activeForm` when set, else its subject), `☑` completed and dimmed.
+The view draws a `sectionHeader` ("Tasks", the accent colour) carrying a `progressBar` — done/total
+cells plus the count, `███░░ 3/5` — right-aligned, then one row per task behind a state dot
+(`TASK_STATE_GLYPHS`/`TASK_STATE_COLORS`): `○` pending, `◐` in_progress (showing the task's
+`activeForm` when set, else its subject), `●` completed and dimmed.
 
 The view opens itself as a background tab the first time the task list becomes non-empty, but only
 when no Raven pane is open yet — it never steals focus from a pane already open, and never reopens
@@ -103,18 +106,22 @@ itself once dismissed.
 
 ## Status band
 
-Above the prompt (`AbovePrompt`), one row reads `raven · N comments pending · plan updated`
-(`plugins/raven/hooks/views/band.tsx`, state in `plugins/raven/hooks/core/band-state.ts`). It draws
-only when something is pending — pending review comments, or a doc/plan shown since the pane was
-last visible — and only while no Raven pane is currently visible, whether the dock is closed or a
-Raven pane is open behind another tab. It never draws while a survey holds the band, and sizes
-itself to the surface's `bodyColumns` with `wrap="truncate-end"`.
+Above the prompt (`AbovePrompt`), one row reads `● raven  N notes pending · plan updated
+[ open ] [ ➤ send ]` (`plugins/raven/hooks/views/band.tsx`, state in
+`plugins/raven/hooks/core/band-state.ts`): an accent `dot` and the name on the left, the
+notes/plan summary beside it, then `[ open ]` and — only while comments are pending — the primary
+`[ ➤ send ]` as right-aligned chips, D9/D10's kit applied. It draws only when something is
+pending — pending review comments, or a doc/plan shown since the pane was last visible — and only
+while no Raven pane is currently visible, whether the dock is closed or a Raven pane is open
+behind another tab. It never draws while a survey holds the band, and sizes itself to the
+surface's `bodyColumns` with `wrap="truncate-end"`; `chipsLayout` shrinks `[ open ]` before
+`[ ➤ send ]` gives up its words, the same priority rule as the diff header's own chips.
 
 A doc counts as unseen from the moment it is shown (or reloaded, for a doc the person has opened
 here before) until the Doc pane is actually drawn again; the count and the unseen flag both
-invalidate the band's render so it updates without a keystroke. The row's plain `open` button opens
-the diff when comments are pending, else the doc; `send`, drawn only while comments are pending,
-submits the review exactly as `/raven send` does.
+invalidate the band's render so it updates without a keystroke. The row's `[ open ]` chip opens
+the diff when comments are pending, else the doc; `[ ➤ send ]`, drawn only while comments are
+pending, submits the review exactly as `/raven send` does.
 
 ## The `/raven` command row
 

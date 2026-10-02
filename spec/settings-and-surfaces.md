@@ -74,10 +74,10 @@ just with no typed, picking, or imaging controls.
 A view checks a capability before drawing the element that needs it, and degrades rather than
 crashing or drawing nothing useful:
 
-- Without `canType`, the diff pane draws no "＋ note" control anywhere — not on a file's heading,
-  not on a hunk's controls row — and no compose box opens; a hunk's `stage` and `revert` still draw
-  and work, since staging and reverting need no typing. An anchor's existing notes still render
-  normally either way.
+- Without `canType`, the diff pane draws no `[ ✎ note ]` chip anywhere — not on a file's heading,
+  not on a hunk's toolbar row — and no compose box opens; a hunk's `[ ✓ stage ]` and `[ ↺ revert ]`
+  chips still draw and work, since staging and reverting need no typing. An anchor's existing notes
+  still render normally either way.
 - Without `canPick`, a picker falls back to a row of plain buttons over the same options
   (`plugins/raven/hooks/views/select-buttons.tsx`) — the diff's source picker (HEAD, session start,
   branch point; a turn source has no name short enough for a button and is left off), and the Doc

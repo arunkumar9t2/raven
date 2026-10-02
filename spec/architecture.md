@@ -49,6 +49,7 @@ flowchart TB
     raven --> views["hooks/views/*\nDiff · Doc · Files · Tasks"]
     views --> sourcectl["views/diff/source-controller.ts\nwhich base the diff compares against"]
     views --> review["review/*\ncomments, resolve, turns"]
+    views --> uikit["hooks/ui/*\ndot · badge · meta · diffStat · statBar\nprogressBar · sectionHeader · row · accentBar\nchips · changeMap — COLORS-keyed only"]
 
     raven --> renderout["RenderElement"]
     renderout --> Q["$ (engine)"]
@@ -78,6 +79,10 @@ view in `hooks/views/` (`diff-view.tsx`, `doc-view.tsx`, `tree-view.tsx`, `tasks
 pane's model and rendering and is handed a `Host`, never `$` directly, which is the same seam that
 makes them testable in isolation. The diff pane alone delegates "what am I comparing against" to
 `views/diff/source-controller.ts`, and "what did the person say about this hunk" to `review/*`.
+Every view draws with the same small component kit in `hooks/ui/` — dots, badges, stat bars, the
+change map, chips, the status band's and notes' accent bars — pure `(kit, props) =>
+RenderElement` functions coloured only through `COLORS` theme keys, so one kit, not each view's
+own styling, is what keeps the panes looking like one product.
 
 ## The Host and View contracts
 
