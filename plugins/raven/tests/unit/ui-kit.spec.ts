@@ -86,6 +86,11 @@ describe('statBarCells', () => {
       const bar = statBarCells(1, 0, 5, 1000)
       expect(bar.added + bar.removed).toBeGreaterThanOrEqual(1)
     })
+
+    test('a max of zero or negative is treated as no max, never dividing by it', () => {
+      expect(statBarCells(3, 3, 5, 0)).toEqual(statBarCells(3, 3, 5))
+      expect(statBarCells(3, 3, 5, -1)).toEqual(statBarCells(3, 3, 5))
+    })
   })
 })
 
