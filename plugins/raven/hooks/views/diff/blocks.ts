@@ -23,9 +23,15 @@ export const orphanPathKeyOf = (path: string) => `orphan-path:${path}`
 
 const EMPTY_GONE: ReadonlySet<string> = new Set()
 
-/** Whether `comment` is this file's own: its path matches `file`'s current path or, a rename, its old one. */
+/**
+ * Whether `comment` is this file's own: a diff comment (never a doc comment — `section` is the
+ * one discriminator, checked explicitly rather than leaned on paths staying distinct between the
+ * two panes) whose path matches `file`'s current path or, a rename, its old one. The Files tree
+ * opens a markdown file in the Doc pane by the same git-relative path this `file.path` already is,
+ * so a doc-section comment made there can otherwise collide with this file's own path exactly.
+ */
 const belongsTo = (comment: Comment, file: ChangedFile): boolean =>
-  comment.path === file.path || comment.path === file.oldPath
+  comment.section === undefined && (comment.path === file.path || comment.path === file.oldPath)
 
 /** The header's fixed row count (counts+source, then the action buttons) and the rule below it. */
 const HEADER_ROWS = 2

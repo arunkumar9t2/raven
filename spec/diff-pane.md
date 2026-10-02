@@ -65,8 +65,11 @@ fit the row's share of `kit.columns` keep the first few and end with one dim `�
 wrapping or dropping files silently.
 
 A file's section shows only its own comments — and, for a renamed file, comments made under its
-old path too (`blocksOf`'s path filter in `plugins/raven/hooks/views/diff/blocks.ts`); comments
-themselves are [`review.md`](./review.md)'s concern.
+old path too (`belongsTo` in `plugins/raven/hooks/views/diff/blocks.ts`) — and only diff comments:
+a doc comment (one carrying `section`) never draws here even when its path happens to match this
+file's exactly, which it can when the same markdown file is also open in the [Doc
+view](./views.md#doc-view) by its git-relative path; comments themselves are
+[`review.md`](./review.md)'s concern.
 
 ### Comments outside the diff
 
