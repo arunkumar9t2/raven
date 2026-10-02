@@ -532,7 +532,9 @@ export function createDiffView(
                 isReadOnly: item.isReadOnly,
                 isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
                 confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
-                columns: Math.max(1, contentWidth - 2),
+                // The row's own indent before the toolbar's `Box` is the one-column `<Text> </Text>`
+                // just above, not two — the toolbar's room matches what is actually drawn.
+                columns: Math.max(1, contentWidth - 1),
                 onStartNote: startComposing,
                 onStage: () => void applyHunk(file, item.hunk, 'stage'),
                 onRevert: () => pressRevert(file, item.hunk, item.anchor),

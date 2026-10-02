@@ -1215,9 +1215,10 @@ describe('stage and revert a hunk', () => {
     const row = await ui.find({ key: hunkHeaderKeyOf(anchor) })
     expect(row?.text).toContain('↺ sure?')
     expect(row?.text).toContain('✓')
-    // 38 minus the card's four edge columns (the 2-column rail and the toolbar's own 2-column
-    // indent) leaves 34 for the toolbar's own text.
-    expect(row?.text?.length).toBeLessThanOrEqual(34)
+    // 38 minus the card's three edge columns (the 2-column rail and the toolbar's own 1-column
+    // indent — `bodyRowOf`'s hunk-header case draws one `<Text> </Text>` before the toolbar, not
+    // two) leaves 35 for the toolbar's own text.
+    expect(row?.text?.length).toBeLessThanOrEqual(35)
   })
 
   const SECOND_HUNK_HEADER = '@@ -10,2 +10,2 @@'
