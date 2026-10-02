@@ -633,6 +633,7 @@ export function createDiffView(
       <Box flexDirection="column">
         {header(kit, {
           files,
+          edited: model.edited,
           pending: review.pending().length,
           confirmingClear: isArmed('clear'),
           sourceValue: sourceValueOf(sourceController.source()),
