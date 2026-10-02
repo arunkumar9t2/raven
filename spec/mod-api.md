@@ -265,8 +265,10 @@ re-adopts a pane this way the first time it is asked to draw into an id it does 
 
 ## The test kit
 
-`claude plugin test <dir>` runs a plugin's tests inside the sandbox, with function hooks enabled in
-the invoking environment; Raven's own is `bun run test:mod`. The kit (imported as `claude-code`'s
+`claude plugin test <dir>` runs a plugin's tests inside the sandbox; Raven's own is
+`bun run test:mod`, whose script sets `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` for older Claude Code,
+though on 2.1.287, where mods load by default, the same suite passes with the variable unset. The
+kit (imported as `claude-code`'s
 testing surface) provides `describe`/`test`/`expect`, a `mock` for the world beneath the plugin
 (`mock.clock`, `mock.store`, `mock.env`) and `on(...)` to answer every `$` call a test's hooks make —
 there is no filesystem, network or process access under test, so a hook that calls `$.fs.read` or

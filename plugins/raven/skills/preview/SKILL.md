@@ -49,6 +49,7 @@ labelled `(2nd)`, `(3rd)`, and so on — address each the same way you address a
 
 ## When the result says the pane is not active
 
-Raven's pane needs a wide fullscreen terminal, and (on older Claude Code, before mods loaded by
-default) Claude Code's function hooks enabled (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`). If the result
-says it was not shown, tell the user once and fall back to answering in chat; do not retry.
+Raven's pane needs a wide fullscreen terminal, and (on Claude Code older than 2.1.287, before mods
+loaded by default) Claude Code's function hooks enabled (`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`). If
+the result says it was not shown, tell the user once and fall back to answering in chat; do not
+retry.

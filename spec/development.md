@@ -127,7 +127,9 @@ siblings jump from dim to full strength and the pointed chip itself invert.
 
 `scripts/setup-local.ts` (`bun run setup:local`) makes every local Claude Code session load this
 checkout live, rather than from an installed or cached copy, by editing
-`~/.claude/settings.json`: it sets `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`, adds this repository's
+`~/.claude/settings.json`: it sets `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` (kept for backward
+compatibility with Claude Code older than 2.1.287; on 2.1.287 mods load by default and the setting
+is a no-op), adds this repository's
 `plugins/raven` to `CLAUDE_CODE_PLUGIN_DIRS` (removing any stale entry for the same path first), and
 allows `Bash(raven:*)` so Claude can run the CLI without a permission prompt on every call. It is
 idempotent — a second run changes nothing — and additive: other entries already in
