@@ -87,7 +87,14 @@ describe('statBarCells', () => {
       expect(bar.added + bar.removed).toBeGreaterThanOrEqual(1)
     })
 
-    test('a max of zero or negative is treated as no max, never dividing by it', () => {
+    // `max = 0` already matched the no-`max` result before the `max <= 0` guard existed, by an
+    // Infinity coincidence: `total / 0` is `Infinity` (total > 0), `Math.round` keeps it
+    // `Infinity`, and `Math.min(safeCells, Math.max(1, Infinity))` clamps straight back down to
+    // `safeCells` — the right answer for the wrong reason. `max = -1` is the real regression
+    // check: without the guard, `total / -1` is negative, `Math.max(1, …)` floors it to `1`, and
+    // `filled` collapses to `1` cell instead of `safeCells` — a visibly wrong bar the guard
+    // actually fixes.
+    test('a negative max is treated as no max (max = 0 passed even before the guard)', () => {
       expect(statBarCells(3, 3, 5, 0)).toEqual(statBarCells(3, 3, 5))
       expect(statBarCells(3, 3, 5, -1)).toEqual(statBarCells(3, 3, 5))
     })

@@ -99,6 +99,18 @@ through `cc.sh type`/`click` rather than asking Claude to do the edit or the tog
 actual prompt for what only the model can produce — an edit whose content matters, or a turn whose
 reply needs judging.
 
+`cc.sh type "/raven"` on its own is not safe in a scripted check: the composer's own command
+typeahead can complete the bare command to `/raven:preview` (the skill, not the mod's `/raven`
+command) before Enter lands, which starts a real model turn instead of toggling the pane for free.
+Always type a full subcommand — `/raven diff` (or `doc`/`files`/`tasks`/`send`) — never the bare
+`/raven`, in any script that must not spend tokens.
+
+A chip row's hover (see `chips.tsx`'s `chipRow` doc comment) can be probed from this harness too,
+beyond `click`: `cc.sh` has no dedicated hover subcommand, but `tmux send-keys -t "$SESSION" -l
+$'\e[<35;COL;ROWM'` — an SGR mouse *motion* event, button code 35, no button held — over a chip's
+cell drives hover the same as a real pointer move, with no click. A `cap` right after shows the
+chip's hover-group siblings jump from dim to full strength and the pointed chip itself invert.
+
 ## Local loading
 
 `scripts/setup-local.ts` (`bun run setup:local`) makes every local Claude Code session load this

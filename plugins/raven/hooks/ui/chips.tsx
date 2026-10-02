@@ -104,24 +104,25 @@ export function chipsLayout(chips: readonly Chip[], room: number): readonly ('wo
  *
  * `scope`, when given, additionally wires every quiet chip in this row into one named hover
  * group (`BoxHoverProps`/`TextHoverProps`'s `scope`, types/claude-code.d.ts ≈715–724 and
- * ≈11814–11823): the pointer resting on *any* chip bearing the group's name is meant to light
- * every chip that names it, not just the one directly under the pointer — D10's "the whole row
- * lights together".
+ * ≈11814–11823): the pointer resting on *any* chip bearing the group's name lights every chip
+ * that names it, not just the one directly under the pointer — the whole row lights together.
+ * This works: confirmed live in a real terminal (tmux), not just drawn with no refusal — at rest
+ * every chip in the row renders dim (`38;5;246`); with the pointer on one chip, every sibling
+ * sharing its `scope` drops to full strength and the pointed chip itself inverts. tmux has no
+ * dedicated "hover" input, but an SGR mouse *motion* event drives it the same as a real pointer
+ * move: `printf '\e[<35;%d;%dM' <col> <row>` into the pane (button code 35 = motion, no button
+ * held) over a chip's cell lights the row without a click.
  *
- * On verifying this once round 1 shipped per-chip `dimColor` alone, `hover` (Box's own and
- * Button's/Text's) on the resolved tree is unconditionally absent from `ui.find()`'s
- * `FoundElement.props` in this harness — confirmed again here, with `scope` set, with the scope
- * matching an ancestor `Box`'s key and matching the Button's own key, and on a bare `Box.hover`
- * with no scope at all; none of them showed up. This is not a refusal of this usage in
- * particular: the type doc says, for all three of `BoxHoverProps`, `ButtonProps.hover` and
- * `TextHoverProps`, the identical "No hook runs and nothing crosses to the plugin" — the same
- * category `FoundElement.props` already documents for a handler ("a Button's `onPress` is not
- * here"). So `hover` not reaching `ui.find()` is the contract working as specified, not a sign
- * it was dropped or refused; there is no prop-level test that can confirm it either way. A real
- * mouse hover would, but this harness's input simulation (`ui.press`, `ui.select`, `ui.scroll`)
- * has no hover-only pointer-move event to drive one. Shipped per the doc's contract; see
- * `ui-kit.test.ts` for the smoke test this leaves (draws with no refusal) in place of a
- * prop assertion.
+ * `hover` (Box's own and Button's/Text's) on the resolved tree is unconditionally absent from
+ * `ui.find()`'s `FoundElement.props` in this harness regardless — confirmed with `scope` set,
+ * with the scope matching an ancestor `Box`'s key and matching the Button's own key, and on a
+ * bare `Box.hover` with no scope at all; none of them showed up there. That is the contract
+ * working as specified (the type doc says the same "No hook runs and nothing crosses to the
+ * plugin" for all three of `BoxHoverProps`, `ButtonProps.hover` and `TextHoverProps`, the same
+ * category `FoundElement.props` already documents for a handler), not a sign the feature was
+ * dropped — `ui.find()` just can't assert it as a prop; the tmux probe above is what actually
+ * confirms the behaviour. `ui-kit.test.ts` keeps the no-refusal smoke test for the harness side;
+ * this comment is the record of the real-terminal check.
  */
 export function chipRow(
   kit: UiKit,
