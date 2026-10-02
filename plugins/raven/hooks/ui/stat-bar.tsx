@@ -20,7 +20,9 @@ export type StatBarCells = { added: number; removed: number; rest: number }
  * 3. With a `max` given (a file-list row, scaled against the list's biggest change, mirroring
  *    `changeMapOf`), only `filled` cells draw at all — `round(total / max * cells)`, clamped to
  *    `[1, cells]` so a real change never floors to nothing — then split the same way, over
- *    `filled` cells instead of all of them; the rest draws inactive.
+ *    `filled` cells instead of all of them; the rest draws inactive. A `max` that is zero or
+ *    negative is nonsensical (nothing to scale against) and is treated as no `max` at all,
+ *    rather than dividing by it.
  * 4. Either way, the one leftover cell from the floor/sum gap, if any, goes first to a side
  *    that is non-zero but floored to nothing — so a real change is never invisible once there
  *    are at least 2 filled cells — else to the side with the larger fractional remainder, ties
@@ -37,7 +39,7 @@ export function statBarCells(
   if (total <= 0 || safeCells === 0) return { added: 0, removed: 0, rest: safeCells }
 
   const filled =
-    max === undefined
+    max === undefined || max <= 0
       ? safeCells
       : Math.min(safeCells, Math.max(1, Math.round((total / max) * safeCells)))
 
