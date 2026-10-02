@@ -67,7 +67,9 @@ name:
 
 `register.ts`'s `kitOf` computes this once per `ui.render` event, off `e.surface`, and puts it on
 `Kit` as `kit.capabilities` — the only thing any view reads to decide whether it can type, pick, or
-show an image; a view never calls `capabilitiesOf` itself.
+show an image; a view never calls `capabilitiesOf` itself. A surface absent from the table (one
+the engine has added since) reads as all-false rather than throwing, so a view still renders on it,
+just with no typed, picking, or imaging controls.
 
 A view checks a capability before drawing the element that needs it, and degrades rather than
 crashing or drawing nothing useful:
