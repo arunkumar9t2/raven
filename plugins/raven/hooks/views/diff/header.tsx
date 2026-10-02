@@ -7,12 +7,11 @@ import { COLORS } from '../../core/colors'
 import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
-import { changeMap } from '../../ui/change-map'
+import { changeMap, changeMapOf } from '../../ui/change-map'
 import { type Chip, chipRow, chipsFit } from '../../ui/chips'
 import { diffStat } from '../../ui/diff-stat'
 import { statBar } from '../../ui/stat-bar'
 import { selectButtons } from '../select-buttons'
-import { HEADER_MIN } from './comment-box'
 
 /** The source Select's element key, for a test or a focus target. */
 export const SOURCE_SELECT_KEY = 'source'
@@ -145,12 +144,21 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   chips.push({
     key: 'clear',
     icon: '⌫',
-    label: props.confirmingClear ? 'clear all? press again' : 'clear',
+    label: props.confirmingClear ? 'clear all?' : 'clear',
     isDim: !props.confirmingClear,
     forceWords: props.confirmingClear,
     onPress: props.onClear,
   })
-  const room = Math.max(0, kit.columns - HEADER_MIN)
+
+  // `chipsFit`'s room must account for the map and the notes summary sharing this row — they
+  // are real, variable-width content, not reserved chrome like `HEADER_MIN` — else the chips
+  // are measured against room the left side has already spent, and decide "words" fits when it
+  // doesn't (caught live at a docked pane's real width; see the task report).
+  const maxCells = Math.floor(kit.columns / 3)
+  const mapWidth = changeMapOf(props.files, props.edited, maxCells).length
+  const notesText = pending > 0 ? `✎ ${countOf(pending, 'note')} pending` : ''
+  const leftWidth = mapWidth + (notesText === '' ? 0 : 1 + notesText.length)
+  const room = Math.max(0, kit.columns - leftWidth - 2)
   const mode = chipsFit(chips, room)
 
   return (
@@ -162,15 +170,15 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       overflow="hidden"
       flexWrap="nowrap"
     >
-      <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-        {changeMap(kit, props.files, props.edited, Math.floor(kit.columns / 3))}
-        {pending > 0 ? (
+      <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap" flexShrink={1}>
+        {changeMap(kit, props.files, props.edited, maxCells)}
+        {notesText !== '' ? (
           <Text color={COLORS.suggestion} wrap="truncate-end">
-            ✎ {countOf(pending, 'note')} pending
+            {notesText}
           </Text>
         ) : null}
       </Box>
-      {chipRow(kit, chips, mode, ACTIONS_ROW_KEY)}
+      <Box flexShrink={0}>{chipRow(kit, chips, mode, ACTIONS_ROW_KEY)}</Box>
     </Box>
   )
 }

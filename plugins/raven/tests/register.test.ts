@@ -680,7 +680,7 @@ describe('diff header', () => {
     expect((await ui.find({ key: 'send' }))?.props.variant).toBe('primary')
   })
 
-  test('an armed clear says to press again', async ($, on) => {
+  test('an armed clear confirms with "clear all?"', async ($, on) => {
     const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
 
@@ -689,7 +689,7 @@ describe('diff header', () => {
 
     const ui = await mountDiff($)
     await ui.press({ key: 'clear' })
-    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
+    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all?')
   })
 
   test('the send chip shrinks to its icon and count at the narrowest docked pane', async ($, on) => {
@@ -728,7 +728,7 @@ describe('diff header', () => {
     })
 
     await ui.press({ key: 'clear' })
-    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all? press again')
+    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all?')
   })
 
   test('row 2 starts with the change map, tallest glyph for the biggest change', async ($, on) => {
