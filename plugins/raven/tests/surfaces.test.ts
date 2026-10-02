@@ -106,4 +106,42 @@ describe('surface safety', () => {
       await ui.unmount()
     }
   })
+
+  test('on mobile, the source picker falls back to plain buttons: no Select element', async ($: Engine, on: On) => {
+    world(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'mobile',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: DIFF_PANE.id,
+    })
+
+    await expect(ui.drawn()).resolves.toBeDefined()
+    expect(await ui.findAll({ type: 'Select' })).toHaveLength(0)
+    expect(await ui.find({ type: 'Button', text: 'HEAD' })).toBeDefined()
+  })
+
+  test('on desktop, a shown png draws no Image element', async ($: Engine, on: On) => {
+    world(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: toolNameOf(NAME), op: 'show', path: '/work/shot.png' })
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'desktop',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+
+    await expect(ui.drawn()).resolves.toBeDefined()
+    expect(await ui.findAll({ type: 'Image' })).toHaveLength(0)
+    expect(await ui.find({ text: '/work/shot.png' })).toBeDefined()
+  })
 })

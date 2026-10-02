@@ -39,6 +39,11 @@ export type CommentBoxProps = {
   inputKey: string
   /** The anchor's hunk; present only for a hunk anchor, drives the line-picker Select. */
   hunk?: Hunk
+  /**
+   * Whether the line-picker Select draws, above the Input — the same value `blocksOf` used to
+   * size this block's rows, so the row count and the drawing never disagree.
+   */
+  hasPicker: boolean
   /** The line chosen in the picker; null means "whole hunk". */
   line: CommentLine | null
   columns: number
@@ -48,16 +53,17 @@ export type CommentBoxProps = {
 }
 
 /**
- * The compose state for an anchor being written to: a line picker (on a hunk, when the surface
- * has `Select`) plus an Input+cancel pair. `blocksOf` emits this block only while the anchor is
- * being composed, so this always runs in that state; the idle "＋ note" control is `noteButton`,
- * drawn by the heading or the hunk's actions row instead.
+ * The compose state for an anchor being written to: a line picker (on a hunk, when `hasPicker`)
+ * plus an Input+cancel pair. `blocksOf` emits this block only while the anchor is being composed
+ * and only on a surface with `canType`, so this always runs with a real `Input` to draw; the
+ * idle "＋ note" control is `noteButton`, drawn by the heading or the hunk's actions row instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
-  const { Box, Button, Input, Select } = kit.ui
+  // Safe once the caller's own contract holds: `blocksOf` never emits this block without
+  // `canType`, and never sets `hasPicker` without `canPick` — so `Input` and, when `hasPicker`,
+  // `Select` are always real constructors here, never the `| undefined` the type carries.
+  const { Box, Button, Input, Select } = kit.ui as Required<Kit['ui']>
   const { anchor } = props
-
-  if (!Input) return <Box />
 
   const lines = props.hunk ? changedLinesOf(props.hunk) : []
   // Leaves room for "Lnnn ± " and the Select's own chrome (label, current value marker).
@@ -75,7 +81,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
 
   return (
     <Box flexDirection="column">
-      {props.hunk && Select ? (
+      {props.hasPicker ? (
         <Select
           key={selectKeyOf(anchor)}
           options={options}

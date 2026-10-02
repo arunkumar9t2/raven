@@ -247,7 +247,7 @@ describe('blocksOf with degraded capabilities', () => {
   test('no Input drops every comment-box block, file and hunk alike, but keeps notes', () => {
     const comment = commentOf({ id: 'n1', hunk: hunkA.header })
     const blocks = blocksOf(file, [hunkA], [comment], null, {
-      capabilities: { canType: false, canPick: true },
+      capabilities: { canType: false, canPick: true, canShowImage: false },
     })
 
     expect(blocks.some(b => b.kind === 'fixed' && b.item.kind === 'comment-box')).toBe(false)
@@ -263,7 +263,7 @@ describe('blocksOf with degraded capabilities', () => {
       [],
       { path: file.path, hunk: hunkA.header },
       {
-        capabilities: { canType: false, canPick: true },
+        capabilities: { canType: false, canPick: true, canShowImage: false },
       },
     )
     expect(
@@ -278,7 +278,7 @@ describe('blocksOf with degraded capabilities', () => {
       [],
       { path: file.path, hunk: hunkA.header },
       {
-        capabilities: { canType: true, canPick: false },
+        capabilities: { canType: true, canPick: false, canShowImage: false },
       },
     )
     const hunkBox = blocks.find(

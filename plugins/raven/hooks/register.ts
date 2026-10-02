@@ -1,4 +1,4 @@
-import type { On, PluginOptions } from 'claude-code'
+import type { On, PluginOptions, RenderSurface } from 'claude-code'
 import { isCheckpointing } from './core/checkpointing'
 import { commandGlyphOf } from './core/command-glyph'
 import { DIRECTIVE_OPS, withoutDirectives } from './core/directive'
@@ -7,7 +7,7 @@ import { isRecord } from './core/is-record'
 import { createRaven, type Raven } from './core/raven'
 import { settingsOf } from './core/settings'
 import type { ToolEvent } from './core/triggers'
-import type { Kit, Ui } from './core/view'
+import { capabilitiesOf, type Kit, type Ui } from './core/view'
 import { COMMAND, COMMAND_DESCRIPTION, PANE_IDS, TOOL_NAME, toolNameOf } from './names'
 import { commandOutputRow } from './views/band'
 
@@ -52,14 +52,15 @@ export function register(on: On, options: PluginOptions) {
    * Notes the viewport off any `ui.render` event and builds its `Kit` around `resolve` (always
    * `() => $.ui.resolve(e)` at the call site — the sandbox forbids passing `$` itself), whose `ui`
    * resolves lazily so a handler whose guard declines to draw (a hidden pane, a band a survey
-   * suppresses) never pays for `$.ui.resolve`.
+   * suppresses) never pays for `$.ui.resolve`. `capabilities` is computed once here, off
+   * `surface`, not off which elements `resolve()` happens to hand back — see `core/view.ts`.
    */
   function kitOf(
     viewport: { columns?: number } | undefined,
     resolve: () => unknown,
     columns: number,
     rows: number,
-    surface: Kit['surface'],
+    surface: RenderSurface,
   ): Kit {
     raven?.noteViewport(viewport?.columns)
     let cached: Ui | undefined
@@ -70,7 +71,7 @@ export function register(on: On, options: PluginOptions) {
       },
       columns,
       rows,
-      surface,
+      capabilities: capabilitiesOf(surface),
     }
   }
 

@@ -38,7 +38,7 @@ export type BodyItem =
   | { kind: 'note'; comment: Comment }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
-  | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk }
+  | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean }
   | { kind: 'hunk-actions'; anchor: Anchor; hunk: Hunk; canNote: boolean }
   | { kind: 'gap' }
   | { kind: 'rule' }
@@ -80,8 +80,9 @@ function notesBlocksOf(notes: Comments, anchor: Anchor): Block<BodyItem>[] {
 /**
  * One anchor's notes followed by its comment box, drawn only while that anchor is being composed
  * — idle, the "＋ note" control lives on the heading or the hunk's actions row instead, so no
- * block is emitted at all. No `Input` drops the box entirely (no controls to draw), and no
- * `Select` drops the line picker's row from a hunk box (whole-hunk comments only).
+ * block is emitted at all. A surface without `canType` drops the box entirely (no controls to
+ * draw); `hasPicker` — whether the box draws its line-picker row — is carried on the block itself
+ * so the row count here and `commentBox`'s own drawing never disagree.
  */
 function anchorBlocksOf(
   notes: Comments,
@@ -101,7 +102,7 @@ function anchorBlocksOf(
       kind: 'fixed',
       key: commentBoxKeyOf(anchor),
       rows,
-      item: { kind: 'comment-box', anchor, hunk },
+      item: { kind: 'comment-box', anchor, hunk, hasPicker },
     },
   ]
 }
@@ -129,7 +130,7 @@ function outdatedBlocksOf(outdated: Comments): Block<BodyItem>[] {
 export type BlocksOptions = {
   /** A turn's diff is read-only: no comment boxes, no stage/revert, just the title and hunks. */
   readOnly?: boolean
-  /** The surface's `Input`/`Select`; every surface has both when omitted. */
+  /** The surface's capabilities (`canType`, `canPick`); every one is on when omitted. */
   capabilities?: Capabilities
   /** The status for a file whose hunks are undefined; `Loading…` when omitted. */
   unreadText?: string

@@ -5,7 +5,7 @@ import type { RenderElement } from 'claude-code'
 
 import { COLORS } from '../core/colors'
 import { type Host, loggedAs } from '../core/host'
-import { type Capabilities, capabilitiesOf, type Kit, type View } from '../core/view'
+import type { Capabilities, Kit, View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
 import { applyPatch, loadAllHunks, loadChanges, loadHunks, refOf } from '../git/load'
@@ -445,7 +445,9 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           <Box flexDirection="row" gap={1}>
             <Text color={mark.color}>{mark.glyph}</Text>
             <Text color={icon.color}>{icon.glyph}</Text>
-            <Text bold>{item.file.path}</Text>
+            <Text bold wrap="truncate-end">
+              {item.file.path}
+            </Text>
             <Text color={COLORS.added}>+{item.file.adds}</Text>
             <Text color={COLORS.removed}>−{item.file.dels}</Text>
             {item.canNote
@@ -471,6 +473,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           anchor: item.anchor,
           inputKey: inputKeyOf(item.anchor),
           hunk: item.hunk,
+          hasPicker: item.hasPicker,
           line: model.composingLine,
           columns: kit.columns,
           onLineChange: line => update({ composingLine: line }),
@@ -531,7 +534,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
       return <Text dimColor>{text}</Text>
     }
 
-    const stream = streamFor(capabilitiesOf(kit.surface))
+    const stream = streamFor(kit.capabilities)
     lastTitleRows = stream.titleRows
     lastContentRows = stream.contentRows
 
