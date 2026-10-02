@@ -618,7 +618,7 @@ export function createDiffView(host: Host, review: Review, actions: DiffActions)
           onClear: pressClear,
         })}
         {fileList(kit, { files, selected: model.selected, edited: model.edited, onSelect: select })}
-        {/* One short of the full width, same as the 'rule' case above, and for the same reason. */}
+        {/* One short of the full width so the rule never wraps onto a row of its own. */}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
         {placed.map(p => placedRowOf(kit, p, filesByPath))}
       </Box>
