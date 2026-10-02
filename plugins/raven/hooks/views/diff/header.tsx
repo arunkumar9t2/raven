@@ -93,6 +93,24 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
   )
 }
 
+/** The reserved minimum the change map keeps even at the narrowest docked body (ruling R28) —
+ * `changeMapOf`'s own overflow `…` rule still applies on top of this cap. */
+const MIN_MAP_CELLS = 3
+
+/**
+ * `chips`' own icons-mode floor: every chip bare-iconed (`short` when given, else `icon`),
+ * bracket-padded `[ x ]`, with one gap between — the same width model `chips.tsx`'s internal
+ * `widthOf`/`buttonWidthOf` use for `chipsLayout`'s own sizing, kept here only for that floor
+ * (nothing passed to it is ever `forceWords`; that only happens during an armed confirm, which
+ * never reaches this helper) to decide whether nav and refresh must give way before the map and
+ * the notes summary are squeezed below R28's reserved minimum.
+ */
+function iconsWidthOf(chips: readonly Chip[]): number {
+  if (chips.length === 0) return 0
+  const total = chips.reduce((sum, chip) => sum + (chip.short ?? chip.icon).length + 4, 0)
+  return total + (chips.length - 1)
+}
+
 /**
  * Row 2: the change map — one glyph per file, the shape of the whole change at a glance, D10
  * point 4 — and the notes summary on the left; every control chip — nav, refresh, edit & send,
@@ -105,81 +123,103 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
  * (not just shrink to icons) and the map/notes summary on the left drop too — the only thing
  * on this row that matters while the person decides is the confirm itself, and both changes
  * together are what keeps the confirm's full words inside even the narrowest docked pane.
+ *
+ * Ruling R28: with nothing armed, the map and the notes summary degrade instead of vanishing.
+ * Every chip bare-iconed can still cost more than the row has — six chips, each drawn
+ * `[ x ]`-bracketed, add up fast — which would otherwise starve the left side to nothing before
+ * `chipsLayout` ever gets a say (the chips' own `Box` is `flexShrink: 0`; the left side's is
+ * `flexShrink: 1`, so it is the one that gives, all the way to 0 if it has to — caught live at a
+ * docked pane's real width, see the task report). When the full chip set's own icons floor would
+ * do that, nav and refresh — each already a keybinding, not just a chip — give way entirely, the
+ * same two the row drops first during an armed confirm (R27), freeing the room the map's
+ * guaranteed `MIN_MAP_CELLS` and the summary's compact `✎N` need. The survivors are still sized
+ * against the *full* reserve (as if the map and summary were still at their widest): once nav
+ * and refresh are gone, the survivors' own icons floor already clears that full reserve, so
+ * sizing against the smaller, actual left content here would only hand them back words they were
+ * just dropped to icons to make room for.
  */
 function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text } = kit.ui
   const { pending, confirmingClear } = props
 
-  const chips: Chip[] = []
-  if (!confirmingClear) {
-    chips.push(
-      {
-        key: 'previous',
-        action: 'app:diffFileListUp',
-        icon: '↑',
-        label: '',
-        isDim: true,
-        priority: 0,
-        onPress: props.onPrevious,
-      },
-      {
-        key: 'next',
-        action: 'app:diffFileListDown',
-        icon: '↓',
-        label: '',
-        isDim: true,
-        priority: 0,
-        onPress: props.onNext,
-      },
-      {
-        key: 'refresh',
-        icon: '↻',
-        label: 'refresh',
-        isDim: true,
-        priority: 1,
-        onPress: props.onRefresh,
-      },
-    )
-  }
-  if (pending > 0) {
+  const chipsOf = (includeNavRefresh: boolean): Chip[] => {
+    const chips: Chip[] = []
+    if (!confirmingClear && includeNavRefresh) {
+      chips.push(
+        {
+          key: 'previous',
+          action: 'app:diffFileListUp',
+          icon: '↑',
+          label: '',
+          isDim: true,
+          priority: 0,
+          onPress: props.onPrevious,
+        },
+        {
+          key: 'next',
+          action: 'app:diffFileListDown',
+          icon: '↓',
+          label: '',
+          isDim: true,
+          priority: 0,
+          onPress: props.onNext,
+        },
+        {
+          key: 'refresh',
+          icon: '↻',
+          label: 'refresh',
+          isDim: true,
+          priority: 1,
+          onPress: props.onRefresh,
+        },
+      )
+    }
+    if (pending > 0) {
+      chips.push(
+        {
+          key: 'edit-send',
+          icon: '✎',
+          label: 'edit & send',
+          isDim: true,
+          priority: 3,
+          onPress: props.onEditSend,
+        },
+        {
+          key: 'send',
+          icon: '➤',
+          short: `➤ ${pending}`,
+          label: `send ${pending}`,
+          variant: 'primary',
+          priority: 4,
+          onPress: props.onSend,
+        },
+      )
+    }
     chips.push({
-      key: 'edit-send',
-      icon: '✎',
-      label: 'edit & send',
-      isDim: true,
-      priority: 3,
-      onPress: props.onEditSend,
+      key: 'clear',
+      icon: '⌫',
+      label: confirmingClear ? 'clear all?' : 'clear',
+      isDim: !confirmingClear,
+      forceWords: confirmingClear,
+      priority: 2,
+      onPress: props.onClear,
     })
-    chips.push({
-      key: 'send',
-      icon: '➤',
-      short: `➤ ${pending}`,
-      label: `send ${pending}`,
-      variant: 'primary',
-      priority: 4,
-      onPress: props.onSend,
-    })
+    return chips
   }
-  chips.push({
-    key: 'clear',
-    icon: '⌫',
-    label: confirmingClear ? 'clear all?' : 'clear',
-    isDim: !confirmingClear,
-    forceWords: confirmingClear,
-    priority: 2,
-    onPress: props.onClear,
-  })
 
-  // The map and the notes summary share this row's left side with the chips, so `chipsLayout`'s
-  // room must account for their real (variable) width, not a fixed reserve — else the chips are
-  // measured against room the left side already spent (caught live at a docked pane's real
-  // width; see the task report). While armed, the left side is empty (R27), so this collapses
-  // to 0 and the chips get the whole row.
   const maxCells = Math.floor(kit.columns / 3)
-  const mapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
-  const notesText = !confirmingClear && pending > 0 ? `✎ ${countOf(pending, 'note')} pending` : ''
-  const leftWidth = mapCells.length + (notesText === '' ? 0 : 1 + notesText.length)
-  const room = Math.max(0, kit.columns - leftWidth - 2)
+  const fullNotesText =
+    !confirmingClear && pending > 0 ? `✎ ${countOf(pending, 'note')} pending` : ''
+  const compactNotesText = !confirmingClear && pending > 0 ? `✎${pending}` : ''
+  const fullChips = chipsOf(true)
+  const fullMapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
+  const fullLeftWidth = fullMapCells.length + (fullNotesText === '' ? 0 : 1 + fullNotesText.length)
+  const ample = confirmingClear || fullLeftWidth + 2 + iconsWidthOf(fullChips) <= kit.columns
+
+  const effectiveMaxCells = ample ? maxCells : MIN_MAP_CELLS
+  const notesText = ample ? fullNotesText : compactNotesText
+  const chips = ample ? fullChips : chipsOf(false)
+  const room = Math.max(0, kit.columns - fullLeftWidth - 2)
   const modes = chipsLayout(chips, room)
 
   return (
@@ -192,7 +232,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       flexWrap="nowrap"
     >
       <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap" flexShrink={1}>
-        {confirmingClear ? null : changeMap(kit, props.files, props.edited, maxCells)}
+        {confirmingClear ? null : changeMap(kit, props.files, props.edited, effectiveMaxCells)}
         {notesText !== '' ? (
           <Text color={COLORS.suggestion} wrap="truncate-end">
             {notesText}

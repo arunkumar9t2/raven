@@ -324,6 +324,40 @@ const mountDiff = ($: Engine) =>
   })
 
 /**
+ * An element's own real drawn width, reconstructed from the raw tree the mod-kit harness returns
+ * (`type`, `props`, `children`) rather than `.text` — which flattens a `Button` down to its bare
+ * label and drops every `Box`'s `gap`, so it cannot stand in for "does this actually fit" the way
+ * the other narrowest-pane tests use it (see the R28 test above). A `Button` draws `[ label ]`
+ * (`types/claude-code.d.ts`'s own documented convention, `chips.tsx`'s `buttonWidthOf`); a row
+ * `Box` sums its children plus one `gap` between each; any other `Box` (here, always a single
+ * child) is its child's width; a `Text` is the length of its string children, recursing into any
+ * nested `Text` (the change map nests one coloured `Text` per glyph).
+ */
+function drawnWidth(
+  el: { type: string; props?: Record<string, unknown>; children?: unknown[] } | undefined,
+): number {
+  if (!el) return 0
+  if (el.type === 'Button') return ((el.props?.label as string | undefined)?.length ?? 0) + 4
+  const kids = (el.children ?? []) as readonly unknown[]
+  if (el.type === 'Text') {
+    return kids.reduce(
+      (sum: number, child) =>
+        sum + (typeof child === 'string' ? child.length : drawnWidth(child as typeof el)),
+      0,
+    )
+  }
+  if (el.type === 'Box') {
+    const widths = kids.map(child => drawnWidth(child as typeof el))
+    if (el.props?.flexDirection === 'row') {
+      const gap = (el.props?.gap as number | undefined) ?? 0
+      return widths.reduce((a, b) => a + b, 0) + gap * Math.max(0, kids.length - 1)
+    }
+    return Math.max(0, ...widths)
+  }
+  return 0
+}
+
+/**
  * A world inside a git repository with modified files (`a.ts` by default, no hunks), so a
  * file-level comment on one draws without needing a hunk fixture; `review.load` runs against a
  * real toplevel.
@@ -925,6 +959,41 @@ describe('diff header', () => {
     // length is the real proxy for "does this actually fit" — same convention as the hunk
     // toolbar's own narrowest-pane test.
     expect(row?.text?.length ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(38)
+  })
+
+  test('with nothing armed, the map and the notes summary degrade instead of vanishing at the narrowest docked pane (R28)', async ($, on) => {
+    // `.text` flattens every Button down to its bare label, dropping the `[ ]` bracket padding
+    // and the row's own gaps — that is why the other narrowest-pane tests' ".text.length <= 38"
+    // proxy cannot catch this bug: the change map and notes summary were being starved to
+    // nothing *before* `.text` is ever computed, by the actual flex layout (the chips' box is
+    // `flexShrink: 0`, so a too-wide chip row shrinks the map/summary box instead, down to 0 if
+    // it has to), not by anything `.text` reflects. `drawnWidth` below walks the raw element
+    // tree and reconstructs each node's real drawn width (a `Button`'s own `[ label ]` bracket
+    // padding, a row `Box`'s `gap` between children) so the assertion actually exercises the
+    // thing that broke live (see .scratch/p2-6-narrow.txt).
+    const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
+    const pending = [
+      { id: 'c1', path: 'f0.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+      { id: 'c2', path: 'f0.ts', text: 'fix that', status: 'pending', createdAt: 0 },
+    ]
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: pending }, null, files)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
+
+    const row = await ui.find({ key: ACTIONS_ROW_KEY })
+    const mapGlyphs = (row?.text ?? '').match(/[▁▂▃▄▅▆▇█…]/g) ?? []
+    expect(mapGlyphs.length).toBeGreaterThanOrEqual(3)
+    expect(row?.text).toMatch(/✎2|✎ 2 notes pending/)
+    expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
   test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {
