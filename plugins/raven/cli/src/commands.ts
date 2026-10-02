@@ -12,7 +12,8 @@ export type Io = {
   exists(path: string): Promise<'file' | 'dir' | null>
 }
 
-const FALLBACK_HINT = '(Enable function hooks: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1)'
+const FALLBACK_HINT =
+  '(If your Claude Code is older than 2.1.287, enable function hooks: CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1)'
 
 const USAGE = `Usage: ${NAME} <command> [options]
 

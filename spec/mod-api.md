@@ -10,8 +10,9 @@ account of Raven's own controller and views; it owns the engine's side of that b
 ## Enabling a mod
 
 Function hooks are early access: no official docs page, the types file's header is the only
-authority. A session needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` in its environment before a mod's
-hooks are read at all. A plugin loads either through normal plugin installation or, for local
+authority. On Claude Code 2.1.287 mods load by default, with no environment variable needed; a
+session on an older Claude Code needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` in its environment
+before a mod's hooks are read at all. A plugin loads either through normal plugin installation or, for local
 development, by naming its directory in `CLAUDE_CODE_PLUGIN_DIRS` (a `path.delimiter`-joined list) or
 passing `--plugin-dir <path>` on the command line. `scripts/setup-local.ts` does the former,
 idempotently, against `~/.claude/settings.json`'s `env`; `scripts/cc.ts` scrubs every

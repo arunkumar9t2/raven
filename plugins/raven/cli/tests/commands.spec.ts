@@ -41,6 +41,7 @@ describe('show', () => {
     expect(code).toBe(0)
     expect(io.stdoutLines[0]).toBe('::raven::{"op":"show","path":"/work/docs/spec.md"}\n')
     expect(io.stdoutLines[1]).toContain('Raven pane is not active')
+    expect(io.stdoutLines[1]).toContain('older than 2.1.287')
     expect(io.stdoutLines[1]).toContain('CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1')
   })
 
