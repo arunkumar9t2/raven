@@ -51,7 +51,8 @@ bun run setup:local  # load this checkout's plugin folder in every local session
 (never `/model`: it rewrites the user's default) and the plugin as `bun run setup:local` loads it,
 with file checkpointing off so the native diff panel does not take the dock. `RAVEN_CLAUDE_ARGS`
 passes extra flags (e.g. `--allowedTools 'Bash(raven:*)' Write`).
-`cc.sh type "/raven"`, `cc.sh click <col> <row>` (SGR mouse, presses Buttons and focuses Inputs),
+`cc.sh type "/raven diff"` (not a bare `/raven`, which the typeahead can complete to the
+`/raven:preview` skill and start a model turn), `cc.sh click <col> <row>` (SGR mouse, presses Buttons and focuses Inputs),
 `cc.sh keys …`, `cc.sh cap`, `cc.sh stop`. Prefer zero-token checks: edit files from the shell and
 use `/raven` rather than prompting the model.
 
