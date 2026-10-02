@@ -14,8 +14,12 @@ authority. A session needs `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1` in its environm
 hooks are read at all. A plugin loads either through normal plugin installation or, for local
 development, by naming its directory in `CLAUDE_CODE_PLUGIN_DIRS` (a `path.delimiter`-joined list) or
 passing `--plugin-dir <path>` on the command line. `scripts/setup-local.ts` does the former,
-idempotently, against `~/.claude/settings.json`'s `env`; `scripts/cc.sh` does the latter for a
-throwaway tmux session. A `--plugin-dir` plugin's key is its `plugin.json` name, not a marketplace
+idempotently, against `~/.claude/settings.json`'s `env`; `scripts/cc.ts` points `--settings <file>`
+(via `RAVEN_CLAUDE_ARGS`) at a project-local settings file with its own `CLAUDE_CODE_PLUGIN_DIRS`
+for a throwaway tmux session, rather than relying on an inherited env var — it scrubs every
+`CLAUDE_CODE_*`/`CLAUDECODE*` name from the caller's own environment first, precisely so a live
+check never loads whichever checkout the calling session happened to have wired in. A `--plugin-dir`
+plugin's key is its `plugin.json` name, not a marketplace
 entry; `claude plugin validate` names any hook the engine would refuse to register, so a plugin
 author sees the same rejection statically that a live session would raise at load.
 
@@ -41,7 +45,7 @@ alongside a `command.register` of the same name — one name, one owner; [`agent
 covers why this is the reason Raven's own skill is not named `raven`.
 
 `/model` is a global rewrite of the person's own default model, not a per-session override; a mod's
-development harness (`scripts/cc.sh`) never touches it, driving the default model instead.
+development harness (`scripts/cc.ts`) never touches it, driving the default model instead.
 
 ## The sandbox
 

@@ -23,7 +23,7 @@ plugins/raven/
   cli/tests/                       CLI unit tests (*.spec.ts)
   tests/unit/                      bun tests of the pure modules (*.spec.ts)
   tests/*.test.ts                  mod tests run through `claude plugin test` (register, surfaces)
-scripts/cc.sh                      drives a real Claude Code session in tmux (closed-loop checks)
+scripts/cc.ts                      drives a real Claude Code session in tmux (closed-loop checks)
 scripts/setup-local.ts             loads the plugin into every local session live from this checkout
 types/claude-code.d.ts             the mod API declarations, kept in sync from the engine's own copy
 ```
@@ -69,47 +69,58 @@ Two test kinds live side by side and are told apart by extension, not by directo
 
 ## The closed-loop tmux harness
 
-`scripts/cc.sh` drives a real Claude Code session inside tmux so the mod can be exercised and its
-pane captured without a person at the keyboard, and without spending model tokens on most checks:
+`scripts/cc.ts` drives a real Claude Code session inside tmux so the mod can be exercised and its
+pane captured without a person at the keyboard, and without spending model tokens on most checks.
+It is a strongly typed Bun script (its own `scripts/tsconfig.json`, unit-tested by
+`scripts/cc.spec.ts`), not a shell script, because `start` needs to scrub the caller's own
+`CLAUDE_CODE_*`/`CLAUDECODE*` environment before launching — running it from inside a Claude Code
+session must never leak that session's `CLAUDE_CODE_PLUGIN_DIRS` or child markers into the session
+it starts:
 
 ```bash
-scripts/cc.sh start [workdir]             # default workdir: a throwaway git repo with one uncommitted edit
-scripts/cc.sh type <text>                 # types text into the composer and presses Enter
-scripts/cc.sh keys <key>...               # raw tmux keys: Enter, Escape, Down, C-c, …
-scripts/cc.sh click <col> <row>           # left-click at a 1-based screen cell, via SGR mouse sequences
-scripts/cc.sh wheel <col> <row> up|down   # scroll wheel tick at a 1-based screen cell, via SGR mouse
-scripts/cc.sh cap                         # print the visible screen
-scripts/cc.sh stop                        # kill the tmux session
+scripts/cc.ts start [workdir]             # default workdir: a throwaway git repo with one uncommitted edit
+scripts/cc.ts type <text>                 # types text into the composer and presses Enter
+scripts/cc.ts keys <key>...               # raw tmux keys: Enter, Escape, Down, C-c, …
+scripts/cc.ts click <col> <row>           # left-click at a 1-based screen cell, via SGR mouse sequences
+scripts/cc.ts hover <col> <row>           # move the pointer to a 1-based screen cell, via SGR mouse motion
+scripts/cc.ts wheel <col> <row> up|down   # scroll wheel tick at a 1-based screen cell, via SGR mouse
+scripts/cc.ts cap                         # print the visible screen
+scripts/cc.ts stop                        # kill the tmux session
 ```
 
-`start` launches `claude` with function hooks and the no-flicker fullscreen layout on, file
-checkpointing off (`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1`) so the built-in diff panel does not
-auto-open over Raven's own dock, and `RAVEN_CLAUDE_ARGS` appended for extra flags such as
-`--allowedTools 'Bash(raven:*)' Write`. It always runs with the default model — never `/model`,
-since that rewrites the person's own default persistently — and relies on `bun run setup:local`
-having wired this checkout into `CLAUDE_CODE_PLUGIN_DIRS` already. Checkpointing stays off for every
-run this harness drives, for the same reason `start` disables it.
+`start` launches `claude` with the no-flicker fullscreen layout on and file checkpointing off
+(`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1`) so the built-in diff panel does not auto-open over
+Raven's own dock, and `RAVEN_CLAUDE_ARGS` appended for extra flags such as `--allowedTools
+'Bash(raven:*)' Write`. It always runs with the default model — never `/model`, since that rewrites
+the person's own default persistently. Before launching, it drops every `CLAUDE_CODE_*`/
+`CLAUDECODE*` name from the caller's env (and any already sitting in a live tmux server's global
+env from an earlier, unscrubbed launch) and sets only its own three: `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`,
+`CLAUDE_CODE_NO_FLICKER=1`, `CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1`. Plugin loading comes from
+`--settings <file>` (via `RAVEN_CLAUDE_ARGS`) or from `bun run setup:local`'s persistent
+`~/.claude/settings.json` entry — never from an inherited `CLAUDE_CODE_PLUGIN_DIRS` — so the scrub
+never breaks loading the checkout under test. Checkpointing stays off for every run this harness
+drives, for the same reason `start` disables it.
 
-`click` and `wheel` send SGR mouse escape sequences directly (button-press then button-release for a
-click; button codes 64/65 for wheel-up/wheel-down) rather than relying on tmux's own mouse mode, so
-they work identically whether or not the terminal emulator running tmux has mouse reporting enabled.
+`click`, `hover` and `wheel` send SGR mouse escape sequences directly (button-press then
+button-release for a click; button code 35 with no button held for hover/motion; button codes
+64/65 for wheel-up/wheel-down) rather than relying on tmux's own mouse mode, so they work
+identically whether or not the terminal emulator running tmux has mouse reporting enabled.
 
 Prefer zero-token checks over prompting the model: edit files from the shell and drive `/raven`
-through `cc.sh type`/`click` rather than asking Claude to do the edit or the toggle itself. Reserve an
-actual prompt for what only the model can produce — an edit whose content matters, or a turn whose
-reply needs judging.
+through `cc.ts type`/`click` rather than asking Claude to do the edit or the toggle itself. Reserve
+an actual prompt for what only the model can produce — an edit whose content matters, or a turn
+whose reply needs judging.
 
-`cc.sh type "/raven"` on its own is not safe in a scripted check: the composer's own command
-typeahead can complete the bare command to `/raven:preview` (the skill, not the mod's `/raven`
-command) before Enter lands, which starts a real model turn instead of toggling the pane for free.
-Always type a full subcommand — `/raven diff` (or `doc`/`files`/`tasks`/`send`) — never the bare
-`/raven`, in any script that must not spend tokens.
+`cc.ts type "/raven"` on its own is refused (exit 2): the composer's own command typeahead can
+complete the bare command to `/raven:preview` (the skill, not the mod's `/raven` command) before
+Enter lands, which would start a real model turn instead of toggling the pane for free. Always type
+a full subcommand — `/raven diff` (or `doc`/`files`/`tasks`/`send`) — never the bare `/raven`, in
+any script that must not spend tokens.
 
-A chip row's hover (see `chips.tsx`'s `chipRow` doc comment) can be probed from this harness too,
-beyond `click`: `cc.sh` has no dedicated hover subcommand, but `tmux send-keys -t "$SESSION" -l
-$'\e[<35;COL;ROWM'` — an SGR mouse *motion* event, button code 35, no button held — over a chip's
-cell drives hover the same as a real pointer move, with no click. A `cap` right after shows the
-chip's hover-group siblings jump from dim to full strength and the pointed chip itself invert.
+A chip row's hover (see `chips.tsx`'s `chipRow` doc comment) can be probed from this harness too:
+`cc.ts hover <col> <row>` sends an SGR mouse *motion* event over a chip's cell, driving hover the
+same as a real pointer move, with no click. A `cap` right after shows the chip's hover-group
+siblings jump from dim to full strength and the pointed chip itself invert.
 
 ## Local loading
 
