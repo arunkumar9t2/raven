@@ -1,6 +1,7 @@
 import type { On } from 'claude-code'
 import { describe, type Engine, expect, test, tier } from 'claude-code/testing'
 import { DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
+import { commentButtonKeyOf } from '../hooks/views/diff/anchor'
 import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
 
 tier('user')
@@ -106,6 +107,30 @@ describe('surface safety', () => {
 
       await ui.unmount()
     }
+  })
+
+  test('a note on a doc section draws on mobile with no Input, the chip gone too', async ($: Engine, on: On) => {
+    world(on)
+    on('fs.read', () => ({ value: '# Plan\n\nIntro\n\n## Goals\n\n- a\n' }))
+
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: toolNameOf(NAME), op: 'show', path: '/work/plan.md' })
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'mobile',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+
+    await expect(ui.drawn()).resolves.toBeDefined()
+    expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
+    // Goals is section index 1 (Plan is 0): no "✎ note" chip control on a surface with no typing.
+    expect(
+      await ui.find({ key: commentButtonKeyOf({ path: '/work/plan.md', hunk: '§1' }) }),
+    ).toBeUndefined()
+    expect(await ui.find({ text: 'Goals' })).toBeDefined()
   })
 
   test('on mobile, the source picker falls back to plain buttons: no Select element', async ($: Engine, on: On) => {

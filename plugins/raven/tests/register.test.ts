@@ -12,6 +12,7 @@ import {
 import {
   commentButtonKeyOf,
   hunkHeaderKeyOf,
+  inputKeyOf,
   revertKeyOf,
   stageKeyOf,
 } from '../hooks/views/diff/anchor'
@@ -137,11 +138,12 @@ describe('register', () => {
  * A world like `world`'s, but recording every pane opened rather than just the ones currently
  * shown, so a test can tell an auto-open happened from one that never did.
  */
-function openWorld(on: On) {
+function openWorld(on: On, docText: Record<string, string> | ((path: string) => string) = {}) {
   const opened: string[] = []
   baseWorld(on)
   on('process.run', () => ran(128, '', 'not a repo'))
-  on('ui.invalidate', () => ({ value: undefined }))
+  // `ui.invalidate` is left to the engine's own implementation (not stubbed): a stub answering it
+  // here would swallow `host.redraw()`, and a mounted pane would never redraw after a press.
   on('ui.status', () => ({ value: undefined }))
   on('settings.read', () => ({ value: {} }))
   on('ui.open', ($, e) => {
@@ -152,6 +154,9 @@ function openWorld(on: On) {
   on('ui.panes', () => ({ value: [] }))
   on('ui.focus', () => ({}))
   on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+  on('fs.read', ($, e) => ({
+    value: typeof docText === 'function' ? docText(e.path) : (docText[e.path] ?? ''),
+  }))
   return opened
 }
 
@@ -240,6 +245,85 @@ describe('options: watched doc paths, defaults', () => {
     })
     expect(await ui.find({ text: /^My plan$/ })).toBeDefined()
     expect(await ui.find({ text: /^\/work\/docs\/superpowers\/plans\/x\.md$/ })).toBeDefined()
+  })
+
+  const DOC_PATH = '/work/docs/superpowers/plans/x.md'
+
+  test('a note on a doc section rides the next prompt under that section', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n\n## Goals\n\n- a\n' })
+    on('prompt.submit', ($, e) => ({ text: e.text }))
+    const toasts: string[] = []
+    on('ui.toast', ($, e) => {
+      toasts.push(e.text)
+      return { value: undefined }
+    })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    // Sections of '# Plan\n\nIntro\n\n## Goals\n\n- a\n' are [Plan (0), Goals (1)]: Goals is §1.
+    const goals = { path: DOC_PATH, hunk: '§1' }
+    await ui.press({ key: commentButtonKeyOf(goals) })
+    await ui.input({ key: inputKeyOf(goals), text: 'tighten the goals' })
+    expect(await ui.find({ text: /tighten the goals/ })).toBeDefined()
+
+    await $.prompt.submit({ text: 'go', origin: { kind: 'composer' }, wait: false })
+    expect(toasts).toContain('Raven: 1 review comment sent with this prompt')
+  })
+
+  test('two sections sharing a heading draw their notes under the right one, by index', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Notes\na\n\n# Notes\nb\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const secondNotes = { path: DOC_PATH, hunk: '§1' }
+    await ui.press({ key: commentButtonKeyOf(secondNotes) })
+    await ui.input({ key: inputKeyOf(secondNotes), text: 'only on the second one' })
+
+    expect((await ui.find({ key: 'section:1' }))?.text).toContain('only on the second one')
+    expect((await ui.find({ key: 'section:0' }))?.text).not.toContain('only on the second one')
+  })
+
+  test('a doc comment whose section is gone draws under an Outdated row', async ($, on) => {
+    let text = '# Gone\n\nold topic\n'
+    openWorld(on, path => (path === DOC_PATH ? text : ''))
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const gone = { path: DOC_PATH, hunk: '§0' }
+    await ui.press({ key: commentButtonKeyOf(gone) })
+    await ui.input({ key: inputKeyOf(gone), text: 'orphan' })
+    expect(await ui.find({ text: /orphan/ })).toBeDefined()
+
+    // The doc changes under it: the 'Gone' section no longer exists, so the comment orphans.
+    text = '# Still here\n\nnew topic\n'
+    await $.tool.call(editOf(DOC_PATH))
+
+    expect(await ui.find({ text: 'Outdated' })).toBeDefined()
+    expect(await ui.find({ text: /orphan/ })).toBeDefined()
   })
 })
 
