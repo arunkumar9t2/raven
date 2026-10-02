@@ -7,7 +7,7 @@ const FENCE = /^\s*(`{3,}|~{3,})/
  * the opener, with nothing but whitespace around it — an info string (e.g. a ```ts` line nested
  * inside a ``` block) carries no closing, it is content.
  */
-function closesFence(line: string, marker: string): boolean {
+export function closesFence(line: string, marker: string): boolean {
   const char = marker[0]
   const body = char === '`' ? '`+' : '~+'
   return new RegExp(`^\\s*${body}\\s*$`).test(line) && line.trim().length >= marker.length
