@@ -18,6 +18,14 @@ describe('statBarCells', () => {
     expect(statBarCells(1, 100, 5)).toEqual({ added: 1, removed: 4, rest: 0 })
   })
 
+  test('the mirror: a tiny non-zero removed still gets one cell (100,1,5 -> 4/1/0)', () => {
+    expect(statBarCells(100, 1, 5)).toEqual({ added: 4, removed: 1, rest: 0 })
+  })
+
+  test('removed wins a non-tied remainder (1,2,4 -> 1/3/0, removed has the larger fraction)', () => {
+    expect(statBarCells(1, 2, 4)).toEqual({ added: 1, removed: 3, rest: 0 })
+  })
+
   test('zero/zero draws all inactive (0,0,5 -> 0/0/5)', () => {
     expect(statBarCells(0, 0, 5)).toEqual({ added: 0, removed: 0, rest: 5 })
   })

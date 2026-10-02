@@ -14,8 +14,11 @@ export type SectionHeaderProps = {
   /** The title's (and `count`'s) colour. */
   color: string
   count?: number
-  /** Dim metadata, right-aligned — `source HEAD`, a ref, a scope. */
-  right?: string
+  /**
+   * Right-aligned metadata — `source HEAD`, a ref, a scope — dim when a plain string; an
+   * element (a chip row, a source picker) draws bare, never wrapped in `Text`.
+   */
+  right?: RenderElement | string
 }
 
 /** A coloured title, an optional count, dim right-aligned metadata — one row, nowrap. */
@@ -38,7 +41,15 @@ export function sectionHeader(kit: Kit, props: SectionHeaderProps): RenderElemen
         </Text>
         {count !== undefined ? <Text> {badge(kit, count, color)}</Text> : ''}
       </Text>
-      {right !== undefined && right !== '' ? <Text dimColor>{right}</Text> : ''}
+      {right === undefined || right === '' ? (
+        ''
+      ) : typeof right === 'string' ? (
+        <Text dimColor>{right}</Text>
+      ) : (
+        <Box flexShrink={1} overflow="hidden">
+          {right}
+        </Box>
+      )}
     </Box>
   )
 }
