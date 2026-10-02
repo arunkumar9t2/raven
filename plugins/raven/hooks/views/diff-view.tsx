@@ -8,7 +8,14 @@ import { type Host, loggedAs } from '../core/host'
 import type { Capabilities, Kit, View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
-import { applyPatch, loadAllHunks, loadChanges, loadHunks, refOf } from '../git/load'
+import {
+  applyPatch,
+  existingPathsOf,
+  loadAllHunks,
+  loadChanges,
+  loadHunks,
+  refOf,
+} from '../git/load'
 import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
@@ -24,6 +31,8 @@ import {
   hunkToolbar,
   note,
   noteChip,
+  orphanPathRow,
+  orphansTitle,
   outdatedTitle,
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
@@ -36,6 +45,7 @@ import { iconOf, statusMarkOf } from './icons'
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
 const WHEEL_ROWS = 3
 const EMPTY_STAGED: ReadonlySet<string> = new Set()
+const EMPTY_GONE_PATHS: ReadonlySet<string> = new Set()
 
 type Model = {
   repository: { toplevel: string; files: readonly ChangedFile[] } | null
@@ -74,6 +84,14 @@ type Model = {
   followPath: string | null
   /** False once the person scrolls the stream this turn; a further edit then leaves the view put. */
   isFollowing: boolean
+  /**
+   * Which review-comment paths are confirmed gone from the working tree — a property of the
+   * repository, not of the selected source, so it is checked over every non-doc comment's path
+   * regardless of which are currently orphaned. Empty until a check actually names one gone, so a
+   * path never checked (or one a failed check couldn't confirm) never draws "file gone": fail
+   * open, same as everywhere else this check feeds.
+   */
+  gonePaths: ReadonlySet<string>
 }
 
 const EMPTY_EDITED: ReadonlySet<string> = new Set()
@@ -102,6 +120,8 @@ export type DiffView = View & {
    * turn (read-only) source is selected — a turn's file list is not the live git diff.
    */
   knownPaths: () => ReadonlySet<string> | null
+  /** The current repository's toplevel; null whenever no repository has loaded. */
+  toplevel: () => string | null
 }
 
 export function createDiffView(
@@ -125,6 +145,7 @@ export function createDiffView(
     pendingEdited: EMPTY_EDITED,
     followPath: null,
     isFollowing: true,
+    gonePaths: EMPTY_GONE_PATHS,
   }
 
   const sourceController = createSourceController(host)
@@ -144,6 +165,7 @@ export function createDiffView(
     readOnly: boolean
     capabilities: Capabilities
     isLoaded: boolean
+    gonePaths: ReadonlySet<string>
     stream: Stream
   } | null = null
 
@@ -284,6 +306,31 @@ export function createDiffView(
     })
 
     if (repository) await review.load(repository.toplevel)
+    if (started !== generation) return
+
+    // Existence is a property of the repository, not of which source happens to be selected, so
+    // every non-doc comment's path is checked here — not just the ones currently orphaned —
+    // sparing `selectSource` (a mere source switch) from ever needing its own check.
+    const commentPaths = [
+      ...new Set(
+        review
+          .comments()
+          .filter(comment => comment.section === undefined)
+          .map(comment => comment.path),
+      ),
+    ]
+    let gonePaths: ReadonlySet<string> = EMPTY_GONE_PATHS
+    if (repository && commentPaths.length > 0) {
+      const existing = await existingPathsOf(host.run, repository.toplevel, commentPaths).catch(
+        loggedAs(host, 'checking comment file existence', null),
+      )
+      // `existing === null` is a failed check, not "nothing exists" — leave `gonePaths` empty
+      // (fail open) rather than mark every candidate gone.
+      if (existing !== null) gonePaths = new Set(commentPaths.filter(path => !existing.has(path)))
+    }
+    if (started !== generation) return
+    update({ gonePaths })
+
     followIfDue()
   }
 
@@ -417,7 +464,8 @@ export function createDiffView(
       cache.readOnly === readOnly &&
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick &&
-      cache.isLoaded === model.isLoaded
+      cache.isLoaded === model.isLoaded &&
+      cache.gonePaths === model.gonePaths
     ) {
       return cache.stream
     }
@@ -434,6 +482,7 @@ export function createDiffView(
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
       },
+      model.gonePaths,
     )
     cache = {
       files,
@@ -443,6 +492,7 @@ export function createDiffView(
       readOnly,
       capabilities,
       isLoaded: model.isLoaded,
+      gonePaths: model.gonePaths,
       stream,
     }
     return stream
@@ -503,6 +553,11 @@ export function createDiffView(
         return <Text> </Text>
       case 'outdated-title':
         return outdatedTitle(kit)
+      // The orphans group's own rows never pass through here: `placedRowOf` dispatches any key
+      // prefixed `orphans#` to `orphanRowOf` before a file is ever looked up for `bodyRowOf`.
+      case 'orphans-title':
+      case 'orphan-path':
+        return <Box />
       case 'addressed':
         return addressedRow(kit, item.anchor, item.count)
       case 'note':
@@ -552,13 +607,60 @@ export function createDiffView(
   }
 
   /**
+   * One block of the trailing orphans group — no `ChangedFile` backs these rows, so they never go
+   * through `bodyRowOf`/`placedRowOf`'s file-rail logic; the rail is a flat `COLORS.inactive`
+   * instead of a status colour. Only the item kinds `orphanBlocksOf` ever emits reach here.
+   */
+  function orphanRowOf(kit: Kit, placed: Placed<BodyItem>): RenderElement {
+    const { Box, Text } = kit.ui
+    const { block } = placed
+    if (block.kind !== 'fixed') return <Box key={block.key} />
+    const { item } = block
+
+    let content: RenderElement
+    switch (item.kind) {
+      case 'orphans-title':
+        content = orphansTitle(kit)
+        break
+      case 'orphan-path':
+        content = orphanPathRow(kit, item.path, item.isGone)
+        break
+      case 'addressed':
+        content = addressedRow(kit, item.anchor, item.count)
+        break
+      case 'note':
+        content = (
+          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
+            <Text> </Text>
+            <Box flexGrow={1} overflow="hidden">
+              {note(kit, item.comment, now(), id => review.remove(id), review.resend)}
+            </Box>
+          </Box>
+        )
+        break
+      default:
+        content = <Box />
+    }
+
+    return (
+      <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+        <Text color={COLORS.inactive}>▌ </Text>
+        <Box flexGrow={1} overflow="hidden">
+          {content}
+        </Box>
+      </Box>
+    )
+  }
+
+  /**
    * A placed block's element; the file it belongs to is found by its key's `path#...` prefix.
    * Every row of a file's section carries a 2-column left rail, `▌ ` in the file's status
    * colour, drawn here rather than by `bodyRowOf` so that function stays about one row's content.
    * A hunk `Code` slice spans several terminal rows at once, so its rail is a `Text` of that many
    * `▌ ` lines; the blank gap row between files carries no rail at all. D10 point 2: the file
    * being edited this turn draws its rail in the accent instead, so the live feed is visible
-   * from across the room.
+   * from across the room. The trailing orphans group (`orphans#` prefixed keys) has no file at
+   * all, so it is dispatched to `orphanRowOf` before the file lookup below.
    */
   function placedRowOf(
     kit: Kit,
@@ -567,6 +669,7 @@ export function createDiffView(
   ): RenderElement {
     const { Box, Code, Text } = kit.ui
     const { block } = placed
+    if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
     const path = block.key.slice(0, block.key.indexOf('#'))
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
@@ -616,12 +719,15 @@ export function createDiffView(
     if (!isReadOnly && !repository) return <Text dimColor>Not in a git repository.</Text>
 
     const files = filesOf()
-    if (files.length === 0) {
+    const stream = streamFor(kit.capabilities)
+    // A comment whose file left the diff still has to draw somewhere (R32 part 2's orphans
+    // group): the empty-state text only wins when the stream is truly empty, not just the file
+    // list.
+    if (files.length === 0 && stream.blocks.length === 0) {
       const text = isReadOnly ? 'This turn edited no files.' : 'No uncommitted changes.'
       return <Text dimColor>{text}</Text>
     }
 
-    const stream = streamFor(kit.capabilities)
     lastTitleRows = stream.titleRows
     lastContentRows = stream.contentRows
 
@@ -671,7 +777,8 @@ export function createDiffView(
   }
 
   function scroll(by: number): boolean {
-    if (filesOf().length === 0) return false
+    // Not `filesOf().length === 0`: a zero-file diff can still scroll an orphans-only stream.
+    if (lastContentRows === 0) return false
     const bodyRows = lastBodyRows
     const size = Math.abs(by)
     // A wheel tick or arrow asks for a row or two; scale it to a readable step, as the terminal's
@@ -785,5 +892,6 @@ export function createDiffView(
     noteEdited,
     turnEnded,
     knownPaths,
+    toplevel: () => model.repository?.toplevel ?? null,
   }
 }

@@ -11,6 +11,7 @@ import {
 } from '../hooks/names'
 import {
   commentButtonKeyOf,
+  dropKeyOf,
   hunkHeaderKeyOf,
   inputKeyOf,
   revertKeyOf,
@@ -470,6 +471,10 @@ function gitWorld(
   files: readonly string[] = ['a.ts'],
   messages: readonly SessionMessage[] = [],
   extraShownIds: readonly string[] = [],
+  // Which paths `existingPathsOf`'s batched `git ls-files -- <paths>` call reports as present;
+  // defaults to `files` so a world that never sets this still answers the old no-pathspec
+  // `git ls-files` listing (the Files tree's) the same way it always has.
+  existing: readonly string[] = files,
 ) {
   const clock = baseWorld(on, storeEntries)
   on('session.messages', () => ({ value: [...messages] }))
@@ -484,8 +489,18 @@ function gitWorld(
     if (cmd === 'git' && e.argv.includes('--numstat')) {
       return ran(0, files.map(path => `1\t1\t${path}\0`).join(''))
     }
-    if (cmd === 'git' && sub === 'ls-files') {
-      return ran(0, files.map(path => `${path}\0`).join(''))
+    // `existingPathsOf` runs `git --literal-pathspecs -C <toplevel> ls-files … -- <paths>`, so
+    // `ls-files` is no longer necessarily `argv[1]`; the Files tree's own plain, no-pathspec,
+    // no-`-C` call still is.
+    if (cmd === 'git' && e.argv.includes('ls-files')) {
+      const dashIndex = e.argv.indexOf('--')
+      // No pathspec: the Files tree's own full-repo listing. A pathspec (after `--`):
+      // `existingPathsOf`'s batched existence check, answered from `existing` alone.
+      const universe =
+        dashIndex === -1
+          ? files
+          : e.argv.slice(dashIndex + 1).filter(path => existing.includes(path))
+      return ran(0, universe.map(path => `${path}\0`).join(''))
     }
     // symbolic-ref/verify/merge-base (branch point) and loadHunks all get the same "nothing here".
     return ran(1)
@@ -1677,8 +1692,11 @@ describe('prompt carries the review', () => {
     on: On,
     comments: readonly unknown[],
     respond: (text: string) => { text: string } | { drop: string } = text => ({ text }),
+    // Which paths the batched existence check (R32) reports present; defaults to `['a.ts']`
+    // (gitWorld's own default `files`), so a path left out — like `gone.ts` — reads as gone.
+    existing: readonly string[] = ['a.ts'],
   ) {
-    gitWorld(on, { [commentsStoreKeyOf(REPO)]: comments }, null)
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: comments }, null, ['a.ts'], [], [], existing)
     const toasts: string[] = []
     on('ui.toast', ($, e) => {
       toasts.push(e.text)
@@ -1711,7 +1729,7 @@ describe('prompt carries the review', () => {
     expect(toasts.filter(text => text.includes('review comment'))).toEqual([])
   })
 
-  test('a pending comment on a file no longer in the diff does not ride the prompt', async ($, on) => {
+  test('a pending comment on a file that no longer exists (deleted) opens instead of riding', async ($, on) => {
     const toasts = promptWorld(on, [
       { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
       { id: 'c2', path: 'gone.ts', text: 'stale', status: 'pending', createdAt: 1 },
@@ -1720,6 +1738,22 @@ describe('prompt carries the review', () => {
     await $.command.run(ravenCommand('diff'))
     await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
     expect(toasts).toContain('Raven: 1 review comment sent with this prompt')
+  })
+
+  test('a pending comment on a file no longer in the diff but still on disk still rides (R32)', async ($, on) => {
+    const toasts = promptWorld(
+      on,
+      [
+        { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 },
+        { id: 'c2', path: 'b.ts', text: 'still relevant', status: 'pending', createdAt: 1 },
+      ],
+      undefined,
+      ['a.ts', 'b.ts'],
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+    expect(toasts).toContain('Raven: 2 review comments sent with this prompt')
   })
 
   test('a doc comment always rides, even once the diff has loaded', async ($, on) => {
@@ -1766,5 +1800,62 @@ describe('prompt carries the review', () => {
     shouldDrop = false
     await $.prompt.submit({ text: 'hello again', origin: { kind: 'composer' }, wait: false })
     expect(toasts).toContain('Raven: 1 review comment sent with this prompt')
+  })
+
+  test('a rejected next() restores the carried comment without a toast', async ($, on) => {
+    let shouldThrow = true
+    const toasts = promptWorld(
+      on,
+      [{ id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }],
+      text => {
+        if (shouldThrow) throw new Error('boom')
+        return { text }
+      },
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    let threw = false
+    try {
+      await $.prompt.submit({ text: 'hello', origin: { kind: 'composer' }, wait: false })
+    } catch {
+      threw = true
+    }
+    expect(threw).toBe(true)
+    expect(toasts.filter(text => text.includes('review comment'))).toEqual([])
+
+    shouldThrow = false
+    await $.prompt.submit({ text: 'hello again', origin: { kind: 'composer' }, wait: false })
+    expect(toasts).toContain('Raven: 1 review comment sent with this prompt')
+  })
+})
+
+describe('comments outside the stream (R32)', () => {
+  test('an open comment on a deleted file shows under "Not in this diff" with a working ✕', async ($, on) => {
+    const open = { id: 'c1', path: 'gone.ts', text: 'stale note', status: 'open', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [open] }, null, ['a.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: 'Not in this diff' })).toBeDefined()
+    expect(await ui.find({ text: 'gone.ts' })).toBeDefined()
+    expect(await ui.find({ text: 'file gone' })).toBeDefined()
+
+    await ui.press({ key: dropKeyOf('c1') })
+
+    expect(await ui.find({ text: 'Not in this diff' })).toBeUndefined()
+  })
+
+  test('an orphan still draws when there are zero files in the diff', async ($, on) => {
+    const open = { id: 'c1', path: 'gone.ts', text: 'stale note', status: 'open', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [open] }, null, [])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect(await ui.find({ text: 'Not in this diff' })).toBeDefined()
   })
 })

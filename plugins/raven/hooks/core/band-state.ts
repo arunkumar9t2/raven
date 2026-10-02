@@ -51,7 +51,10 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
   // Every path ever shown in the doc view, so a reload (fired for any edited file) only flags the
   // band for one the person actually opened here before.
   const shownDocPaths = new Set<string>()
-  let hasLoadedReview = false
+  // The in-flight (or settled) load, memoized so a second caller awaits the same promise instead
+  // of seeing a `true` guard set synchronously before the read it guards has actually finished —
+  // `band` and `takePromptContext` (and the session-start kick-off in `raven.ts`) all call this.
+  let loading: Promise<void> | null = null
   // The last width any `ui.render` reported; undefined until one has, which the auto-open gate
   // reads as "unknown" and opens anyway rather than staying silent by default.
   let lastViewportColumns: number | undefined
@@ -60,15 +63,18 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
    * Loads the review once without opening any pane, so the band and status line see comments a
    * past session left pending. A failure (no repository) is not retried on every call.
    */
-  async function ensureReviewLoaded(): Promise<void> {
-    if (hasLoadedReview) return
-    hasLoadedReview = true
-    try {
-      const toplevel = await toplevelOf(host.run)
-      if (toplevel !== null) await review.load(toplevel)
-    } catch (error) {
-      host.debug(`raven: resolving the repository for the review failed: ${String(error)}`)
+  function ensureReviewLoaded(): Promise<void> {
+    if (loading === null) {
+      loading = (async () => {
+        try {
+          const toplevel = await toplevelOf(host.run)
+          if (toplevel !== null) await review.load(toplevel)
+        } catch (error) {
+          host.debug(`raven: resolving the repository for the review failed: ${String(error)}`)
+        }
+      })()
     }
+    return loading
   }
 
   /**
