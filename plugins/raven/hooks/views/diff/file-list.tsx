@@ -26,17 +26,20 @@ export const MAX_ROWS = 8
 
 /**
  * The changed-files list: one row per file, with status/kind marks and an add/del count, capped
- * at `MAX_ROWS`; beyond that, the rows around the selected file plus a dim "… N more" row.
+ * at `MAX_ROWS`; beyond that, the rows around the selected file plus a dim "… N more" row. Each
+ * row's `statBar` scales against the largest change in the whole list (not just the visible
+ * window), mirroring `changeMapOf`'s own scaling, so a tiny rename and a big edit read apart.
  */
 export function fileList(kit: Kit, props: FileListProps): RenderElement {
   const { Box, Text } = kit.ui
   const { files, selected } = props
   const selectedIndex = files.findIndex(file => file.path === selected)
   const { start, end, more } = fileWindowOf(files.length, selectedIndex, MAX_ROWS)
+  const maxChange = Math.max(1, ...files.map(file => file.adds + file.dels))
 
   return (
     <Box flexDirection="column">
-      {files.slice(start, end).map(file => fileRow(kit, file, props))}
+      {files.slice(start, end).map(file => fileRow(kit, file, props, maxChange))}
       {more > 0 ? (
         <Text key="file-list:more" dimColor>
           … {more} more
@@ -54,7 +57,12 @@ export function fileList(kit: Kit, props: FileListProps): RenderElement {
  * the two must read as different marks for a glance to tell "what kind of change" from "is this
  * happening right now" apart.
  */
-function fileRow(kit: Kit, file: ChangedFile, props: FileListProps): RenderElement {
+function fileRow(
+  kit: Kit,
+  file: ChangedFile,
+  props: FileListProps,
+  maxChange: number,
+): RenderElement {
   const { Box, Text, Button } = kit.ui
   const icon = iconOf(file.path)
   const mark = statusMarkOf(file.status)
@@ -78,7 +86,7 @@ function fileRow(kit: Kit, file: ChangedFile, props: FileListProps): RenderEleme
   const right = (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
       {diffStat(kit, file.adds, file.dels)}
-      {statBar(kit, file.adds, file.dels)}
+      {statBar(kit, file.adds, file.dels, 5, maxChange)}
       {isEdited ? <Text color={COLORS.accent}>◉</Text> : null}
     </Box>
   )
