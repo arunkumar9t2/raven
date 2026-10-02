@@ -228,3 +228,47 @@ describe('commentsFrom', () => {
     expect(restored).toEqual(comments)
   })
 })
+
+describe('doc comments', () => {
+  const base = { status: 'pending' as const, createdAt: 1 }
+
+  test('a stored doc comment keeps its section; an old comment without one still loads', () => {
+    const loaded = commentsFrom([
+      { id: 'd1', path: '/plans/p.md', section: 'Goals', text: 'tighten', ...base },
+      { id: 'c1', path: 'a.ts', text: 'old', ...base },
+    ])
+    expect(loaded).toHaveLength(2)
+    expect(loaded[0]).toMatchObject({ section: 'Goals' })
+    expect(loaded[1]?.section).toBeUndefined()
+  })
+
+  test('a stored doc comment keeps its sectionIndex', () => {
+    const loaded = commentsFrom([
+      { id: 'd1', path: '/p.md', section: 'Notes', sectionIndex: 3, text: 'x', ...base },
+    ])
+    expect(loaded[0]).toMatchObject({ section: 'Notes', sectionIndex: 3 })
+  })
+
+  test('a malformed section drops the comment', () => {
+    expect(commentsFrom([{ id: 'd1', path: '/p.md', section: 3, text: 'x', ...base }])).toEqual([])
+  })
+
+  test('doc comments render under their section, beside diff comments', () => {
+    const text = reviewTextOf([
+      { id: 'c1', path: 'a.ts', text: 'rename this', ...base },
+      { id: 'd1', path: '/plans/p.md', section: 'Goals', text: 'tighten', ...base },
+      {
+        id: 'd2',
+        path: '/plans/p.md',
+        section: '(top)',
+        text: 'add a summary',
+        ...base,
+        createdAt: 2,
+      },
+    ])
+    expect(text).toContain("the user's review comments on files and docs")
+    // Sections come in the order their first comment was made: Goals (createdAt 1), then (top) (2).
+    expect(text).toContain('/plans/p.md\n§ Goals\n- tighten [d1]\n§ (top)\n- add a summary [d2]')
+    expect(text).toContain('a.ts\n- rename this [c1]')
+  })
+})

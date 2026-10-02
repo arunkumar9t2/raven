@@ -13,6 +13,10 @@ export type Comment = {
   /** The '@@ -a,b +c,d @@' header of the hunk this anchors to; absent = whole-file comment. */
   hunk?: string
   line?: CommentLine
+  /** The doc section a doc comment is on: its heading, or '(top)' before the first one. */
+  section?: string
+  /** That section's 0-based position in the doc when the comment was made. */
+  sectionIndex?: number
   text: string
   status: CommentStatus
   createdAt: number
@@ -37,7 +41,7 @@ export function commentsOn(comments: Comments, path: string, hunk?: string): Com
   return comments.filter(comment => comment.path === path && comment.hunk === hunk)
 }
 
-const PREAMBLE = "These are the user's review comments on the working-tree diff. Address them."
+const PREAMBLE = "These are the user's review comments on files and docs. Address them."
 
 function commentLinesOf(comment: Comment): string {
   const suffix = `[${comment.id}]`
@@ -48,8 +52,9 @@ function commentLinesOf(comment: Comment): string {
 
 /**
  * Renders the given comments as the model reads them: a short preamble saying these are the
- * user's review comments on the working-tree diff, to address them; then grouped by file, each
- * hunk's comments under its header, a line-anchored comment quoting its diff line first. Callers
+ * user's review comments on files and docs, to address them; then grouped by file, each hunk's
+ * comments under its header, a line-anchored comment quoting its diff line first; a doc's
+ * comments group instead under `§ <section heading>`, in first-seen (by createdAt) order. Callers
  * pass whichever subset should be sent (typically the pending ones). Returns undefined for none.
  * Deterministic ordering: by path, file-level first, then by hunk in first-seen order, then
  * createdAt. Each comment ends with its id in brackets so a later reply can name which it addressed.
@@ -60,6 +65,19 @@ export function reviewTextOf(comments: Comments): string | undefined {
   const paths = [...new Set(comments.map(comment => comment.path))].sort()
   const sections = paths.map(path => {
     const forPath = comments.filter(comment => comment.path === path)
+
+    if (forPath.every(comment => comment.section !== undefined)) {
+      const sorted = [...forPath].sort((a, b) => a.createdAt - b.createdAt)
+      const order = [...new Set(sorted.map(comment => comment.section as string))]
+      const groups = order.map(section => {
+        const lines = sorted
+          .filter(comment => comment.section === section)
+          .map(commentLinesOf)
+          .join('\n')
+        return `§ ${section}\n${lines}`
+      })
+      return `${path}\n${groups.join('\n')}`
+    }
 
     const seenHunks = [
       ...new Set(forPath.flatMap(comment => (comment.hunk === undefined ? [] : [comment.hunk]))),
@@ -184,16 +202,24 @@ function lineOf(value: unknown): CommentLine | null {
 
 function commentOf(value: unknown): Comment | null {
   if (!isRecord(value)) return null
-  const { id, path, hunk, line, text, createdAt } = value
+  const { id, path, hunk, line, section, sectionIndex, text, createdAt } = value
   if (typeof id !== 'string' || typeof path !== 'string' || typeof text !== 'string') return null
   if (typeof createdAt !== 'number' || !Number.isFinite(createdAt)) return null
   if (hunk !== undefined && typeof hunk !== 'string') return null
   const parsedLine = line === undefined ? undefined : lineOf(line)
   if (line !== undefined && parsedLine === null) return null
+  if (section !== undefined && typeof section !== 'string') return null
+  if (
+    sectionIndex !== undefined &&
+    (typeof sectionIndex !== 'number' || !Number.isInteger(sectionIndex) || sectionIndex < 0)
+  )
+    return null
 
   const comment: Comment = { id, path, text, createdAt, status: statusOf(value.status) }
   if (hunk !== undefined) comment.hunk = hunk
   if (parsedLine) comment.line = parsedLine
+  if (section !== undefined) comment.section = section
+  if (sectionIndex !== undefined) comment.sectionIndex = sectionIndex
   return comment
 }
 
