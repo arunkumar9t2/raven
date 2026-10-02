@@ -59,10 +59,7 @@ export type CommentBoxProps = {
  * idle "＋ note" control is `noteButton`, drawn by the heading or the hunk's actions row instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
-  // Safe once the caller's own contract holds: `blocksOf` never emits this block without
-  // `canType`, and never sets `hasPicker` without `canPick` — so `Input` and, when `hasPicker`,
-  // `Select` are always real constructors here, never the `| undefined` the type carries.
-  const { Box, Button, Input, Select } = kit.ui as Required<Kit['ui']>
+  const { Box, Button, Input, Select } = kit.ui
   const { anchor } = props
 
   const lines = props.hunk ? changedLinesOf(props.hunk) : []
