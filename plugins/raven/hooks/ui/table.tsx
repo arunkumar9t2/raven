@@ -11,6 +11,9 @@ export type TableProps = TableData & {
   /** Cells the table may fill: the pane's content width. */
   width: number
   key?: string
+  /** One blank row above / below, to breathe like a `Markdown` block. */
+  gapTop?: boolean
+  gapBottom?: boolean
 }
 
 /**
@@ -44,7 +47,12 @@ export function table(kit: UiKit, props: TableProps): RenderElement {
     return <Text key={`p${index}`}>{piece.text}</Text>
   }
   return (
-    <Box key={props.key} flexDirection="column">
+    <Box
+      key={props.key}
+      flexDirection="column"
+      marginTop={props.gapTop ? 1 : 0}
+      marginBottom={props.gapBottom ? 1 : 0}
+    >
       {drawnRowsOf(layout).map((line, index) => (
         <Text key={`p${index}`} wrap="truncate-end">
           {line.length === 0 ? ' ' : line.map(span)}

@@ -86,6 +86,32 @@ describe('layoutTable', () => {
     expect(lines.join('\n').replace(/[^q]/g, '').length).toBe(50)
   })
 
+  test('a long path breaks after a separator, not mid-name', () => {
+    const table: TableData = {
+      header: ['Path', 'Note'],
+      align: ['left', 'left'],
+      rows: [
+        [
+          'plugins/raven/hooks/views/doc-view.tsx',
+          'a fairly long note that wraps over a few lines here',
+        ],
+      ],
+    }
+    const lines = linesOf(layoutTable(table, 60))
+    const text = lines.join('\n')
+    expect(text).toContain('plugins/raven/hooks/views/ ')
+    expect(text).toContain('doc-view.tsx')
+    expect(maxWidth(lines)).toBeLessThanOrEqual(60)
+  })
+
+  test('with no separator a word still hard-breaks', () => {
+    const lines = linesOf(
+      layoutTable({ header: ['A'], align: ['left'], rows: [['abcdefghijklmnopqrstuvwxyz']] }, 14),
+    )
+    expect(lines.join('').replace(/[^a-z]/g, '')).toBe('abcdefghijklmnopqrstuvwxyz')
+    expect(maxWidth(lines)).toBeLessThanOrEqual(14)
+  })
+
   test('falls back to records when even the minimums do not fit', () => {
     const layout = layoutTable(wide, 14)
     expect(layout.kind).toBe('records')
