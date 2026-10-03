@@ -21,7 +21,7 @@ Commands:
   show <path> [--title <t>]          Open the doc view on a file
   note [--title <t>] [<markdown>]    Open the doc view on inline markdown (stdin when omitted or "-")
   diff [<path>]                      Open the diff view, optionally selecting a file
-  open <pane>                        Open a pane: diff|doc|files|tasks
+  open <pane>                        Open a pane: ${PANE_SUBCOMMANDS.join('|')}
   comments                           Ask the pane for pending review comments
   help                               Show this message
 
