@@ -1,7 +1,7 @@
 import { isAbsolute, resolve } from 'node:path'
 import type { Directive } from '../../hooks/core/directive'
 import { directiveLine } from './directive'
-import { FALLBACK_PREFIX, NAME, VERSION } from './names'
+import { FALLBACK_PREFIX, NAME, PANE_SUBCOMMANDS, type PaneSubcommand, VERSION } from './names'
 
 /** The process-shaped bits the commands need, isolated so tests can inject fakes. */
 export type Io = {
@@ -21,6 +21,7 @@ Commands:
   show <path> [--title <t>]          Open the doc view on a file
   note [--title <t>] [<markdown>]    Open the doc view on inline markdown (stdin when omitted or "-")
   diff [<path>]                      Open the diff view, optionally selecting a file
+  open <pane>                        Open a pane: diff|doc|files|tasks
   comments                           Ask the pane for pending review comments
   help                               Show this message
 
@@ -91,6 +92,17 @@ async function runComments(io: Io): Promise<number> {
   return emit(io, { op: 'comments' }, 'there are no pending comments.')
 }
 
+async function runOpen(args: string[], io: Io): Promise<number> {
+  const pane = args[0]
+  if (!PANE_SUBCOMMANDS.includes(pane as PaneSubcommand)) {
+    io.stderr(
+      `${NAME} open: ${pane ? `unknown pane "${pane}"` : 'missing <pane>'} (one of ${PANE_SUBCOMMANDS.join('|')})\n`,
+    )
+    return 1
+  }
+  return emit(io, { op: 'open', pane: pane as PaneSubcommand }, `the ${pane} pane was not shown.`)
+}
+
 /** Entry point shared by the real binary and tests; `argv` excludes the interpreter and script. */
 export async function run(argv: string[], io: Io): Promise<number> {
   const [command, ...rest] = argv
@@ -111,6 +123,8 @@ export async function run(argv: string[], io: Io): Promise<number> {
       return runNote(rest, io)
     case 'diff':
       return runDiff(rest, io)
+    case 'open':
+      return runOpen(rest, io)
     case 'comments':
       return runComments(io)
     default:

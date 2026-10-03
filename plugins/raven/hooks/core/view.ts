@@ -1,4 +1,5 @@
 import type { Elements, RenderElement, RenderSurface } from 'claude-code'
+import type { PaneSubcommand } from '../names'
 
 /**
  * The elements a view draws with; Raven draws on the terminal surface, mobile among them. The
@@ -67,8 +68,9 @@ export type UiKit = Pick<Kit, 'ui'>
  */
 export type View = {
   readonly pane: { readonly id: string; readonly title: string }
-  /** The `/raven <subcommand>` that toggles it. */
-  readonly subcommand: string
+  /** The `/raven <subcommand>` that toggles it; one of `PANE_SUBCOMMANDS`, so the CLI, the tool
+   * and the views share one list. */
+  readonly subcommand: PaneSubcommand
   /** Rereads the world; the controller runs it before the first drawing of a fresh module. */
   refresh?: () => Promise<void>
   render: (kit: Kit) => RenderElement
