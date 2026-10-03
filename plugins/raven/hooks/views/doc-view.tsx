@@ -182,7 +182,8 @@ export function createDocView(
         if (block.kind === 'table') {
           return table(kit, {
             key: `${keyPrefix}table:${i}:${j}`,
-            rows: tableRowsOf(block, kit.columns),
+            // One cell short of the pane, so a full-width line never loses its last cell.
+            rows: tableRowsOf(block, kit.columns - 1),
             // A blank row either side, like a Markdown block's own gap — none at the very start
             // or end of the section.
             gapTop: i > 0 || j > 0,

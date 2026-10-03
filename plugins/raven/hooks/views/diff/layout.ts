@@ -3,7 +3,14 @@ import type { CommentStatus } from '../../review/comments'
 
 /** A body block: a payload of known height, or a hunk whose body lines are its rows. */
 export type Block<T = unknown> =
-  | { kind: 'fixed'; key: string; rows: number; item: T }
+  | {
+      kind: 'fixed'
+      key: string
+      rows: number
+      item: T
+      /** Placed whole even when it straddles the window's top (an Input must stay mounted). */
+      pinned?: boolean
+    }
   | {
       kind: 'hunk'
       key: string
@@ -43,7 +50,9 @@ export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: numb
     if (end <= top || start >= bottom) continue
 
     if (block.kind === 'fixed') {
-      if (start >= top) placed.push({ block, from: 0, to: blockRows })
+      // A card straddling the top stays placed with its top rows clipped; a pinned block whole.
+      const from = block.pinned ? 0 : Math.max(0, top - start)
+      placed.push({ block, from, to: blockRows })
     } else {
       const from = Math.max(0, top - start)
       const to = Math.min(blockRows, bottom - start)

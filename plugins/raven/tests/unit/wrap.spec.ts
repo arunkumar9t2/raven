@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { wrapText } from '../../hooks/ui/wrap'
+import { widthOf, wrapText } from '../../hooks/ui/wrap'
 
 describe('wrapText', () => {
   test('wraps at word boundaries within the width', () => {
@@ -34,5 +34,39 @@ describe('wrapText', () => {
 
   test('wide characters count two cells', () => {
     expect(wrapText('漢字漢字', 4, 9)).toEqual(['漢字', '漢字'])
+  })
+})
+
+describe('widthOf wide emoji', () => {
+  test('emoji presentation symbols outside the pictograph block measure 2', () => {
+    for (const glyph of [
+      '✅',
+      '❌',
+      '⭐',
+      '⌚',
+      '⏩',
+      '☔',
+      '♈',
+      '♿',
+      '⚓',
+      '⚡',
+      '⚽',
+      '⛄',
+      '⛔',
+      '✨',
+      '❓',
+      '➕',
+      '➰',
+      '⬛',
+      '⭕',
+      '🀄',
+      '🃏',
+      '🆎',
+      '🆑',
+      '🈁',
+    ]) {
+      expect(widthOf(glyph)).toBe(2)
+    }
+    expect(widthOf('✓')).toBe(1)
   })
 })

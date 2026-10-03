@@ -10,6 +10,8 @@ export const NOTE_MAX_ROWS = 6
 /** The widest an age reads (`99d`); `now`/`5m` never exceed it. */
 const AGE_CELLS = 4
 const GAP = 1
+/** Row 1 shares its text room with the right side; under this many cells it gives the text up. */
+const MIN_FIRST_WIDTH = 8
 
 /** The status word a card shows, by its comment's status. */
 export const STATUS_WORDS: Record<Comment['status'], string> = {
@@ -62,7 +64,11 @@ function noteRightCellsOf(comment: Comment): number {
 /** The card's text lines at `width` total cells (bar and gap included): row 1 shares its row. */
 export function noteLinesOf(comment: Comment, width: number): string[] {
   const textWidth = Math.max(1, width - CARD_BAR_CELLS)
-  const firstWidth = Math.max(1, textWidth - noteRightCellsOf(comment))
+  const firstWidth = textWidth - noteRightCellsOf(comment)
+  // Too little room beside the status, meta and chips: row 1 carries only those, text from row 2.
+  if (firstWidth < MIN_FIRST_WIDTH) {
+    return ['', ...wrapText(comment.text, textWidth, NOTE_MAX_ROWS - 1)]
+  }
   return wrapText(comment.text, textWidth, NOTE_MAX_ROWS, firstWidth)
 }
 

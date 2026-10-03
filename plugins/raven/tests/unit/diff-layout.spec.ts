@@ -70,10 +70,24 @@ describe('windowOf', () => {
     ])
   })
 
-  test('fixed block whose first row is above top is excluded even if its tail is visible', () => {
-    // fixed2 spans rows [11,13); asking from row 12 puts its first row above top
+  test('a fixed block straddling the top stays placed, its top rows clipped', () => {
+    // fixed2 spans rows [11,13); asking from row 12 clips its first row
     const placed = windowOf(blocks, 12, 3)
-    expect(placed.some(p => p.block === fixed2)).toBe(false)
+    expect(placed.find(p => p.block === fixed2)).toEqual({ block: fixed2, from: 1, to: 2 })
+  })
+
+  test("the window's rows stay exact while a card straddles the top", () => {
+    for (const top of [11, 12]) {
+      const placed = windowOf(blocks, top, 4)
+      const drawn = placed.reduce((sum, p) => sum + (p.to - p.from), 0)
+      expect(drawn).toBe(4)
+    }
+  })
+
+  test('a pinned block (the compose box) is placed whole even when it straddles the top', () => {
+    const pinned: Block = { kind: 'fixed', key: 'box', rows: 3, item: null, pinned: true }
+    const placed = windowOf([fixed1, pinned], 2, 4)
+    expect(placed).toEqual([{ block: pinned, from: 0, to: 3 }])
   })
 
   test('window past the end returns nothing', () => {

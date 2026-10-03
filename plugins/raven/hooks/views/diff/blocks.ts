@@ -87,8 +87,10 @@ function splitInline(hunk: Hunk, notes: Comments): { inline: InlineNotes[]; rest
   const byRow = new Map<number, Comment[]>()
   const placed = new Set<Comment>()
   for (const comment of visible) {
-    const at = comment.line ? rows.get(lineKeyOf(comment.line)) : undefined
-    if (at === undefined) continue
+    const found = comment.line ? rows.get(lineKeyOf(comment.line)) : undefined
+    // A line whose text changed since the note was made is not the one it was about: after the hunk.
+    if (!found || found.text !== comment.line?.text) continue
+    const at = found.index
     placed.add(comment)
     byRow.set(at, [...(byRow.get(at) ?? []), comment])
   }
@@ -120,13 +122,17 @@ function hunkSegmentsOf(
     hunk: sliceHunk(hunk, from, to),
     mark,
   })
-  const total = bodyLinesOf(hunk).length
+  const body = bodyLinesOf(hunk)
+  const total = body.length
   const blocks: Block<BodyItem>[] = []
   let from = 0
   for (const { at, notes } of inline) {
-    blocks.push(segmentOf(from, at + 1, notes[0]?.status))
+    // A `\ No newline` marker belongs to the line above it: the segment takes it along.
+    let to = at + 1
+    while (body[to]?.startsWith('\\')) to += 1
+    blocks.push(segmentOf(from, to, notes[0]?.status))
     blocks.push(...notesBlocksOf(notes, { path: notes[0]?.path ?? '' }, width))
-    from = at + 1
+    from = to
   }
   if (from < total) blocks.push(segmentOf(from, total))
   return blocks
@@ -188,6 +194,8 @@ function anchorBlocksOf(
       kind: 'fixed',
       key: commentBoxKeyOf(anchor),
       rows,
+      // The Input must stay mounted (its text would be lost), so it is never clipped at the top.
+      pinned: true,
       item: { kind: 'comment-box', anchor, hunk, hasPicker },
     },
   ]

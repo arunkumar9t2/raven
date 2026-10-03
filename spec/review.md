@@ -60,10 +60,13 @@ the card. Row 1 reads the comment's first line, then — right-aligned — the s
 status colour, a dim `Lnn · age` and the chips: `┃ text ··· pending L12 · 2m [ resend ] [ ✕ ]`.
 The card sits on the theme's `userMessageBackground` (`COLORS.userMessage`) from the bar to the
 right edge — the tint Claude Code puts behind the person's own messages, since a note is theirs;
-the file rail and indent beside it stay untinted. The rest of the text follows on rows 2..n, wrapped at word boundaries to the card's width (a
+the file rail and indent beside it stay untinted. The rest of the text follows on rows 2..n, wrapped
+at word boundaries to the card's width (a
 newline in the comment starts a line; one wrapper, `wrapText` in `hooks/ui/wrap.ts`, shared with
 the table layout), at most 6 rows in all, the last ending `…` when the text is cut. The card's row
-count is its wrapped line count at the pane's width (`noteLinesOf`), so a resize re-lays it out.
+count is its wrapped line count at the pane's width (`noteLinesOf`), so a resize re-lays it out. When
+the status, meta and chips leave row 1 under 8 cells for text, row 1 carries only those and the text
+starts on row 2 (still at most 6 rows in all).
 
 - **pending** — word `pending`, `suggestion`-coloured; not yet sent, and the only status a
   header's "send N" count includes.
@@ -82,14 +85,16 @@ count is its wrapped line count at the pane's width (`noteLinesOf`), so a resize
 The compose box (`commentBox`, same file) sits on the same tint, railed by an accent `┃`
 (`suggestion`) down its rows: the line picker (hunks only), the Input with its placeholder, then one
 hint row — dim `⏎ add` and a `[ ✕ cancel ]` chip that closes the box. The Input soft-wraps and
-draws at most two rows (longer text scrolls inside them); the diff pane tracks the text (`onInput`)
-and sizes the box's rows to `inputRowsOf`, an estimate of that wrap, so the bar and the rows below
-stay aligned.
+draws at most two rows (longer text scrolls inside them), so the box's rows are constant
+(`composeRowsOf`): 3, or 4 with the line picker; a short comment leaves one spare tinted row. The
+box is never clipped at the top of a scrolled window, so its Input stays mounted.
 
 A comment with a `line` threads inline: its card draws directly under that line of the hunk, not
 after the whole hunk, and the line's rail cell reads `◆` in the (first) note's status colour instead
-of `▌`. The line is found by side and number (`lineIndexOf`: the old side counts context and removed
-lines, the new side context and added). A hunk-wide note, an addressed one (collapsed into the
+of `▌`. The line is found by side and number (`lineRowsOf`: the old side counts context and removed
+lines, the new side context and added) and must still read as the text the note was made on; a line
+whose text changed since stays after the hunk. A `\ No newline` marker travels with the line above
+it. A hunk-wide note, an addressed one (collapsed into the
 anchor's "✓ N addressed" row) and a line no longer in the hunk draw after the hunk as before, and
 the compose box stays after the hunk.
 
