@@ -1,4 +1,4 @@
-import { bodyLinesOf, type Hunk, hunkFrom, parseHeader } from '../../git/hunks'
+import { bodyLinesOf, type Hunk, hunkFrom, hunkLinesOf, parseHeader } from '../../git/hunks'
 import type { CommentStatus } from '../../review/comments'
 
 /** A body block: a payload of known height, or a hunk whose body lines are its rows. */
@@ -8,8 +8,6 @@ export type Block<T = unknown> =
       kind: 'hunk'
       key: string
       hunk: Hunk
-      /** The body lines [from, to) this block shows, when a hunk is split around inline notes. */
-      range?: { from: number; to: number }
       /** Set when the block's last line carries a note: that note's status colours its rail cell. */
       mark?: CommentStatus
     }
@@ -19,8 +17,7 @@ export type Placed<T = unknown> = { block: Block<T>; from: number; to: number }
 
 /** The rows a block takes: a fixed block its declared rows, a hunk its body line count. */
 export function rowsOf(block: Block): number {
-  if (block.kind === 'fixed') return block.rows
-  return block.range ? block.range.to - block.range.from : bodyLinesOf(block.hunk).length
+  return block.kind === 'fixed' ? block.rows : bodyLinesOf(block.hunk).length
 }
 
 /** The rows all the blocks take together. */
@@ -63,27 +60,21 @@ export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: numb
  * '\ No newline' lines count for neither).
  */
 export function sliceHunk(hunk: Hunk, from: number, to: number): Hunk {
-  const lines = bodyLinesOf(hunk)
-  const slice = lines.slice(from, to)
+  const slice = bodyLinesOf(hunk).slice(from, to)
 
   const parsed = parseHeader(hunk.header)
   if (!parsed) return hunkFrom(hunk.header, slice)
 
-  const { oldStart, newStart, suffix } = parsed
+  const lines = hunkLinesOf(hunk)
+  const inSlice = lines.filter(line => line.index >= from && line.index < to)
+  // The slice starts at the first diff line at or after `from`; with none left, past the last.
+  const first = lines.find(line => line.index >= from)
+  const oldStart = first?.oldLine ?? parsed.oldStart + lines.filter(l => l.kind !== 'add').length
+  const newStart = first?.newLine ?? parsed.newStart + lines.filter(l => l.kind !== 'del').length
+  const oldCount = inSlice.filter(line => line.kind !== 'add').length
+  const newCount = inSlice.filter(line => line.kind !== 'del').length
 
-  const isOld = (line: string) => line.startsWith(' ') || line.startsWith('-')
-  const isNew = (line: string) => line.startsWith(' ') || line.startsWith('+')
-
-  const before = lines.slice(0, from)
-
-  const oldStartOut = oldStart + before.filter(isOld).length
-  const newStartOut = newStart + before.filter(isNew).length
-  const oldCountOut = slice.filter(isOld).length
-  const newCountOut = slice.filter(isNew).length
-
-  const header = `@@ -${oldStartOut},${oldCountOut} +${newStartOut},${newCountOut} @@${suffix}`
-
-  return hunkFrom(header, slice)
+  return hunkFrom(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@${parsed.suffix}`, slice)
 }
 
 /** Keeps `top` within [0, max(0, contentRows - rows)]. */
