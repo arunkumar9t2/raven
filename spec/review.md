@@ -53,25 +53,33 @@ with.
 
 ## Status
 
-A comment's status moves `pending` → `sent` → `addressed` or `open`. A note row reads as a margin
-annotation under its code, not a dialog of its own: a left accent bar `▎`
-(`plugins/raven/hooks/ui/accent-bar.tsx`) coloured
-by the status below (`NOTE_STATE_COLORS`), the comment's text, then dim `Lnn · age` and its chips
-right-aligned — `▎ text ··· L12 · 2m [ resend ] [ ✕ ]`. No separate status glyph draws; the
-accent bar's colour is the only status mark.
+A comment's status moves `pending` → `sent` → `addressed` or `open`. A note draws as a card
+(`note` in `plugins/raven/hooks/views/diff/comment-box.tsx`, one component for the diff stream and
+the Doc pane): a heavy bar `┃` in the status colour (`NOTE_STATE_COLORS`) runs down every row of
+the card. Row 1 reads the comment's first line, then — right-aligned — the status word in the
+status colour, a dim `Lnn · age` and the chips: `┃ text ··· pending L12 · 2m [ resend ] [ ✕ ]`.
+The rest of the text follows on rows 2..n, wrapped at word boundaries to the card's width (a
+newline in the comment starts a line; one wrapper, `wrapText` in `hooks/ui/wrap.ts`, shared with
+the table layout), at most 6 rows in all, the last ending `…` when the text is cut. The card's row
+count is its wrapped line count at the pane's width (`noteLinesOf`), so a resize re-lays it out.
 
-- **pending** — the accent bar reads `suggestion`-coloured; not yet sent, and the only status a
+- **pending** — word `pending`, `suggestion`-coloured; not yet sent, and the only status a
   header's "send N" count includes.
-- **sent** — the accent bar dims to `inactive`, once it has ridden a prompt.
-- **addressed** — the accent bar reads `success`-coloured, collapsed with every other addressed
-  comment at the same anchor into one dim "✓ N addressed" row, once a resolution names it.
-- **open** — the accent bar reads `warning`-coloured (the same colour as the `M` status mark), with
+- **sent** — word `sent`, dim (`inactive`), once it has ridden a prompt.
+- **addressed** — `success`-coloured, collapsed with every other addressed comment at the same
+  anchor into one dim "✓ N addressed" row, once a resolution names it (a card that does draw reads
+  `✓ addressed`).
+- **open** — word `open`, `warning`-coloured (the same colour as the `M` status mark), with
   a `[ resend ]` chip. A comment lands here two ways: a main-loop turn finished without naming it,
   or (diff comments only) a composer/Remote Control prompt's carry check found its file gone — see
   [Delivery](#delivery). The chip is not scoped to the row it sits on: pressing resend on any one
   open comment moves every open comment back to `pending` — there is no per-comment resend, only a
   resend-all triggered from any open row. Every note row also carries a `[ ✕ ]` chip that removes it
   outright, regardless of status.
+
+The compose box (`commentBox`, same file) is railed by an accent `┃` (`suggestion`) down its rows:
+the line picker (hunks only), the Input with its placeholder, then one hint row — dim `⏎ add` and a
+`[ ✕ cancel ]` chip that closes the box.
 
 ## Delivery
 

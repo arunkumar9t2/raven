@@ -218,8 +218,10 @@ const mergeSpans = (spans: Span[]): Span[] => {
   return out
 }
 
-function wrapWords(words: readonly Word[], width: number): CellLine[] {
+function wrapWords(words: readonly Word[], width: number, firstWidth = width): CellLine[] {
   const lines: CellLine[] = []
+  // The first line may be narrower (a caller sharing its row with something else).
+  const room = () => (lines.length === 0 ? firstWidth : width)
   let line: Span[] = []
   let used = 0
   const finish = () => {
@@ -229,17 +231,17 @@ function wrapWords(words: readonly Word[], width: number): CellLine[] {
   }
   for (const word of words) {
     const w = wordWidth(word)
-    if (line.length > 0 && used + 1 + w <= width) {
+    if (line.length > 0 && used + 1 + w <= room()) {
       line.push({ text: ' ', style: 'plain' }, ...word)
       used += 1 + w
       continue
     }
     if (line.length > 0) finish()
-    if (w <= width) {
+    if (w <= room()) {
       line = [...word]
       used = w
     } else {
-      const pieces = breakWord(word, width)
+      const pieces = breakWord(word, room())
       for (const [index, piece] of pieces.entries()) {
         line = [...piece]
         used = wordWidth(piece)
@@ -251,10 +253,18 @@ function wrapWords(words: readonly Word[], width: number): CellLine[] {
   return lines
 }
 
-/** A cell's spans wrapped to `width` (hard `\n` breaks kept); always at least one line. */
-export function wrapSpans(spans: readonly Span[], width: number): CellLine[] {
+/**
+ * A cell's spans wrapped to `width` (hard `\n` breaks kept); always at least one line. The very
+ * first line wraps to `firstWidth` instead, when given.
+ */
+export function wrapSpans(
+  spans: readonly Span[],
+  width: number,
+  firstWidth: number = width,
+): CellLine[] {
   const w = Math.max(1, width)
-  return wordLinesOf(spans).flatMap(words => wrapWords(words, w))
+  const first = Math.max(1, Math.min(firstWidth, w))
+  return wordLinesOf(spans).flatMap((words, index) => wrapWords(words, w, index === 0 ? first : w))
 }
 
 // ── layout ───────────────────────────────────────────────────────────────────────────────────

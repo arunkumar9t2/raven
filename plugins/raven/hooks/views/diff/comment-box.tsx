@@ -3,11 +3,10 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import { NOTE_STATE_COLORS } from '../../core/colors'
+import { COLORS, NOTE_STATE_COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import { type Hunk, parseHeader } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf } from '../../review/comments'
-import { accentBar } from '../../ui/accent-bar'
 import { ageOf } from '../../ui/age'
 import { type Chip, chipRow, chipsFit } from '../../ui/chips'
 import { meta } from '../../ui/meta'
@@ -16,6 +15,7 @@ import {
   type Anchor,
   addressedKeyOf,
   cancelKeyOf,
+  commentBoxKeyOf,
   commentButtonKeyOf,
   dropKeyOf,
   hunkHeaderKeyOf,
@@ -25,6 +25,7 @@ import {
   selectKeyOf,
   stageKeyOf,
 } from './anchor'
+import { barOf, composeRowsOf, noteLinesOf, STATUS_WORDS } from './note-layout'
 
 const WHOLE_HUNK = 'whole'
 
@@ -64,7 +65,7 @@ export type CommentBoxProps = {
  * idle "✎ note" control is `noteChip`, drawn by the heading or the hunk's toolbar instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
-  const { Box, Button, Input, Select } = kit.ui
+  const { Box, Input, Select, Text } = kit.ui
   const { anchor } = props
 
   const lines = props.hunk ? changedLinesOf(props.hunk) : []
@@ -81,32 +82,58 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     })),
   ]
 
+  const hint = (
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      <Text dimColor>⏎ add</Text>
+      {chipRow(
+        kit,
+        [
+          {
+            key: cancelKeyOf(anchor),
+            icon: '✕',
+            label: 'cancel',
+            isDim: true,
+            onPress: props.onCancel,
+          },
+        ],
+        'words',
+        commentBoxKeyOf(anchor),
+      )}
+    </Box>
+  )
+
+  const rows = composeRowsOf(props.hasPicker)
   return (
-    <Box flexDirection="column">
-      {props.hasPicker ? (
-        <Select
-          key={selectKeyOf(anchor)}
-          options={options}
-          value={props.line ? lineValueOf(props.line) : WHOLE_HUNK}
-          onSelect={value => props.onLineChange(lineOfValue(value, lines))}
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      <Text color={COLORS.suggestion}>{barOf(rows)}</Text>
+      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+        {props.hasPicker ? (
+          <Select
+            key={selectKeyOf(anchor)}
+            options={options}
+            value={props.line ? lineValueOf(props.line) : WHOLE_HUNK}
+            onSelect={value => props.onLineChange(lineOfValue(value, lines))}
+          />
+        ) : null}
+        <Input
+          key={props.inputKey}
+          autoFocus
+          placeholder="Your comment for Claude…"
+          submitLabel="add"
+          onSubmit={text => props.onSubmit(text)}
         />
-      ) : null}
-      <Input
-        key={props.inputKey}
-        autoFocus
-        placeholder="Your comment for Claude…"
-        submitLabel="add"
-        onSubmit={text => props.onSubmit(text)}
-      />
-      <Button key={cancelKeyOf(anchor)} plain dimColor label="cancel" onPress={props.onCancel} />
+        {hint}
+      </Box>
     </Box>
   )
 }
 
 /**
- * A note reads as a margin annotation under its code: `accentBar` coloured by its status, the
- * text, then a dim `L<line> · <age>` and its chips, right-aligned — D10 point 6. `now` (ms) comes
- * from the view's own clock, never `Date.now()` here.
+ * A note is a card: a heavy `┃` in its status colour down every row, row 1 the comment's first
+ * line with — right-aligned — the status word, a dim `L<line> · <age>` and the chips; the rest of
+ * the text follows on rows 2..n, wrapped to `width` (the card's whole room), at most
+ * `NOTE_MAX_ROWS`. `noteLinesOf` is the one wrap, shared with `blocksOf`'s row count. `now` (ms)
+ * comes from the view's own clock, never `Date.now()` here.
  */
 export function note(
   kit: Kit,
@@ -114,10 +141,12 @@ export function note(
   now: number,
   onRemove: (id: string) => void,
   onResend: () => void,
+  width: number,
 ): RenderElement {
   const { Box, Text } = kit.ui
   const lineLabel = comment.line ? `L${comment.line.number}` : ''
   const age = ageOf(comment.createdAt, now)
+  const color = NOTE_STATE_COLORS[comment.status]
 
   const chips: Chip[] = []
   if (comment.status === 'open') {
@@ -137,20 +166,32 @@ export function note(
     onPress: () => onRemove(comment.id),
   })
 
-  const left = (
-    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-      {accentBar(kit, NOTE_STATE_COLORS[comment.status])}
-      <Text wrap="truncate-end">{comment.text}</Text>
-    </Box>
-  )
+  const lines = noteLinesOf(comment, width)
   const scope = noteKeyOf(comment.id)
   const right = (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      <Text color={color}>{STATUS_WORDS[comment.status]}</Text>
       {meta(kit, [lineLabel, age])}
       {chipRow(kit, chips, 'words', scope)}
     </Box>
   )
-  return row(kit, { left, right, key: scope })
+  return (
+    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      <Text color={color}>{barOf(lines.length)}</Text>
+      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+        {row(kit, {
+          left: <Text wrap="truncate-end">{lines[0] ?? ''}</Text>,
+          right,
+          key: scope,
+        })}
+        {lines.slice(1).map((line, index) => (
+          <Box key={`${scope}:${index}`}>
+            <Text wrap="truncate-end">{line}</Text>
+          </Box>
+        ))}
+      </Box>
+    </Box>
+  )
 }
 
 /**

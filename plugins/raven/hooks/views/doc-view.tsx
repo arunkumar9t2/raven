@@ -268,7 +268,7 @@ export function createDocView(
           {chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)}
           {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
           {visible.map(comment =>
-            note(kit, comment, now(), id => review.remove(id), review.resend),
+            note(kit, comment, now(), id => review.remove(id), review.resend, kit.columns),
           )}
           {isComposing
             ? commentBox(kit, {
@@ -325,7 +325,7 @@ export function createDocView(
                 <Box key={`outdated:${key}`} flexDirection="column">
                   {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
                   {visible.map(comment =>
-                    note(kit, comment, now(), id => review.remove(id), review.resend),
+                    note(kit, comment, now(), id => review.remove(id), review.resend, kit.columns),
                   )}
                 </Box>
               )
