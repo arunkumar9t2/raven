@@ -85,6 +85,7 @@ Claude runs the commands below through its Bash tool; the plugin's `bin/` direct
 raven show <path> [--title T]     render a markdown file / show any file
 raven note [--title T] [<md>|-]   render markdown (stdin when omitted)
 raven diff [<path>]               open the diff, optionally at a file
+raven open <pane>                 open a pane: diff, doc, files or tasks
 raven comments                    print pending review comments
 ```
 

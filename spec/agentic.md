@@ -12,8 +12,8 @@ the two is live.
 At `session.start`, `plugins/raven/hooks/register.ts` registers a tool named `show` through
 `$.tool.register`; the model calls it as `mcp__<plugin>__show`, where `<plugin>` is whatever name
 this plugin was loaded under (`$.plugin.name`, not a hardcoded `raven`, since a directory-loaded copy
-can carry another name). Its input schema takes an `op` — `show`, `note`, `diff` or `comments` — and,
-depending on `op`, `path`, `markdown` and `title`. The engine answers the tool call directly: no
+can carry another name). Its input schema takes an `op` — `show`, `note`, `diff`, `comments` or `open` — and,
+depending on `op`, `path`, `markdown`, `title` and `pane`. The engine answers the tool call directly: no
 process sits in between, and the same handler that parses a CLI-printed directive parses the tool's
 input (`directiveOf` in `plugins/raven/hooks/core/directive.ts`).
 
@@ -26,10 +26,10 @@ shown.
 
 ## The directive contract
 
-The `show` tool's input and a line the CLI prints share one shape: `{ op, path?, markdown?, title? }`.
+The `show` tool's input and a line the CLI prints share one shape: `{ op, path?, markdown?, title?, pane? }`.
 A CLI directive line is `::<name>::` followed by compact JSON of that shape, one line, printed to
-stdout. `directiveOf` validates either source the same way — `op` must be one of the four values,
-`show` requires `path`, `note` requires `markdown`, `diff`'s `path` and title fields are optional,
+stdout. `directiveOf` validates either source the same way — `op` must be one of the five values,
+`show` requires `path`, `note` requires `markdown`, `open` requires a `pane` that is one of the views' subcommands (`diff`, `doc`, `files`, `tasks`; one list in `names.ts`), `diff`'s `path` and title fields are optional,
 `comments` takes none — and an unrecognized `op` or a line that doesn't parse is dropped rather than
 raised as an error, so extra output around a directive line never breaks the pane.
 
@@ -38,6 +38,7 @@ raised as an error, so extra output around a directive line never breaks the pan
 | `show` | `path`, `title?` | open the Doc view on that file |
 | `note` | `markdown`, `title?` | open the Doc view on inline markdown |
 | `diff` | `path?` | open the diff pane, selecting `path` when given |
+| `open` | `pane` | show that pane, as `/raven <pane>` does, but never hide it: a pane already showing stays showing |
 | `comments` | — | answer with the pending review comments as the tool result text |
 
 A directive arriving through Bash is different from one arriving through the tool in one respect
@@ -64,6 +65,7 @@ hint to enable function hooks.
 raven show <path> [--title <t>]     open the Doc view on a file
 raven note [--title <t>] [<md>|-]   open the Doc view on inline markdown (stdin when omitted or "-")
 raven diff [<path>]                 open the diff pane, optionally selecting a file
+raven open <pane>                   open the diff, doc, files or tasks pane (never toggles it off)
 raven comments                      ask the pane for pending review comments
 ```
 
@@ -71,7 +73,8 @@ raven comments                      ask the pane for pending review comments
 is a file (not a directory) before emitting a directive, failing with a non-zero exit and a stderr
 message otherwise. `note` takes its markdown from the first positional argument, or from stdin when
 that argument is omitted or `-`, trimming it and refusing to emit an empty note. `diff` takes an
-optional path with the same resolution as `show`, but does not require it to exist. `comments` takes
+optional path with the same resolution as `show`, but does not require it to exist. `open` takes one pane name (`diff`, `doc`, `files` or `tasks`) and fails with a non-zero exit and a stderr
+message listing the valid names otherwise. `comments` takes
 no arguments.
 
 The CLI lives inside the plugin (`plugins/raven/cli/`, not at the repo root) because a plugin install

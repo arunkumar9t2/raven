@@ -37,7 +37,7 @@ function world(on: On, stdout: string, env: Readonly<Record<string, string>> = {
   on('settings.read', () => ({ value: {} }))
   on('tool.call', { tool: 'Bash' }, () => ({ result: { stdout, stderr: '', interrupted: false } }))
 
-  trackShownPanes(on)
+  return trackShownPanes(on)
 }
 
 describe('register', () => {
@@ -76,6 +76,27 @@ describe('register', () => {
     const result = await $.tool.call({ tool: TOOL, op: 'comments' })
 
     expect(result.text).toBe('The user has no pending review comments.')
+  })
+
+  test('the show tool opens a pane and a second call leaves it showing', async ($, on) => {
+    const shown = world(on, '')
+
+    await $.session.start(SESSION)
+    const first = await $.tool.call({ tool: TOOL, op: 'open', pane: 'files' })
+    const second = await $.tool.call({ tool: TOOL, op: 'open', pane: 'files' })
+
+    expect(first.text).toBe('Shown in the Raven pane: the files pane.')
+    expect(second.text).toBe('Shown in the Raven pane: the files pane.')
+    expect([...shown]).toEqual([TREE_PANE.id])
+  })
+
+  test('the show tool refuses an open call with an unknown pane', async ($, on) => {
+    world(on, '')
+
+    await $.session.start(SESSION)
+    const result = await $.tool.call({ tool: TOOL, op: 'open', pane: 'nonsense' })
+
+    expect(result.deny).toBeDefined()
   })
 
   test('the show tool refuses input its schema does not describe', async ($, on) => {
