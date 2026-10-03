@@ -174,6 +174,10 @@ export function createDocView(
             align: block.align,
             rows: block.rows,
             width: kit.columns,
+            // A blank row either side, like a Markdown block's own gap — none at the very start
+            // or end of the section.
+            gapTop: i > 0 || j > 0,
+            gapBottom: i < chunks.length - 1 || j < chunk.blocks.length - 1,
           })
         }
         if (block.kind === 'code') {

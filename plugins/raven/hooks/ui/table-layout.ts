@@ -171,28 +171,40 @@ function wordLinesOf(spans: readonly Span[]): Word[][] {
   return lines
 }
 
-/** Cuts `word` into pieces of at most `width` cells, styles kept. */
+/**
+ * Cuts `word` into pieces of at most `width` cells, styles kept. A piece ends after the last `/`
+ * that fits (else the last `.`, `-` or `_`) when one does, so a path wraps at a separator; with
+ * none it breaks hard at the width.
+ */
 function breakWord(word: Word, width: number): Word[] {
+  const chars = word.flatMap(span =>
+    [...span.text].map(char => ({ char, style: span.style, w: widthOf(char) })),
+  )
   const pieces: Word[] = []
-  let current: Word = []
-  let used = 0
-  for (const span of word) {
-    let text = ''
-    for (const char of span.text) {
-      const w = widthOf(char)
-      if (used + w > width && used > 0) {
-        if (text !== '') current.push({ text, style: span.style })
-        pieces.push(current)
-        current = []
-        text = ''
-        used = 0
-      }
-      text += char
-      used += w
+  let start = 0
+  while (start < chars.length) {
+    let used = 0
+    let end = start
+    while (end < chars.length && used + (chars[end]?.w ?? 0) <= width) {
+      used += chars[end]?.w ?? 0
+      end += 1
     }
-    if (text !== '') current.push({ text, style: span.style })
+    if (end === start) end += 1 // a char wider than the column still takes a line
+    if (end < chars.length) {
+      const fitting = chars.slice(start, end)
+      const lastOf = (set: string) => fitting.findLastIndex(c => set.includes(c.char))
+      const at = lastOf('/') >= 0 ? lastOf('/') : lastOf('.-_')
+      if (at >= 0) end = start + at + 1
+    }
+    const piece: Word = []
+    for (const c of chars.slice(start, end)) {
+      const last = piece[piece.length - 1]
+      if (last && last.style === c.style) last.text += c.char
+      else piece.push({ text: c.char, style: c.style })
+    }
+    pieces.push(piece)
+    start = end
   }
-  if (current.length > 0) pieces.push(current)
   return pieces
 }
 
