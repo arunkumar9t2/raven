@@ -90,6 +90,21 @@ describe('register', () => {
     expect([...shown]).toEqual([TREE_PANE.id])
   })
 
+  for (const [pane, id] of [
+    ['diff', DIFF_PANE.id],
+    ['doc', DOC_PANE.id],
+    ['tasks', TASKS_PANE.id],
+  ] as const) {
+    test(`the show tool opens the ${pane} pane`, async ($, on) => {
+      const shown = world(on, '')
+
+      await $.session.start(SESSION)
+      await $.tool.call({ tool: TOOL, op: 'open', pane })
+
+      expect([...shown]).toContain(id)
+    })
+  }
+
   test('the show tool refuses an open call with an unknown pane', async ($, on) => {
     world(on, '')
 
