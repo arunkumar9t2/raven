@@ -1,8 +1,8 @@
 import { type Capabilities, FULL_CAPABILITIES } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
-import type { Hunk } from '../../git/hunks'
+import { bodyLinesOf, type Hunk } from '../../git/hunks'
 import type { Comment, Comments } from '../../review/comments'
-import { groupByAnchor, splitAddressed } from '../../review/comments'
+import { groupByAnchor, lineIndexOf, splitAddressed } from '../../review/comments'
 import {
   type Anchor,
   addressedKeyOf,
@@ -61,6 +61,64 @@ export type BodyItem =
   | { kind: 'orphans-title' }
   | { kind: 'orphan-path'; path: string; isGone: boolean }
 
+type InlineNotes = { at: number; notes: Comment[] }
+
+/**
+ * A hunk's visible notes that carry a locatable `line`, grouped by the body row they sit under
+ * (ascending), and the rest (hunk-wide notes, addressed ones, lines no longer found) which stay
+ * after the hunk.
+ */
+function splitInline(hunk: Hunk, notes: Comments): { inline: InlineNotes[]; rest: Comments } {
+  const { visible } = splitAddressed(notes)
+  const byRow = new Map<number, Comment[]>()
+  const placed = new Set<Comment>()
+  for (const comment of visible) {
+    const at = comment.line ? lineIndexOf(hunk, comment.line) : null
+    if (at === null) continue
+    placed.add(comment)
+    byRow.set(at, [...(byRow.get(at) ?? []), comment])
+  }
+  const inline = [...byRow.entries()]
+    .sort((a, b) => a[0] - b[0])
+    .map(([at, list]) => ({ at, notes: list }))
+  return { inline, rest: notes.filter(comment => !placed.has(comment)) }
+}
+
+/**
+ * A hunk as blocks: whole when nothing sits under one of its lines, else a segment per commented
+ * line — the lines up to and including it (its rail cell marked with the first note's status),
+ * then that line's cards — and a last segment for the rest. Row-exact: the segments' lines and
+ * the cards' rows add up to the hunk plus the notes.
+ */
+function hunkSegmentsOf(
+  index: number,
+  hunk: Hunk,
+  inline: readonly InlineNotes[],
+  width: number,
+): Block<BodyItem>[] {
+  const key = hunkKeyOf(index, hunk)
+  if (inline.length === 0) return [{ kind: 'hunk', key, hunk }]
+
+  const total = bodyLinesOf(hunk).length
+  const blocks: Block<BodyItem>[] = []
+  let from = 0
+  for (const { at, notes } of inline) {
+    const to = at + 1
+    blocks.push({
+      kind: 'hunk',
+      key: from === 0 ? key : `${key}~${from}`,
+      hunk,
+      range: { from, to },
+      mark: notes[0]?.status,
+    })
+    blocks.push(...notesBlocksOf(notes, { path: notes[0]?.path ?? '' }, width))
+    from = to
+  }
+  if (from < total)
+    blocks.push({ kind: 'hunk', key: `${key}~${from}`, hunk, range: { from, to: total } })
+  return blocks
+}
+
 /** The block key of hunk `index`, unique even across hunks sharing a header (e.g. after a slice). */
 export const hunkKeyOf = (index: number, hunk: Hunk) => `hunk:${index}:${hunk.header}`
 
@@ -103,13 +161,14 @@ function anchorBlocksOf(
   composing: Anchor | null,
   capabilities: Capabilities,
   width: number,
+  inputRows: number,
   hunk?: Hunk,
 ): Block<BodyItem>[] {
   const notesBlocks = notesBlocksOf(notes, anchor, width)
   if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
 
   const hasPicker = hunk !== undefined && capabilities.canPick
-  const rows = composeRowsOf(hasPicker)
+  const rows = composeRowsOf(hasPicker, inputRows)
   return [
     ...notesBlocks,
     {
@@ -189,6 +248,8 @@ export type BlocksOptions = {
    * `rows` is its wrapped line count at this width. 100 when omitted.
    */
   width?: number
+  /** The rows the composing Input has soft-wrapped to (`inputRowsOf`); 1 when omitted. */
+  composingRows?: number
   /** The status for a file whose hunks are undefined; `Loading…` when omitted. */
   unreadText?: string
 }
@@ -215,6 +276,7 @@ export function blocksOf(
   const isReadOnly = options.readOnly ?? false
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const width = noteWidthOf(options)
+  const inputRows = options.composingRows ?? 1
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
@@ -227,7 +289,9 @@ export function blocksOf(
       rows: 1,
       item: { kind: 'title', file, canNote: canNoteFile },
     },
-    ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width)),
+    ...(isReadOnly
+      ? []
+      : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width, inputRows)),
   ]
 
   if (hunks === undefined || hunks.length === 0) {
@@ -255,18 +319,13 @@ export function blocksOf(
         isReadOnly,
       },
     })
-    blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
-    if (isReadOnly) return
-    blocks.push(
-      ...anchorBlocksOf(
-        grouped.byHunk.get(hunk.header) ?? [],
-        anchor,
-        composing,
-        capabilities,
-        width,
-        hunk,
-      ),
-    )
+    if (isReadOnly) {
+      blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
+      return
+    }
+    const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
+    blocks.push(...hunkSegmentsOf(index, hunk, inline, width))
+    blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, inputRows, hunk))
   })
 
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated, width))

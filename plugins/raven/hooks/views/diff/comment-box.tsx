@@ -50,10 +50,14 @@ export type CommentBoxProps = {
    * size this block's rows, so the row count and the drawing never disagree.
    */
   hasPicker: boolean
+  /** The rows the Input's text wraps to (the bar spans them); 1 when omitted. */
+  inputRows?: number
   /** The line chosen in the picker; null means "whole hunk". */
   line: CommentLine | null
   columns: number
   onLineChange: (line: CommentLine | null) => void
+  /** Every change of the Input's text; the diff pane sizes the box's rows from it. */
+  onInput?: (text: string) => void
   onSubmit: (text: string) => void
   onCancel: () => void
 }
@@ -102,9 +106,16 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     </Box>
   )
 
-  const rows = composeRowsOf(props.hasPicker)
+  const rows = composeRowsOf(props.hasPicker, props.inputRows)
   return (
-    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+    <Box
+      flexDirection="row"
+      flexGrow={1}
+      gap={1}
+      overflow="hidden"
+      flexWrap="nowrap"
+      backgroundColor={COLORS.userMessage}
+    >
       <Text color={COLORS.suggestion}>{barOf(rows)}</Text>
       <Box flexDirection="column" flexGrow={1} overflow="hidden">
         {props.hasPicker ? (
@@ -120,6 +131,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
           autoFocus
           placeholder="Your comment for Claude…"
           submitLabel="add"
+          onInput={props.onInput}
           onSubmit={text => props.onSubmit(text)}
         />
         {hint}
@@ -176,7 +188,14 @@ export function note(
     </Box>
   )
   return (
-    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+    <Box
+      flexDirection="row"
+      flexGrow={1}
+      gap={1}
+      overflow="hidden"
+      flexWrap="nowrap"
+      backgroundColor={COLORS.userMessage}
+    >
       <Text color={color}>{barOf(lines.length)}</Text>
       <Box flexDirection="column" flexGrow={1} overflow="hidden">
         {row(kit, {

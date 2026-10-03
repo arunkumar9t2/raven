@@ -1447,8 +1447,9 @@ function hunkWorld(
   onApply: (argv: readonly string[], stdin: string | undefined) => void,
   diffTextOf: () => string = () => HUNK_TEXT,
   path = 'a.ts',
+  storeEntries: Record<string, unknown> = {},
 ) {
-  baseWorld(on)
+  baseWorld(on, storeEntries)
   on('process.run', ($, e) => {
     const [cmd, sub] = e.argv
     if (cmd === 'git' && sub === 'rev-parse') return ran(0, REPO)
@@ -2076,6 +2077,59 @@ describe('a note is a card (R38)', () => {
     await ui.press({ key: commentButtonKeyOf(section) })
     await ui.input({ key: inputKeyOf(section), text: 'doc card note' })
     expect(await ui.find({ text: /pending/ })).toBeDefined()
+  })
+})
+
+describe('inline line threads (R39)', () => {
+  const header = '@@ -1,8 +1,8 @@'
+  const text = `${header}\n l1\n l2\n l3\n l4\n l5\n-old6\n+new6\n l7\n l8\n`
+  const onLine6 = {
+    id: 'c1',
+    path: 'a.ts',
+    hunk: header,
+    line: { number: 6, side: 'new', text: 'new6' },
+    text: 'inline remark',
+    status: 'pending',
+    createdAt: 0,
+  }
+
+  test('a note on a line draws between that line and the next, its rail cell a ◆', async ($, on) => {
+    hunkWorld(
+      on,
+      () => {},
+      () => text,
+      'a.ts',
+      { [commentsStoreKeyOf(REPO)]: [onLine6] },
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    const drawn = (await ui.find({ key: noteKeyOf('c1') }))?.text
+    expect(drawn).toContain('inline remark')
+    const all = (await ui.find({ text: /new6/ }))?.text ?? ''
+    expect(all.indexOf('new6')).toBeGreaterThan(-1)
+    expect(all.indexOf('inline remark')).toBeGreaterThan(all.indexOf('new6'))
+    expect(all.indexOf('inline remark')).toBeLessThan(all.indexOf('l7'))
+    expect(all).toContain('◆')
+    expect(all.indexOf('◆')).toBeLessThan(all.indexOf('inline remark'))
+  })
+
+  test('a note whose line is not in the hunk draws after the hunk, with no ◆', async ($, on) => {
+    const stray = { ...onLine6, line: { number: 99, side: 'new', text: '' } }
+    hunkWorld(
+      on,
+      () => {},
+      () => text,
+      'a.ts',
+      { [commentsStoreKeyOf(REPO)]: [stray] },
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+    const all = (await ui.find({ text: /new6/ }))?.text ?? ''
+    expect(all.indexOf('inline remark')).toBeGreaterThan(all.indexOf('l8'))
+    expect(all).not.toContain('◆')
   })
 })
 

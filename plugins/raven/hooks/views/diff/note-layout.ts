@@ -42,5 +42,27 @@ export function noteLinesOf(comment: Comment, width: number): string[] {
 export const barOf = (rows: number): string =>
   Array.from({ length: Math.max(1, rows) }, () => '┃').join('\n')
 
-/** The compose box's rows: an Input and the hint row, plus a line picker above on a hunk. */
-export const composeRowsOf = (hasPicker: boolean): number => (hasPicker ? 3 : 2)
+/**
+ * The compose box's rows: the Input (one row, or as many as its text soft-wraps to), the hint
+ * row, plus a line picker above on a hunk.
+ */
+export const composeRowsOf = (hasPicker: boolean, inputRows = 1): number =>
+  (hasPicker ? 3 : 2) + Math.max(1, inputRows) - 1
+
+/** The Input never draws more than two rows: longer text scrolls inside them (measured live). */
+const INPUT_MAX_ROWS = 2
+
+/** Cells the Input keeps for its own `⏎ add` label (and a spare) on the first row it draws. */
+const INPUT_LABEL_CELLS = 7
+
+/**
+ * How many rows the engine's Input draws for `text` in a box `width` cells wide, reckoned by the
+ * same word wrap as a card: the Input exposes only its text (`onInput`), not its layout, so this
+ * is an estimate — measured live, it soft-wraps at word boundaries `INPUT_LABEL_CELLS` short and
+ * stops at `INPUT_MAX_ROWS`.
+ */
+export const inputRowsOf = (text: string, width: number): number =>
+  Math.min(
+    INPUT_MAX_ROWS,
+    wrapText(text, Math.max(1, width - INPUT_LABEL_CELLS), INPUT_MAX_ROWS + 1).length,
+  )

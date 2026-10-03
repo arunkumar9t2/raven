@@ -1,16 +1,26 @@
 import { bodyLinesOf, type Hunk, hunkFrom, parseHeader } from '../../git/hunks'
+import type { CommentStatus } from '../../review/comments'
 
 /** A body block: a payload of known height, or a hunk whose body lines are its rows. */
 export type Block<T = unknown> =
   | { kind: 'fixed'; key: string; rows: number; item: T }
-  | { kind: 'hunk'; key: string; hunk: Hunk }
+  | {
+      kind: 'hunk'
+      key: string
+      hunk: Hunk
+      /** The body lines [from, to) this block shows, when a hunk is split around inline notes. */
+      range?: { from: number; to: number }
+      /** Set when the block's last line carries a note: that note's status colours its rail cell. */
+      mark?: CommentStatus
+    }
 
 /** A block placed in the window: rows [from, to) of it are visible. */
 export type Placed<T = unknown> = { block: Block<T>; from: number; to: number }
 
 /** The rows a block takes: a fixed block its declared rows, a hunk its body line count. */
 export function rowsOf(block: Block): number {
-  return block.kind === 'fixed' ? block.rows : bodyLinesOf(block.hunk).length
+  if (block.kind === 'fixed') return block.rows
+  return block.range ? block.range.to - block.range.from : bodyLinesOf(block.hunk).length
 }
 
 /** The rows all the blocks take together. */
