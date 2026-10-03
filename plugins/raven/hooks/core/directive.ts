@@ -1,7 +1,7 @@
-import { DIRECTIVE_PREFIX, FALLBACK_PREFIX } from '../names'
+import { DIRECTIVE_PREFIX, FALLBACK_PREFIX, PANE_SUBCOMMANDS, type PaneSubcommand } from '../names'
 import { isRecord } from './is-record'
 
-export const DIRECTIVE_OPS = ['show', 'note', 'diff', 'comments'] as const
+export const DIRECTIVE_OPS = ['show', 'note', 'diff', 'comments', 'open'] as const
 type DirectiveOp = (typeof DIRECTIVE_OPS)[number]
 
 /** What the CLI asks of the pane; see spec/agentic.md. */
@@ -10,13 +10,14 @@ export type Directive =
   | { op: 'note'; markdown: string; title?: string }
   | { op: 'diff'; path?: string }
   | { op: 'comments' }
+  | { op: 'open'; pane: PaneSubcommand }
 
 const optionalString = (value: unknown) => value === undefined || typeof value === 'string'
 
 /** Parses one directive's payload (a CLI's printed JSON, or the `show` tool's input) or null. */
 export function directiveOf(value: unknown): Directive | null {
   if (!isRecord(value)) return null
-  const { op, path, title, markdown } = value
+  const { op, path, title, markdown, pane } = value
   if (!optionalString(title) || !optionalString(path)) return null
   if (!DIRECTIVE_OPS.includes(op as DirectiveOp)) return null
 
@@ -25,6 +26,8 @@ export function directiveOf(value: unknown): Directive | null {
       return typeof path === 'string' ? (value as Directive) : null
     case 'note':
       return typeof markdown === 'string' ? (value as Directive) : null
+    case 'open':
+      return PANE_SUBCOMMANDS.includes(pane as PaneSubcommand) ? (value as Directive) : null
     case 'diff':
     case 'comments':
       return value as Directive

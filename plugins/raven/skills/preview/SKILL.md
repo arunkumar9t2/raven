@@ -10,7 +10,7 @@ change, and markdown written under `docs/superpowers/` or `.superpowers/`, and p
 open as they are written. Reach for the Raven `show` tool only for what it cannot see coming.
 
 Prefer the Raven `show` tool when it is listed among your tools: call it with `op` (`show`, `note`,
-`diff` or `comments`), and `path` / `markdown` / `title` as the op needs. A relative `path` resolves
+`diff`, `comments` or `open`), and `path` / `markdown` / `title` / `pane` as the op needs. A relative `path` resolves
 against the session's working directory.
 
 | Want | Call |
@@ -18,6 +18,7 @@ against the session's working directory.
 | Render a markdown file or show any file | `{ op: "show", path, title? }` |
 | Render markdown you compose | `{ op: "note", markdown, title? }` |
 | Open the diff, optionally at one file | `{ op: "diff", path? }` |
+| Open a pane: the files list, tasks, doc or diff | `{ op: "open", pane }` (`files`, `tasks`, `doc`, `diff`) |
 | Read the user's pending review comments | `{ op: "comments" }` |
 
 When the tool is not listed (function hooks off, or an older Raven), fall back to the `raven` CLI: it
@@ -28,11 +29,15 @@ is on your PATH, prints one line the pane consumes, and the tool result tells yo
 | Render a markdown file or show any file | `raven show <path> [--title "…"]` |
 | Render markdown you compose | `raven note --title "…" <<'EOF'` … `EOF` |
 | Open the diff, optionally at one file | `raven diff [<path>]` |
+| Open a pane: the files list, tasks, doc or diff | `raven open <files\|tasks\|doc\|diff>` |
 | Read the user's pending review comments | `raven comments` |
 
 ## When to use it
 
 - The user asks to see, open, preview or render something: show it instead of pasting it into chat.
+- The user asks for the file tree, the files list, the tasks, the doc or the diff: `raven open <pane>`
+  (`files`, `tasks`, `doc`, `diff`) docks that pane, and a second call leaves it showing. Don't tell
+  them only `/raven` can switch panes.
 - You wrote a plan or spec outside the watched folders: `raven show` it so the user reads it rendered.
 - A comparison, checklist or summary is easier to read rendered: compose it with `raven note` and keep
   the chat reply to one line pointing at the pane.

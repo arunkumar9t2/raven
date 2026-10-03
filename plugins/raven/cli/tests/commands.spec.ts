@@ -156,3 +156,27 @@ describe('help and misc', () => {
     expect(io.stderrLines.join('')).toContain('Usage:')
   })
 })
+
+describe('open', () => {
+  test('prints the directive for a pane', async () => {
+    const io = fakeIo({})
+    const code = await run(['open', 'files'], io)
+    expect(code).toBe(0)
+    expect(io.stdoutLines[0]).toBe('::raven::{"op":"open","pane":"files"}\n')
+    expect(io.stdoutLines[1]).toContain('the files pane was not shown')
+  })
+
+  test('errors on an unknown pane', async () => {
+    const io = fakeIo({})
+    const code = await run(['open', 'nonsense'], io)
+    expect(code).toBe(1)
+    expect(io.stdoutLines).toEqual([])
+    expect(io.stderrLines.join('')).toContain('diff|doc|files|tasks')
+  })
+
+  test('errors on a missing pane', async () => {
+    const io = fakeIo({})
+    expect(await run(['open'], io)).toBe(1)
+    expect(io.stdoutLines).toEqual([])
+  })
+})
