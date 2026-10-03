@@ -32,7 +32,15 @@ a code block never splits mid-block; a single block longer than the cap is still
 with the fence closed before the cut and reopened after it. Each chunk's fenced code blocks render
 through a `Code` element carrying the fence's language, interleaved with `Markdown` elements for the
 surrounding prose, so code reads as code rather than as part of the markdown text; an empty fence
-draws nothing. A file that is not markdown renders as one `Code` element instead, truncated at the
+draws nothing. GFM tables in prose (outside fences) are split out too and drawn by Raven itself
+(`hooks/ui/table.tsx`, layout in `hooks/ui/table-layout.ts`), because the engine's `Markdown` sizes a
+table to the terminal, not the pane, so a wide table breaks its borders in a narrower pane. A table
+draws at the pane's width (`kit.columns`) with box borders, a centred bold header and body cells
+aligned per the delimiter row; `**bold**` and `` `code` `` cells keep their style through wrapping and
+other inline markers draw as their visible text. When the natural widths do not fit, columns shrink
+(never below their longest word, 6 to 20 cells) and cell text wraps at word boundaries, hard-breaking a
+word wider than its column; when even that does not fit, each row draws as a group of `Header: value`
+lines. This holds for files, notes, plans and commentable sections alike (R36). A file that is not markdown renders as one `Code` element instead, truncated at the
 same cap with a "the rest of the file is not shown" note when it overruns.
 
 A markdown file — never a note or any other file kind — is also where [review comments](./review.md)

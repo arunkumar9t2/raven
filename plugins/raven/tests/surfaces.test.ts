@@ -171,3 +171,36 @@ describe('surface safety', () => {
     expect(await ui.find({ text: '/work/shot.png' })).toBeDefined()
   })
 })
+
+describe('doc tables', () => {
+  const PROSE =
+    'The engine **sizes GFM tables to the terminal width**, not the pane, so every row wraps and the `box borders` break apart into stray characters when the pane is narrower than the terminal.'
+  const MARKDOWN = `Before\n\n| Path | What Claude sees |\n| --- | --- |\n| \`a.ts\` | ${PROSE} |\n| b.ts | ok |\n\nAfter`
+
+  test('a wide table in a note is drawn to fit the pane, borders intact', async ($: Engine, on: On) => {
+    world(on)
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: toolNameOf(NAME), op: 'note', markdown: MARKDOWN, title: 'Table' })
+
+    for (const bodyColumns of [100, 70]) {
+      const ui = await $.ui.mount({
+        plugin: NAME,
+        surface: 'terminal',
+        component: 'Pane',
+        props: { ...PANE_PROPS, title: 'Doc', bodyColumns },
+        requestId: DOC_PANE.id,
+      })
+      await expect(ui.drawn()).resolves.toBeDefined()
+
+      const lines = (await ui.findAll({ type: 'Text' }))
+        .map(each => each.text)
+        .filter(text => /[│┌└├]/.test(text))
+      expect(lines.some(text => text.startsWith('┌'))).toBe(true)
+      expect(lines.some(text => text.startsWith('└'))).toBe(true)
+      expect(lines.length).toBeGreaterThan(5)
+      for (const text of lines) expect([...text].length).toBeLessThanOrEqual(bodyColumns)
+
+      await ui.unmount()
+    }
+  })
+})
