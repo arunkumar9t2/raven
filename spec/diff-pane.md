@@ -41,13 +41,14 @@ except for a renamed file, whose heading shows only its new path; the `old → n
 file-list row's alone. The whole stream is laid out into one scrollable window so wheel and
 arrow-key scrolling moves through it without redrawing the header or file list
 (`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling body total 2
-(header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a status line, a
-note, the collapsed "✓ N addressed" row, a hunk's toolbar row, the "Outdated" title, the "Not in
+(header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a status line, the
+collapsed "✓ N addressed" row, a hunk's toolbar row, the "Outdated" title, the "Not in
 this diff" title, an orphan path's own row, and the blank row between files are each one row; a
-note chip draws idle on the heading or a hunk's toolbar row
+note is a card of as many rows as its text wraps to at the stream's width (1 to 6, see
+[review](review.md#status)); a note chip draws idle on the heading or a hunk's toolbar row
 rather than as a row of its own, and opens a compose box in its place — two rows (Input plus
-cancel), three when a hunk's line picker draws above the Input — only while that anchor is being
-composed. A hunk itself takes as many rows as its body has lines, sliced into whatever range the
+the `⏎ add`/`[ ✕ cancel ]` hint row), three when a hunk's line picker draws above the Input — only
+while that anchor is being composed. A multi-row fixed block's rail runs its full height. A hunk itself takes as many rows as its body has lines, sliced into whatever range the
 current scroll position exposes, and a fixed row only draws once its first row falls inside that
 range. Element caps, focus, and the scroll contract these elements draw under are engine facts
 owned by [`mod-api.md`](./mod-api.md).

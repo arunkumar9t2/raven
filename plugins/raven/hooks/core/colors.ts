@@ -26,7 +26,7 @@ export const COLORS = {
   done: 'success',
 } as const
 
-/** A note's `CommentStatus` (`hooks/review/comments.ts`) to its `accentBar` colour. */
+/** A note's `CommentStatus` (`hooks/review/comments.ts`) to its card's `┃` bar and status-word colour. */
 export const NOTE_STATE_COLORS: Record<CommentStatus, string> = {
   pending: COLORS.suggestion,
   sent: COLORS.inactive,

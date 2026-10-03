@@ -10,10 +10,12 @@ import {
   toolNameOf,
 } from '../hooks/names'
 import {
+  cancelKeyOf,
   commentButtonKeyOf,
   dropKeyOf,
   hunkHeaderKeyOf,
   inputKeyOf,
+  noteKeyOf,
   revertKeyOf,
   stageKeyOf,
 } from '../hooks/views/diff/anchor'
@@ -1981,6 +1983,99 @@ describe('prompt carries the review', () => {
     shouldThrow = false
     await $.prompt.submit({ text: 'hello again', origin: { kind: 'composer' }, wait: false })
     expect(toasts).toContain('Raven: 1 review comment sent with this prompt')
+  })
+})
+
+describe('a note is a card (R38)', () => {
+  const LONG = Array.from({ length: 30 }, (_, i) => `word${i}`).join(' ') // ~210 chars
+  const card = (patch: Record<string, unknown>) => ({
+    id: 'c1',
+    path: 'a.ts',
+    text: LONG,
+    status: 'pending',
+    createdAt: 0,
+    ...patch,
+  })
+
+  test('a long comment draws on several rows, every word up to the cut present, none past the pane', async ($, on) => {
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [card({})] }, null)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    const first = await ui.find({ key: noteKeyOf('c1') })
+    expect(first?.text).toContain('word0')
+    expect(first?.text).toContain('pending')
+    const rest: string[] = []
+    for (let i = 0; i < 5; i += 1) {
+      const line = await ui.find({ key: `${noteKeyOf('c1')}:${i}` })
+      if (line) rest.push(line.text)
+    }
+    expect(rest.length).toBeGreaterThan(0)
+    expect(rest.every(line => line.length <= PANE_PROPS.bodyColumns - 3)).toBe(true)
+    const drawn = `${first?.text} ${rest.join(' ')}`
+    // The whole comment fits in six rows here, so every word is drawn.
+    for (let i = 0; i < 30; i += 1) expect(drawn).toContain(`word${i}`)
+  })
+
+  test('an overlong comment is cut at six rows with an ellipsis', async ($, on) => {
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [card({ text: 'lorem '.repeat(300) })] }, null)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+    const last = await ui.find({ key: `${noteKeyOf('c1')}:4` })
+    expect(last?.text.endsWith('…')).toBe(true)
+    expect(await ui.find({ key: `${noteKeyOf('c1')}:5` })).toBeUndefined()
+  })
+
+  test('the status shows as a word: pending on a fresh note, open once it has opened', async ($, on) => {
+    gitWorld(
+      on,
+      { [commentsStoreKeyOf(REPO)]: [card({ id: 'o1', status: 'open', text: 'reopened' })] },
+      null,
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    expect((await ui.find({ key: noteKeyOf('o1') }))?.text).toContain('open')
+    await ui.press({ key: commentButtonKeyOf({ path: 'a.ts' }) })
+    await ui.input({ key: inputKeyOf({ path: 'a.ts' }), text: 'fresh one' })
+    expect(await ui.find({ text: /pending/ })).toBeDefined()
+  })
+
+  test('composing shows a real cancel chip; pressing it closes the box', async ($, on) => {
+    gitWorld(on, {}, null)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    const anchor = { path: 'a.ts' }
+    await ui.press({ key: commentButtonKeyOf(anchor) })
+    expect(await ui.find({ key: cancelKeyOf(anchor) })).toBeDefined()
+    expect(await ui.find({ text: /⏎ add/ })).toBeDefined()
+    expect(await ui.find({ text: /cancel/ })).toBeDefined()
+
+    await ui.press({ key: cancelKeyOf(anchor) })
+    expect(await ui.find({ key: cancelKeyOf(anchor) })).toBeUndefined()
+  })
+
+  test("the Doc pane's section note is the same card", async ($, on) => {
+    const docPath = '/work/docs/superpowers/plans/x.md'
+    openWorld(on, { [docPath]: '# Plan\n\nIntro\n' })
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(docPath))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const section = { path: docPath, hunk: '§0' }
+    await ui.press({ key: commentButtonKeyOf(section) })
+    await ui.input({ key: inputKeyOf(section), text: 'doc card note' })
+    expect(await ui.find({ text: /pending/ })).toBeDefined()
   })
 })
 

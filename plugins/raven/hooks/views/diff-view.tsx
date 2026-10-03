@@ -166,6 +166,7 @@ export function createDiffView(
     capabilities: Capabilities
     isLoaded: boolean
     gonePaths: ReadonlySet<string>
+    width: number
     stream: Stream
   } | null = null
 
@@ -449,7 +450,7 @@ export function createDiffView(
   }
 
   /** Every changed file's blocks in one stream, cached while its inputs are unchanged. */
-  function streamFor(capabilities: Capabilities): Stream {
+  function streamFor(capabilities: Capabilities, width: number): Stream {
     const files = filesOf()
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
@@ -465,7 +466,8 @@ export function createDiffView(
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick &&
       cache.isLoaded === model.isLoaded &&
-      cache.gonePaths === model.gonePaths
+      cache.gonePaths === model.gonePaths &&
+      cache.width === width
     ) {
       return cache.stream
     }
@@ -478,6 +480,7 @@ export function createDiffView(
       {
         readOnly,
         capabilities,
+        width,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -493,6 +496,7 @@ export function createDiffView(
       capabilities,
       isLoaded: model.isLoaded,
       gonePaths: model.gonePaths,
+      width,
       stream,
     }
     return stream
@@ -565,7 +569,14 @@ export function createDiffView(
           <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
             <Text> </Text>
             <Box flexGrow={1} overflow="hidden">
-              {note(kit, item.comment, now(), id => review.remove(id), review.resend)}
+              {note(
+                kit,
+                item.comment,
+                now(),
+                id => review.remove(id),
+                review.resend,
+                Math.max(1, contentWidth - 1),
+              )}
             </Box>
           </Box>
         )
@@ -616,6 +627,7 @@ export function createDiffView(
     const { block } = placed
     if (block.kind !== 'fixed') return <Box key={block.key} />
     const { item } = block
+    const contentWidth = Math.max(1, kit.columns - 2)
 
     let content: RenderElement
     switch (item.kind) {
@@ -633,7 +645,14 @@ export function createDiffView(
           <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
             <Text> </Text>
             <Box flexGrow={1} overflow="hidden">
-              {note(kit, item.comment, now(), id => review.remove(id), review.resend)}
+              {note(
+                kit,
+                item.comment,
+                now(),
+                id => review.remove(id),
+                review.resend,
+                Math.max(1, contentWidth - 1),
+              )}
             </Box>
           </Box>
         )
@@ -644,7 +663,7 @@ export function createDiffView(
 
     return (
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        <Text color={COLORS.inactive}>▌ </Text>
+        <Text color={COLORS.inactive}>{railOf(block.rows)}</Text>
         <Box flexGrow={1} overflow="hidden">
           {content}
         </Box>
@@ -662,6 +681,9 @@ export function createDiffView(
    * from across the room. The trailing orphans group (`orphans#` prefixed keys) has no file at
    * all, so it is dispatched to `orphanRowOf` before the file lookup below.
    */
+  /** The 2-column `▌ ` rail, one per row, down a block of `rows` rows. */
+  const railOf = (rows: number): string => `${'▌ \n'.repeat(Math.max(0, rows - 1))}▌ `
+
   function placedRowOf(
     kit: Kit,
     placed: Placed<BodyItem>,
@@ -679,7 +701,7 @@ export function createDiffView(
 
     if (block.kind === 'hunk') {
       const rows = placed.to - placed.from
-      const rail = `${'▌ \n'.repeat(Math.max(0, rows - 1))}▌ `
+      const rail = railOf(rows)
       return (
         <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
           <Text color={railColor}>{rail}</Text>
@@ -702,7 +724,7 @@ export function createDiffView(
 
     return (
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        <Text color={railColor}>▌ </Text>
+        <Text color={railColor}>{railOf(block.rows)}</Text>
         <Box flexGrow={1} overflow="hidden">
           {bodyRowOf(kit, item, file, contentWidth)}
         </Box>
@@ -719,7 +741,7 @@ export function createDiffView(
     if (!isReadOnly && !repository) return <Text dimColor>Not in a git repository.</Text>
 
     const files = filesOf()
-    const stream = streamFor(kit.capabilities)
+    const stream = streamFor(kit.capabilities, Math.max(1, kit.columns - 2))
     // A comment whose file left the diff still has to draw somewhere (R32 part 2's orphans
     // group): the empty-state text only wins when the stream is truly empty, not just the file
     // list.
