@@ -191,6 +191,31 @@ export function changedLinesOf(hunk: { header: string; text: string }): CommentL
   return result
 }
 
+/**
+ * The body-line index of `line` in `hunk` (the row it draws on within the hunk), found by side and
+ * number the way `changedLinesOf` counts; null when the hunk has no such line.
+ */
+export function lineIndexOf(
+  hunk: { header: string; text: string },
+  line: Pick<CommentLine, 'number' | 'side'>,
+): number | null {
+  const parsed = parseHeader(hunk.header)
+  if (!parsed) return null
+  let oldLine = parsed.oldStart
+  let newLine = parsed.newStart
+  const body = bodyLinesOf(hunk)
+  for (const [index, text] of body.entries()) {
+    const kind = lineKindOf(text)
+    if (kind === null) continue
+    const isOld = kind !== 'add' && line.side === 'old' && line.number === oldLine
+    const isNew = kind !== 'del' && line.side === 'new' && line.number === newLine
+    if (isOld || isNew) return index
+    if (kind !== 'add') oldLine += 1
+    if (kind !== 'del') newLine += 1
+  }
+  return null
+}
+
 /** One file's comments split against its current hunks: file-level, live per-hunk, and outdated. */
 export function groupByAnchor(
   comments: Comments,

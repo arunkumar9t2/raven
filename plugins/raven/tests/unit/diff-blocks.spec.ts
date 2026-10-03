@@ -11,6 +11,7 @@ import {
 import {
   blocksOf,
   fileAtRow,
+  hunkKeyOf,
   ORPHANS_TITLE_KEY,
   OUTDATED_TITLE_KEY,
   orphanPathKeyOf,
@@ -19,7 +20,7 @@ import {
   TITLE_KEY,
 } from '../../hooks/views/diff/blocks'
 import { contentRowsOf } from '../../hooks/views/diff/layout'
-import { NOTE_MAX_ROWS, noteLinesOf } from '../../hooks/views/diff/note-layout'
+import { inputRowsOf, NOTE_MAX_ROWS, noteLinesOf } from '../../hooks/views/diff/note-layout'
 
 const file: ChangedFile = {
   path: 'a.txt',
@@ -81,6 +82,76 @@ describe("a note block's rows", () => {
       streamOf([file], () => [hunkA], [commentOf({ id: 'n1', text: long })], null, { width })
     expect(at(40).contentRows).toBeGreaterThan(at(120).contentRows)
     expect(at(40).contentRows).toBe(contentRowsOf(at(40).blocks))
+  })
+})
+
+describe('inline line threads (R39)', () => {
+  // body rows: 0 ' a' (o1 n1), 1 '-b' (o2), 2 '+c' (n2), 3 ' d' (o3 n3), 4 '+e' (n4)
+  const hunkL = hunkOf('@@ -1,3 +1,4 @@', [' a', '-b', '+c', ' d', '+e'])
+  const onLine = (id: string, number: number, side: 'old' | 'new' = 'new', text = 'x') =>
+    commentOf({ id, hunk: hunkL.header, text, line: { number, side, text: '' } })
+  const segmentsOf = (comments: Comments) =>
+    blocksOf(file, [hunkL], comments, null).filter(b => b.kind === 'hunk')
+  const keysOf = (comments: Comments) => blocksOf(file, [hunkL], comments, null).map(b => b.key)
+
+  test('no line note leaves one whole hunk block', () => {
+    const hunks = segmentsOf([commentOf({ id: 'n1', hunk: hunkL.header })])
+    expect(hunks).toHaveLength(1)
+    expect(hunks[0]).toMatchObject({ key: hunkKeyOf(0, hunkL) })
+    expect(hunks[0]).not.toHaveProperty('range')
+  })
+
+  test('a line note splits the hunk: lines up to it, the card, the rest', () => {
+    const blocks = blocksOf(file, [hunkL], [onLine('n1', 2)], null)
+    const keys = blocks.map(b => b.key)
+    const note = keys.indexOf(noteKeyOf('n1'))
+    const hunks = blocks.filter(b => b.kind === 'hunk')
+    expect(hunks).toHaveLength(2)
+    expect(hunks[0]).toMatchObject({ range: { from: 0, to: 3 } })
+    expect(hunks[1]).toMatchObject({ range: { from: 3, to: 5 } })
+    expect(keys.indexOf(hunks[0]?.key as string)).toBe(note - 1)
+    expect(keys.indexOf(hunks[1]?.key as string)).toBe(note + 1)
+    expect(hunks[0]).toMatchObject({ mark: 'pending' })
+  })
+
+  test('two notes on different lines make three segments', () => {
+    const hunks = segmentsOf([onLine('n1', 2), onLine('n2', 4)])
+    expect(hunks.map(h => (h as { range: unknown }).range)).toEqual([
+      { from: 0, to: 3 },
+      { from: 3, to: 5 },
+    ])
+    // line 4 (new) is the last body row, so no trailing segment: two, not three
+    const three = segmentsOf([onLine('n1', 1), onLine('n2', 3)])
+    expect(three).toHaveLength(3)
+    expect(new Set(three.map(h => h.key)).size).toBe(3)
+  })
+
+  test('an old-side line is found by counting context and removed lines', () => {
+    const hunks = segmentsOf([onLine('n1', 2, 'old')])
+    expect(hunks[0]).toMatchObject({ range: { from: 0, to: 2 } })
+  })
+
+  test('a line that cannot be found falls back to after the hunk', () => {
+    const keys = keysOf([onLine('n1', 99)])
+    expect(segmentsOf([onLine('n1', 99)])).toHaveLength(1)
+    expect(keys.at(-1)).toBe(noteKeyOf('n1'))
+  })
+
+  test('hunk-wide notes stay after the hunk', () => {
+    const keys = keysOf([commentOf({ id: 'w', hunk: hunkL.header }), onLine('n1', 2)])
+    expect(keys.at(-1)).toBe(noteKeyOf('w'))
+  })
+
+  test('rows total the unsplit hunk plus the note rows', () => {
+    const plain = contentRowsOf(blocksOf(file, [hunkL], [], null))
+    const split = contentRowsOf(blocksOf(file, [hunkL], [onLine('n1', 2), onLine('n2', 1)], null))
+    expect(split).toBe(plain + 2)
+  })
+
+  test('the compose box stays after the hunk', () => {
+    const anchor = { path: file.path, hunk: hunkL.header }
+    const keys = blocksOf(file, [hunkL], [onLine('n1', 2)], anchor).map(b => b.key)
+    expect(keys.at(-1)).toBe(commentBoxKeyOf(anchor))
   })
 })
 
@@ -172,6 +243,19 @@ describe('blocksOf', () => {
     const blocks = blocksOf(file, [hunkA], [], { path: file.path })
     const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
     expect(fileBox).toMatchObject({ rows: 2 })
+  })
+
+  test('the compose box grows with the rows its Input wraps to', () => {
+    const rowsAt = (composingRows: number) =>
+      blocksOf(file, [hunkA], [], { path: file.path }, { composingRows }).find(b =>
+        b.key.startsWith('comment-box:'),
+      )
+    expect(rowsAt(1)).toMatchObject({ rows: 2 })
+    expect(rowsAt(2)).toMatchObject({ rows: 3 })
+    expect(inputRowsOf('word', 60)).toBe(1)
+    expect(inputRowsOf('word '.repeat(20), 60)).toBe(2)
+    // the Input stops at two rows however long the text
+    expect(inputRowsOf('word '.repeat(400), 60)).toBe(2)
   })
 
   test('row total matches title + notes + toolbar + hunk lines', () => {

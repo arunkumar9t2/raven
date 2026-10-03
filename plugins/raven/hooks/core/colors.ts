@@ -22,6 +22,11 @@ export const COLORS = {
   accent: 'claude',
   /** Resting chrome: rail and bar cells with nothing to say, a chip at rest. */
   inactive: 'inactive',
+  /**
+   * The tint Claude Code puts behind the person's own messages in the transcript: a note card
+   * and the compose box are the person's message to Claude, so they sit on it.
+   */
+  userMessage: 'userMessageBackground',
   /** `progressBar`'s filled cells. */
   done: 'success',
 } as const

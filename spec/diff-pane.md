@@ -48,7 +48,11 @@ note is a card of as many rows as its text wraps to at the stream's width (1 to 
 [review](review.md#status)); a note chip draws idle on the heading or a hunk's toolbar row
 rather than as a row of its own, and opens a compose box in its place — two rows (Input plus
 the `⏎ add`/`[ ✕ cancel ]` hint row), three when a hunk's line picker draws above the Input — only
-while that anchor is being composed. A multi-row fixed block's rail runs its full height. A hunk itself takes as many rows as its body has lines, sliced into whatever range the
+while that anchor is being composed. A multi-row fixed block's rail runs its full height. A hunk with line notes is several `hunk`
+blocks, each a body-line `range` — the lines up to and including a commented line, that line's
+cards, then the rest — keyed `hunk:<i>:<header>` and `…~<from>`; rows stay exact because the
+segments' lines and the cards' rows sum to the hunk plus the notes, and `sliceHunk` renumbers each
+segment's gutter. See [review](review.md#status) for what draws on the commented line. A hunk itself takes as many rows as its body has lines, sliced into whatever range the
 current scroll position exposes, and a fixed row only draws once its first row falls inside that
 range. Element caps, focus, and the scroll contract these elements draw under are engine facts
 owned by [`mod-api.md`](./mod-api.md).

@@ -3,7 +3,7 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import { COLORS } from '../core/colors'
+import { COLORS, NOTE_STATE_COLORS } from '../core/colors'
 import { type Host, loggedAs } from '../core/host'
 import type { Capabilities, Kit, View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
@@ -38,6 +38,7 @@ import {
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
 import { clampTop, type Placed, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
+import { inputRowsOf } from './diff/note-layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { iconOf, statusMarkOf } from './icons'
@@ -55,6 +56,8 @@ type Model = {
   composing: Anchor | null
   /** The line picked in the composing anchor's Select; null is "whole hunk". */
   composingLine: CommentLine | null
+  /** The rows the composing Input's text wraps to; the compose block's height follows it. */
+  composingRows: number
   top: number
   /** Staged hunk headers per file path, cleared for a path when its hunks no longer carry them. */
   stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
@@ -137,6 +140,7 @@ export function createDiffView(
     hunks: new Map(),
     composing: null,
     composingLine: null,
+    composingRows: 1,
     top: 0,
     stagedHunks: new Map(),
     confirming: null,
@@ -167,6 +171,7 @@ export function createDiffView(
     isLoaded: boolean
     gonePaths: ReadonlySet<string>
     width: number
+    composingRows: number
     stream: Stream
   } | null = null
 
@@ -378,13 +383,13 @@ export function createDiffView(
   }
 
   function startComposing(anchor: Anchor) {
-    update({ composing: anchor, composingLine: null })
+    update({ composing: anchor, composingLine: null, composingRows: 1 })
     actions.focus(inputKeyOf(anchor))
   }
 
   /** Closes the compose box and hands the keyboard back to its anchor's comment button. */
   function stopComposing(anchor: Anchor) {
-    update({ composing: null, composingLine: null })
+    update({ composing: null, composingLine: null, composingRows: 1 })
     actions.focus(commentButtonKeyOf(anchor))
   }
 
@@ -467,7 +472,8 @@ export function createDiffView(
       cache.capabilities.canPick === capabilities.canPick &&
       cache.isLoaded === model.isLoaded &&
       cache.gonePaths === model.gonePaths &&
-      cache.width === width
+      cache.width === width &&
+      cache.composingRows === model.composingRows
     ) {
       return cache.stream
     }
@@ -481,6 +487,7 @@ export function createDiffView(
         readOnly,
         capabilities,
         width,
+        composingRows: model.composingRows,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -497,6 +504,7 @@ export function createDiffView(
       isLoaded: model.isLoaded,
       gonePaths: model.gonePaths,
       width,
+      composingRows: model.composingRows,
       stream,
     }
     return stream
@@ -586,9 +594,16 @@ export function createDiffView(
           inputKey: inputKeyOf(item.anchor),
           hunk: item.hunk,
           hasPicker: item.hasPicker,
+          inputRows: model.composingRows,
           line: model.composingLine,
           columns: contentWidth,
           onLineChange: line => update({ composingLine: line }),
+          onInput: text => {
+            // The compose box is `contentWidth` wide less its 2-cell bar; its block's rows follow
+            // the Input's soft wrap, re-laid out only when the row count changes.
+            const rows = inputRowsOf(text, Math.max(1, contentWidth - 2))
+            if (rows !== model.composingRows) update({ composingRows: rows })
+          },
           onSubmit: text => submitComment(item.anchor, text),
           onCancel: () => stopComposing(item.anchor),
         })
@@ -701,13 +716,25 @@ export function createDiffView(
 
     if (block.kind === 'hunk') {
       const rows = placed.to - placed.from
-      const rail = railOf(rows)
+      // A split hunk shows body lines [range.from, range.to); `placed` is relative to that.
+      const base = block.range?.from ?? 0
+      const total = block.range ? block.range.to - block.range.from : null
+      // The segment's last line carries a note: its rail cell is a ◆ in that note's colour.
+      const isMarked = block.mark !== undefined && total !== null && placed.to === total
+      const rail = isMarked ? (
+        <Box flexDirection="column">
+          {rows > 1 ? <Text color={railColor}>{railOf(rows - 1)}</Text> : null}
+          <Text color={NOTE_STATE_COLORS[block.mark as NonNullable<typeof block.mark>]}>◆ </Text>
+        </Box>
+      ) : (
+        <Text color={railColor}>{railOf(rows)}</Text>
+      )
       return (
         <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-          <Text color={railColor}>{rail}</Text>
+          {rail}
           <Box flexGrow={1} overflow="hidden">
             <Code
-              source={sliceHunk(block.hunk, placed.from, placed.to).text}
+              source={sliceHunk(block.hunk, base + placed.from, base + placed.to).text}
               format="diff"
               path={file.path}
               wrap="truncate-end"
