@@ -45,11 +45,16 @@ export function chipsFit(
   chips: readonly Pick<Chip, 'label' | 'icon'>[],
   room: number,
 ): 'words' | 'icons' {
-  if (chips.length === 0) return 'words'
-  const width =
+  return chipsWidthOf(chips) <= room ? 'words' : 'icons'
+}
+
+/** The cells a row of chips drawn as `[ icon label ]` takes, one gap between them; 0 for none. */
+export function chipsWidthOf(chips: readonly Pick<Chip, 'label' | 'icon'>[]): number {
+  if (chips.length === 0) return 0
+  return (
     chips.reduce((sum, chip) => sum + buttonWidthOf(wordsOf(chip.icon, chip.label)), 0) +
     (chips.length - 1)
-  return width <= room ? 'words' : 'icons'
+  )
 }
 
 /** `chip`'s drawn width in `mode`, `forceWords` always winning over the mode it's given. */

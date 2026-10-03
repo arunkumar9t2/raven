@@ -23,7 +23,15 @@ import type { Review } from '../review/review'
 import { chipRow, chipsFit } from '../ui/chips'
 import { row } from '../ui/row'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { type BodyItem, fileAtRow, fixedRowsOf, type Stream, streamOf } from './diff/blocks'
+import {
+  type BodyItem,
+  contentWidthOf,
+  fileAtRow,
+  fixedRowsOf,
+  indentedWidthOf,
+  type Stream,
+  streamOf,
+} from './diff/blocks'
 import {
   addressedRow,
   commentBox,
@@ -37,8 +45,8 @@ import {
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { header } from './diff/header'
-import { clampTop, type Placed, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
-import { inputRowsOf } from './diff/note-layout'
+import { clampTop, type Placed, rowsOf, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
+import { railOf } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { iconOf, statusMarkOf } from './icons'
@@ -56,8 +64,6 @@ type Model = {
   composing: Anchor | null
   /** The line picked in the composing anchor's Select; null is "whole hunk". */
   composingLine: CommentLine | null
-  /** The rows the composing Input's text wraps to; the compose block's height follows it. */
-  composingRows: number
   top: number
   /** Staged hunk headers per file path, cleared for a path when its hunks no longer carry them. */
   stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
@@ -140,7 +146,6 @@ export function createDiffView(
     hunks: new Map(),
     composing: null,
     composingLine: null,
-    composingRows: 1,
     top: 0,
     stagedHunks: new Map(),
     confirming: null,
@@ -171,7 +176,6 @@ export function createDiffView(
     isLoaded: boolean
     gonePaths: ReadonlySet<string>
     width: number
-    composingRows: number
     stream: Stream
   } | null = null
 
@@ -383,13 +387,13 @@ export function createDiffView(
   }
 
   function startComposing(anchor: Anchor) {
-    update({ composing: anchor, composingLine: null, composingRows: 1 })
+    update({ composing: anchor, composingLine: null })
     actions.focus(inputKeyOf(anchor))
   }
 
   /** Closes the compose box and hands the keyboard back to its anchor's comment button. */
   function stopComposing(anchor: Anchor) {
-    update({ composing: null, composingLine: null, composingRows: 1 })
+    update({ composing: null, composingLine: null })
     actions.focus(commentButtonKeyOf(anchor))
   }
 
@@ -472,8 +476,7 @@ export function createDiffView(
       cache.capabilities.canPick === capabilities.canPick &&
       cache.isLoaded === model.isLoaded &&
       cache.gonePaths === model.gonePaths &&
-      cache.width === width &&
-      cache.composingRows === model.composingRows
+      cache.width === width
     ) {
       return cache.stream
     }
@@ -487,7 +490,6 @@ export function createDiffView(
         readOnly,
         capabilities,
         width,
-        composingRows: model.composingRows,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -504,10 +506,22 @@ export function createDiffView(
       isLoaded: model.isLoaded,
       gonePaths: model.gonePaths,
       width,
-      composingRows: model.composingRows,
       stream,
     }
     return stream
+  }
+
+  /** A note's card, indented one cell after the rail; its lines were wrapped when it was sized. */
+  function noteRowOf(kit: Kit, item: Extract<BodyItem, { kind: 'note' }>): RenderElement {
+    const { Box, Text } = kit.ui
+    return (
+      <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
+        <Text> </Text>
+        <Box flexGrow={1} overflow="hidden">
+          {note(kit, item.comment, item.lines, now(), id => review.remove(id), review.resend)}
+        </Box>
+      </Box>
+    )
   }
 
   /**
@@ -573,37 +587,16 @@ export function createDiffView(
       case 'addressed':
         return addressedRow(kit, item.anchor, item.count)
       case 'note':
-        return (
-          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-            <Text> </Text>
-            <Box flexGrow={1} overflow="hidden">
-              {note(
-                kit,
-                item.comment,
-                now(),
-                id => review.remove(id),
-                review.resend,
-                Math.max(1, contentWidth - 1),
-              )}
-            </Box>
-          </Box>
-        )
+        return noteRowOf(kit, item)
       case 'comment-box':
         return commentBox(kit, {
           anchor: item.anchor,
           inputKey: inputKeyOf(item.anchor),
           hunk: item.hunk,
           hasPicker: item.hasPicker,
-          inputRows: model.composingRows,
           line: model.composingLine,
           columns: contentWidth,
           onLineChange: line => update({ composingLine: line }),
-          onInput: text => {
-            // The compose box is `contentWidth` wide less its 2-cell bar; its block's rows follow
-            // the Input's soft wrap, re-laid out only when the row count changes.
-            const rows = inputRowsOf(text, Math.max(1, contentWidth - 2))
-            if (rows !== model.composingRows) update({ composingRows: rows })
-          },
           onSubmit: text => submitComment(item.anchor, text),
           onCancel: () => stopComposing(item.anchor),
         })
@@ -621,7 +614,7 @@ export function createDiffView(
                 confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
                 // The row's own indent before the toolbar's `Box` is the one-column `<Text> </Text>`
                 // just above, not two — the toolbar's room matches what is actually drawn.
-                columns: Math.max(1, contentWidth - 1),
+                columns: indentedWidthOf(contentWidth),
                 onStartNote: startComposing,
                 onStage: () => void applyHunk(file, item.hunk, 'stage'),
                 onRevert: () => pressRevert(file, item.hunk, item.anchor),
@@ -638,11 +631,10 @@ export function createDiffView(
    * instead of a status colour. Only the item kinds `orphanBlocksOf` ever emits reach here.
    */
   function orphanRowOf(kit: Kit, placed: Placed<BodyItem>): RenderElement {
-    const { Box, Text } = kit.ui
+    const { Box } = kit.ui
     const { block } = placed
     if (block.kind !== 'fixed') return <Box key={block.key} />
     const { item } = block
-    const contentWidth = Math.max(1, kit.columns - 2)
 
     let content: RenderElement
     switch (item.kind) {
@@ -656,21 +648,7 @@ export function createDiffView(
         content = addressedRow(kit, item.anchor, item.count)
         break
       case 'note':
-        content = (
-          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-            <Text> </Text>
-            <Box flexGrow={1} overflow="hidden">
-              {note(
-                kit,
-                item.comment,
-                now(),
-                id => review.remove(id),
-                review.resend,
-                Math.max(1, contentWidth - 1),
-              )}
-            </Box>
-          </Box>
-        )
+        content = noteRowOf(kit, item)
         break
       default:
         content = <Box />
@@ -678,7 +656,7 @@ export function createDiffView(
 
     return (
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        <Text color={COLORS.inactive}>{railOf(block.rows)}</Text>
+        {railOf(kit, block.rows, COLORS.inactive)}
         <Box flexGrow={1} overflow="hidden">
           {content}
         </Box>
@@ -696,45 +674,31 @@ export function createDiffView(
    * from across the room. The trailing orphans group (`orphans#` prefixed keys) has no file at
    * all, so it is dispatched to `orphanRowOf` before the file lookup below.
    */
-  /** The 2-column `▌ ` rail, one per row, down a block of `rows` rows. */
-  const railOf = (rows: number): string => `${'▌ \n'.repeat(Math.max(0, rows - 1))}▌ `
-
   function placedRowOf(
     kit: Kit,
     placed: Placed<BodyItem>,
     filesByPath: ReadonlyMap<string, ChangedFile>,
   ): RenderElement {
-    const { Box, Code, Text } = kit.ui
+    const { Box, Code } = kit.ui
     const { block } = placed
     if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
     const path = block.key.slice(0, block.key.indexOf('#'))
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
 
-    const contentWidth = Math.max(1, kit.columns - 2)
+    const contentWidth = contentWidthOf(kit.columns)
     const railColor = model.edited.has(file.path) ? COLORS.accent : statusMarkOf(file.status).color
 
     if (block.kind === 'hunk') {
-      const rows = placed.to - placed.from
-      // A split hunk shows body lines [range.from, range.to); `placed` is relative to that.
-      const base = block.range?.from ?? 0
-      const total = block.range ? block.range.to - block.range.from : null
-      // The segment's last line carries a note: its rail cell is a ◆ in that note's colour.
-      const isMarked = block.mark !== undefined && total !== null && placed.to === total
-      const rail = isMarked ? (
-        <Box flexDirection="column">
-          {rows > 1 ? <Text color={railColor}>{railOf(rows - 1)}</Text> : null}
-          <Text color={NOTE_STATE_COLORS[block.mark as NonNullable<typeof block.mark>]}>◆ </Text>
-        </Box>
-      ) : (
-        <Text color={railColor}>{railOf(rows)}</Text>
-      )
+      // A segment ending at a commented line draws its ◆ only once that last row is in view.
+      const isMarked = block.mark !== undefined && placed.to === rowsOf(block)
+      const mark = isMarked && block.mark ? NOTE_STATE_COLORS[block.mark] : undefined
       return (
         <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-          {rail}
+          {railOf(kit, placed.to - placed.from, railColor, mark)}
           <Box flexGrow={1} overflow="hidden">
             <Code
-              source={sliceHunk(block.hunk, base + placed.from, base + placed.to).text}
+              source={sliceHunk(block.hunk, placed.from, placed.to).text}
               format="diff"
               path={file.path}
               wrap="truncate-end"
@@ -751,7 +715,7 @@ export function createDiffView(
 
     return (
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        <Text color={railColor}>{railOf(block.rows)}</Text>
+        {railOf(kit, block.rows, railColor)}
         <Box flexGrow={1} overflow="hidden">
           {bodyRowOf(kit, item, file, contentWidth)}
         </Box>
@@ -768,7 +732,7 @@ export function createDiffView(
     if (!isReadOnly && !repository) return <Text dimColor>Not in a git repository.</Text>
 
     const files = filesOf()
-    const stream = streamFor(kit.capabilities, Math.max(1, kit.columns - 2))
+    const stream = streamFor(kit.capabilities, contentWidthOf(kit.columns))
     // A comment whose file left the diff still has to draw somewhere (R32 part 2's orphans
     // group): the empty-state text only wins when the stream is truly empty, not just the file
     // list.

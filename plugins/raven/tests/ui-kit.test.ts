@@ -2,7 +2,6 @@ import type { On, RenderElement } from 'claude-code'
 import { describe, type Engine, expect, test, tier } from 'claude-code/testing'
 import { COLORS } from '../hooks/core/colors'
 import { FULL_CAPABILITIES, type Kit, type Ui } from '../hooks/core/view'
-import { accentBar } from '../hooks/ui/accent-bar'
 import { badge } from '../hooks/ui/badge'
 import { chipRow } from '../hooks/ui/chips'
 import { diffStat } from '../hooks/ui/diff-stat'
@@ -55,7 +54,6 @@ function world(on: On) {
           key: 'kit-row',
           hover: { backgroundColor: COLORS.inactive },
         }),
-        accentBar(kit, COLORS.suggestion),
         chipRow(kit, [{ key: 'note', label: 'note', icon: '✎', onPress: () => {} }], 'words'),
       ],
     }

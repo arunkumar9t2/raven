@@ -43,6 +43,35 @@ export function bodyLinesOf(hunk: Hunk): readonly string[] {
   return lines
 }
 
+/** One diff line of a hunk body: its row, kind, and its numbers on each side (the cursor, for the side it is not on). */
+export type HunkLine = {
+  index: number
+  kind: 'add' | 'del' | 'context'
+  oldLine: number
+  newLine: number
+}
+
+/**
+ * Walks a hunk's body once, yielding every diff line (not the `\ No newline` marker, which advances
+ * neither counter) with the real line numbers it has on each side. `[]` for a malformed header.
+ * The one counter every line lookup and renumbering shares.
+ */
+export function hunkLinesOf(hunk: Hunk): HunkLine[] {
+  const parsed = parseHeader(hunk.header)
+  if (!parsed) return []
+  let oldLine = parsed.oldStart
+  let newLine = parsed.newStart
+  const lines: HunkLine[] = []
+  for (const [index, text] of bodyLinesOf(hunk).entries()) {
+    const kind = lineKindOf(text)
+    if (kind === null) continue
+    lines.push({ index, kind, oldLine, newLine })
+    if (kind !== 'add') oldLine += 1
+    if (kind !== 'del') newLine += 1
+  }
+  return lines
+}
+
 /** Builds a hunk from its header line and body lines. */
 export function hunkFrom(header: string, body: readonly string[]): Hunk {
   return { header, text: `${[header, ...body].join('\n')}\n` }

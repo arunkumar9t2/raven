@@ -15,6 +15,7 @@ import { row } from '../ui/row'
 import { table } from '../ui/table'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
+import { noteLinesOf } from './diff/note-layout'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName } from './icons'
@@ -268,7 +269,14 @@ export function createDocView(
           {chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)}
           {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
           {visible.map(comment =>
-            note(kit, comment, now(), id => review.remove(id), review.resend, kit.columns),
+            note(
+              kit,
+              comment,
+              noteLinesOf(comment, kit.columns),
+              now(),
+              id => review.remove(id),
+              review.resend,
+            ),
           )}
           {isComposing
             ? commentBox(kit, {
@@ -325,7 +333,14 @@ export function createDocView(
                 <Box key={`outdated:${key}`} flexDirection="column">
                   {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
                   {visible.map(comment =>
-                    note(kit, comment, now(), id => review.remove(id), review.resend, kit.columns),
+                    note(
+                      kit,
+                      comment,
+                      noteLinesOf(comment, kit.columns),
+                      now(),
+                      id => review.remove(id),
+                      review.resend,
+                    ),
                   )}
                 </Box>
               )

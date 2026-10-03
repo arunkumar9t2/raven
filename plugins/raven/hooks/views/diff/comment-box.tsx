@@ -6,8 +6,9 @@ import type { RenderElement } from 'claude-code'
 import { COLORS, NOTE_STATE_COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import { type Hunk, parseHeader } from '../../git/hunks'
-import { type Comment, type CommentLine, changedLinesOf } from '../../review/comments'
+import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../../review/comments'
 import { ageOf } from '../../ui/age'
+import { card } from '../../ui/card'
 import { type Chip, chipRow, chipsFit } from '../../ui/chips'
 import { meta } from '../../ui/meta'
 import { row } from '../../ui/row'
@@ -17,19 +18,17 @@ import {
   cancelKeyOf,
   commentBoxKeyOf,
   commentButtonKeyOf,
-  dropKeyOf,
   hunkHeaderKeyOf,
   noteKeyOf,
-  resendKeyOf,
   revertKeyOf,
   selectKeyOf,
   stageKeyOf,
 } from './anchor'
-import { barOf, composeRowsOf, noteLinesOf, STATUS_WORDS } from './note-layout'
+import { composeRowsOf, noteChipsOf, STATUS_WORDS } from './note-layout'
 
 const WHOLE_HUNK = 'whole'
 
-const lineValueOf = (line: CommentLine) => `${line.side}:${line.number}`
+const lineValueOf = lineKeyOf
 
 function lineOfValue(value: string, lines: readonly CommentLine[]): CommentLine | null {
   return lines.find(line => lineValueOf(line) === value) ?? null
@@ -50,14 +49,10 @@ export type CommentBoxProps = {
    * size this block's rows, so the row count and the drawing never disagree.
    */
   hasPicker: boolean
-  /** The rows the Input's text wraps to (the bar spans them); 1 when omitted. */
-  inputRows?: number
   /** The line chosen in the picker; null means "whole hunk". */
   line: CommentLine | null
   columns: number
   onLineChange: (line: CommentLine | null) => void
-  /** Every change of the Input's text; the diff pane sizes the box's rows from it. */
-  onInput?: (text: string) => void
   onSubmit: (text: string) => void
   onCancel: () => void
 }
@@ -106,18 +101,11 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     </Box>
   )
 
-  const rows = composeRowsOf(props.hasPicker, props.inputRows)
-  return (
-    <Box
-      flexDirection="row"
-      flexGrow={1}
-      gap={1}
-      overflow="hidden"
-      flexWrap="nowrap"
-      backgroundColor={COLORS.userMessage}
-    >
-      <Text color={COLORS.suggestion}>{barOf(rows)}</Text>
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
+  return card(kit, {
+    color: COLORS.suggestion,
+    rows: composeRowsOf(props.hasPicker),
+    children: (
+      <Box flexDirection="column">
         {props.hasPicker ? (
           <Select
             key={selectKeyOf(anchor)}
@@ -131,86 +119,53 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
           autoFocus
           placeholder="Your comment for Claude…"
           submitLabel="add"
-          onInput={props.onInput}
           onSubmit={text => props.onSubmit(text)}
         />
         {hint}
       </Box>
-    </Box>
-  )
+    ),
+  })
 }
 
 /**
  * A note is a card: a heavy `┃` in its status colour down every row, row 1 the comment's first
- * line with — right-aligned — the status word, a dim `L<line> · <age>` and the chips; the rest of
- * the text follows on rows 2..n, wrapped to `width` (the card's whole room), at most
- * `NOTE_MAX_ROWS`. `noteLinesOf` is the one wrap, shared with `blocksOf`'s row count. `now` (ms)
- * comes from the view's own clock, never `Date.now()` here.
+ * line with — right-aligned — the status word, a dim `L<line> · <age>` and the chips; `lines`
+ * (from `noteLinesOf`, wrapped once by whoever sized the card) fill rows 1..n. `now` (ms) comes
+ * from the view's own clock, never `Date.now()` here.
  */
 export function note(
   kit: Kit,
   comment: Comment,
+  lines: readonly string[],
   now: number,
   onRemove: (id: string) => void,
   onResend: () => void,
-  width: number,
 ): RenderElement {
   const { Box, Text } = kit.ui
   const lineLabel = comment.line ? `L${comment.line.number}` : ''
-  const age = ageOf(comment.createdAt, now)
   const color = NOTE_STATE_COLORS[comment.status]
-
-  const chips: Chip[] = []
-  if (comment.status === 'open') {
-    chips.push({
-      key: resendKeyOf(comment.id),
-      icon: '',
-      label: 'resend',
-      isDim: true,
-      onPress: onResend,
-    })
-  }
-  chips.push({
-    key: dropKeyOf(comment.id),
-    icon: '✕',
-    label: '',
-    isDim: true,
-    onPress: () => onRemove(comment.id),
-  })
-
-  const lines = noteLinesOf(comment, width)
   const scope = noteKeyOf(comment.id)
   const right = (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
       <Text color={color}>{STATUS_WORDS[comment.status]}</Text>
-      {meta(kit, [lineLabel, age])}
-      {chipRow(kit, chips, 'words', scope)}
+      {meta(kit, [lineLabel, ageOf(comment.createdAt, now)])}
+      {chipRow(kit, noteChipsOf(comment, onRemove, onResend), 'words', scope)}
     </Box>
   )
-  return (
-    <Box
-      flexDirection="row"
-      flexGrow={1}
-      gap={1}
-      overflow="hidden"
-      flexWrap="nowrap"
-      backgroundColor={COLORS.userMessage}
-    >
-      <Text color={color}>{barOf(lines.length)}</Text>
-      <Box flexDirection="column" flexGrow={1} overflow="hidden">
-        {row(kit, {
-          left: <Text wrap="truncate-end">{lines[0] ?? ''}</Text>,
-          right,
-          key: scope,
-        })}
+  return card(kit, {
+    color,
+    rows: lines.length,
+    children: (
+      <Box flexDirection="column">
+        {row(kit, { left: <Text wrap="truncate-end">{lines[0] ?? ''}</Text>, right, key: scope })}
         {lines.slice(1).map((line, index) => (
           <Box key={`${scope}:${index}`}>
             <Text wrap="truncate-end">{line}</Text>
           </Box>
         ))}
       </Box>
-    </Box>
-  )
+    ),
+  })
 }
 
 /**

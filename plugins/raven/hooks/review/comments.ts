@@ -1,5 +1,5 @@
 import { isRecord } from '../core/is-record'
-import { bodyLinesOf, lineKindOf, parseHeader } from '../git/hunks'
+import { bodyLinesOf, hunkLinesOf } from '../git/hunks'
 
 /** A single diff line a comment anchors to, inside its `hunk`. */
 export type CommentLine = { number: number; side: 'old' | 'new'; text: string }
@@ -166,54 +166,30 @@ export function reviewTextOf(comments: Comments): string | undefined {
 
 /** The changed lines of a hunk, each with the real line number it has on its side of the diff. */
 export function changedLinesOf(hunk: { header: string; text: string }): CommentLine[] {
-  const parsed = parseHeader(hunk.header)
-  if (!parsed) return []
-  let oldLine = parsed.oldStart
-  let newLine = parsed.newStart
-
-  const result: CommentLine[] = []
-  for (const line of bodyLinesOf(hunk)) {
-    const kind = lineKindOf(line)
-    // A line starting with '\' is the '\ No newline at end of file' marker for the line above it
-    // and advances neither counter.
-    if (kind === null) continue
-    if (kind === 'add') {
-      result.push({ number: newLine, side: 'new', text: line.slice(1) })
-      newLine += 1
-    } else if (kind === 'del') {
-      result.push({ number: oldLine, side: 'old', text: line.slice(1) })
-      oldLine += 1
-    } else {
-      oldLine += 1
-      newLine += 1
-    }
-  }
-  return result
+  const body = bodyLinesOf(hunk)
+  return hunkLinesOf(hunk).flatMap(({ index, kind, oldLine, newLine }): CommentLine[] => {
+    const text = (body[index] ?? '').slice(1)
+    if (kind === 'add') return [{ number: newLine, side: 'new', text }]
+    if (kind === 'del') return [{ number: oldLine, side: 'old', text }]
+    return []
+  })
 }
 
+/** A line's identity within a hunk: its side and number. */
+export const lineKeyOf = (line: Pick<CommentLine, 'number' | 'side'>): string =>
+  `${line.side}:${line.number}`
+
 /**
- * The body-line index of `line` in `hunk` (the row it draws on within the hunk), found by side and
- * number the way `changedLinesOf` counts; null when the hunk has no such line.
+ * The body row each line of `hunk` draws on (a context line on both its sides), by `lineKeyOf` — one walk per hunk, so many
+ * notes cost one lookup each. A line the hunk lacks is absent.
  */
-export function lineIndexOf(
-  hunk: { header: string; text: string },
-  line: Pick<CommentLine, 'number' | 'side'>,
-): number | null {
-  const parsed = parseHeader(hunk.header)
-  if (!parsed) return null
-  let oldLine = parsed.oldStart
-  let newLine = parsed.newStart
-  const body = bodyLinesOf(hunk)
-  for (const [index, text] of body.entries()) {
-    const kind = lineKindOf(text)
-    if (kind === null) continue
-    const isOld = kind !== 'add' && line.side === 'old' && line.number === oldLine
-    const isNew = kind !== 'del' && line.side === 'new' && line.number === newLine
-    if (isOld || isNew) return index
-    if (kind !== 'add') oldLine += 1
-    if (kind !== 'del') newLine += 1
+export function lineRowsOf(hunk: { header: string; text: string }): ReadonlyMap<string, number> {
+  const rows = new Map<string, number>()
+  for (const { index, kind, oldLine, newLine } of hunkLinesOf(hunk)) {
+    if (kind !== 'add') rows.set(lineKeyOf({ side: 'old', number: oldLine }), index)
+    if (kind !== 'del') rows.set(lineKeyOf({ side: 'new', number: newLine }), index)
   }
-  return null
+  return rows
 }
 
 /** One file's comments split against its current hunks: file-level, live per-hunk, and outdated. */

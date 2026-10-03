@@ -2,7 +2,13 @@ import { type Capabilities, FULL_CAPABILITIES } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import { bodyLinesOf, type Hunk } from '../../git/hunks'
 import type { Comment, Comments } from '../../review/comments'
-import { groupByAnchor, lineIndexOf, splitAddressed } from '../../review/comments'
+import {
+  type CommentStatus,
+  groupByAnchor,
+  lineKeyOf,
+  lineRowsOf,
+  splitAddressed,
+} from '../../review/comments'
 import {
   type Anchor,
   addressedKeyOf,
@@ -12,7 +18,7 @@ import {
   sameAnchor,
 } from './anchor'
 import type { Block } from './layout'
-import { rowsOf } from './layout'
+import { rowsOf, sliceHunk } from './layout'
 import { composeRowsOf, noteLinesOf } from './note-layout'
 
 export const TITLE_KEY = 'title'
@@ -43,15 +49,22 @@ export function fixedRowsOf(fileCount: number, maxListRows: number): number {
   return HEADER_ROWS + Math.min(fileCount, maxListRows) + RULE_ROWS
 }
 
-/** The columns a note sits in when `options.width` is not given. */
-const DEFAULT_WIDTH = 100
-/** The one-cell indent a note draws after the file's rail. */
+/** The 2-column left rail (`▌ `) every row of a file's section draws behind. */
+const RAIL_CELLS = 2
+/** The one-cell indent a note and a hunk toolbar draw after the rail. */
 const NOTE_INDENT = 1
+
+/** A row's room beside the file rail, for a pane `columns` wide. */
+export const contentWidthOf = (columns: number): number => Math.max(1, columns - RAIL_CELLS)
+
+/** A note card's (or hunk toolbar's) room: the content width less the indent after the rail. */
+export const indentedWidthOf = (contentWidth: number): number =>
+  Math.max(1, contentWidth - NOTE_INDENT)
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
   | { kind: 'title'; file: ChangedFile; canNote: boolean }
-  | { kind: 'note'; comment: Comment }
+  | { kind: 'note'; comment: Comment; lines: string[] }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean }
@@ -70,11 +83,12 @@ type InlineNotes = { at: number; notes: Comment[] }
  */
 function splitInline(hunk: Hunk, notes: Comments): { inline: InlineNotes[]; rest: Comments } {
   const { visible } = splitAddressed(notes)
+  const rows = lineRowsOf(hunk)
   const byRow = new Map<number, Comment[]>()
   const placed = new Set<Comment>()
   for (const comment of visible) {
-    const at = comment.line ? lineIndexOf(hunk, comment.line) : null
-    if (at === null) continue
+    const at = comment.line ? rows.get(lineKeyOf(comment.line)) : undefined
+    if (at === undefined) continue
     placed.add(comment)
     byRow.set(at, [...(byRow.get(at) ?? []), comment])
   }
@@ -99,23 +113,22 @@ function hunkSegmentsOf(
   const key = hunkKeyOf(index, hunk)
   if (inline.length === 0) return [{ kind: 'hunk', key, hunk }]
 
+  // Each segment is a plain hunk block over a pre-sliced hunk (gutter renumbered by `sliceHunk`).
+  const segmentOf = (from: number, to: number, mark?: CommentStatus): Block<BodyItem> => ({
+    kind: 'hunk',
+    key: from === 0 ? key : `${key}~${from}`,
+    hunk: sliceHunk(hunk, from, to),
+    mark,
+  })
   const total = bodyLinesOf(hunk).length
   const blocks: Block<BodyItem>[] = []
   let from = 0
   for (const { at, notes } of inline) {
-    const to = at + 1
-    blocks.push({
-      kind: 'hunk',
-      key: from === 0 ? key : `${key}~${from}`,
-      hunk,
-      range: { from, to },
-      mark: notes[0]?.status,
-    })
+    blocks.push(segmentOf(from, at + 1, notes[0]?.status))
     blocks.push(...notesBlocksOf(notes, { path: notes[0]?.path ?? '' }, width))
-    from = to
+    from = at + 1
   }
-  if (from < total)
-    blocks.push({ kind: 'hunk', key: `${key}~${from}`, hunk, range: { from, to: total } })
+  if (from < total) blocks.push(segmentOf(from, total))
   return blocks
 }
 
@@ -136,14 +149,15 @@ function notesBlocksOf(notes: Comments, anchor: Anchor, width: number): Block<Bo
     })
   }
   blocks.push(
-    ...visible.map(
-      (comment): Block<BodyItem> => ({
+    ...visible.map((comment): Block<BodyItem> => {
+      const lines = noteLinesOf(comment, width)
+      return {
         kind: 'fixed',
         key: noteKeyOf(comment.id),
-        rows: noteLinesOf(comment, width).length,
-        item: { kind: 'note', comment },
-      }),
-    ),
+        rows: lines.length,
+        item: { kind: 'note', comment, lines },
+      }
+    }),
   )
   return blocks
 }
@@ -161,14 +175,13 @@ function anchorBlocksOf(
   composing: Anchor | null,
   capabilities: Capabilities,
   width: number,
-  inputRows: number,
   hunk?: Hunk,
 ): Block<BodyItem>[] {
   const notesBlocks = notesBlocksOf(notes, anchor, width)
   if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
 
   const hasPicker = hunk !== undefined && capabilities.canPick
-  const rows = composeRowsOf(hasPicker, inputRows)
+  const rows = composeRowsOf(hasPicker)
   return [
     ...notesBlocks,
     {
@@ -244,19 +257,13 @@ export type BlocksOptions = {
   /** The surface's capabilities (`canType`, `canPick`, `canShowImage`); every one is on when omitted. */
   capabilities?: Capabilities
   /**
-   * The content width — the pane's columns less the file rail — a note wraps to; its block's
-   * `rows` is its wrapped line count at this width. 100 when omitted.
+   * The content width (`contentWidthOf`) a note wraps to; its block's `rows` is its wrapped line
+   * count at this width.
    */
-  width?: number
-  /** The rows the composing Input has soft-wrapped to (`inputRowsOf`); 1 when omitted. */
-  composingRows?: number
+  width: number
   /** The status for a file whose hunks are undefined; `Loading…` when omitted. */
   unreadText?: string
 }
-
-/** A note card's whole room: the content width less the indent the card draws after the rail. */
-const noteWidthOf = (options: BlocksOptions): number =>
-  Math.max(1, (options.width ?? DEFAULT_WIDTH) - NOTE_INDENT)
 
 /**
  * The selected file's body as fixed-height and hunk blocks, top to bottom: the title row (carrying
@@ -271,12 +278,11 @@ export function blocksOf(
   hunks: readonly Hunk[] | undefined,
   comments: Comments,
   composing: Anchor | null,
-  options: BlocksOptions = {},
+  options: BlocksOptions,
 ): Block<BodyItem>[] {
   const isReadOnly = options.readOnly ?? false
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
-  const width = noteWidthOf(options)
-  const inputRows = options.composingRows ?? 1
+  const width = indentedWidthOf(options.width)
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
@@ -289,9 +295,7 @@ export function blocksOf(
       rows: 1,
       item: { kind: 'title', file, canNote: canNoteFile },
     },
-    ...(isReadOnly
-      ? []
-      : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width, inputRows)),
+    ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width)),
   ]
 
   if (hunks === undefined || hunks.length === 0) {
@@ -325,7 +329,7 @@ export function blocksOf(
     }
     const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
     blocks.push(...hunkSegmentsOf(index, hunk, inline, width))
-    blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, inputRows, hunk))
+    blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, hunk))
   })
 
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated, width))
@@ -349,7 +353,7 @@ export function streamOf(
   hunksFor: (file: ChangedFile) => readonly Hunk[] | undefined,
   comments: Comments,
   composing: Anchor | null,
-  options: BlocksOptions = {},
+  options: BlocksOptions,
   /** Which comment paths are confirmed gone, for the trailing orphans group's "file gone" label. */
   gonePaths: ReadonlySet<string> = EMPTY_GONE,
 ): Stream {
@@ -372,7 +376,7 @@ export function streamOf(
   // belongs here when its path matches a current file's path or (a rename) oldPath.
   const isOwned = (comment: Comment) => files.some(file => belongsTo(comment, file))
   const orphans = comments.filter(comment => comment.section === undefined && !isOwned(comment))
-  for (const block of orphanBlocksOf(orphans, gonePaths, noteWidthOf(options))) {
+  for (const block of orphanBlocksOf(orphans, gonePaths, indentedWidthOf(options.width))) {
     blocks.push({ ...block, key: `orphans#${block.key}` })
     row += rowsOf(block)
   }
