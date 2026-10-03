@@ -12,6 +12,7 @@ import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
 import { chipRow, chipsFit } from '../ui/chips'
 import { row } from '../ui/row'
+import { table } from '../ui/table'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
 import { docLinksOf, resolveDocLink } from './doc-links'
@@ -164,6 +165,17 @@ export function createDocView(
     const { Code, Markdown } = kit.ui
     return chunks.flatMap((chunk, i) =>
       chunk.blocks.map((block, j) => {
+        // R36: the engine sizes a table to the terminal, not the pane, so Raven draws it, fitted
+        // to the pane's width (the doc body adds no indent of its own).
+        if (block.kind === 'table') {
+          return table(kit, {
+            key: `${keyPrefix}table:${i}:${j}`,
+            header: block.header,
+            align: block.align,
+            rows: block.rows,
+            width: kit.columns,
+          })
+        }
         if (block.kind === 'code') {
           // R2: an empty fence has nothing to draw; the engine may refuse the whole drawing
           // if `Code` gets an empty source.

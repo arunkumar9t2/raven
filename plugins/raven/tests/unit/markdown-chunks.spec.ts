@@ -82,3 +82,62 @@ describe('docBlocksOf', () => {
     ])
   })
 })
+
+describe('docBlocksOf tables', () => {
+  const table = (blocks: ReturnType<typeof docBlocksOf>) => blocks.filter(b => b.kind === 'table')
+
+  test('a GFM table is its own block, prose before and after kept', () => {
+    const blocks = docBlocksOf('Intro\n\n| A | B |\n| --- | :-: |\n| 1 | 2 |\n| 3 | 4 |\n\nOutro')
+    expect(blocks).toEqual([
+      { kind: 'markdown', text: 'Intro' },
+      {
+        kind: 'table',
+        header: ['A', 'B'],
+        align: ['left', 'center'],
+        rows: [
+          ['1', '2'],
+          ['3', '4'],
+        ],
+      },
+      { kind: 'markdown', text: 'Outro' },
+    ])
+  })
+
+  test('leading and trailing pipes are optional; alignment reads from the delimiter row', () => {
+    const [block] = table(docBlocksOf('A | B | C\n:-- | :-: | --:\n1 | 2 | 3'))
+    expect(block).toEqual({
+      kind: 'table',
+      header: ['A', 'B', 'C'],
+      align: ['left', 'center', 'right'],
+      rows: [['1', '2', '3']],
+    })
+  })
+
+  test('an escaped pipe stays inside its cell', () => {
+    const [block] = table(docBlocksOf('| A | B |\n|---|---|\n| a \\| b | c |'))
+    expect(block).toMatchObject({ rows: [['a | b', 'c']] })
+  })
+
+  test('ragged rows are padded and truncated to the header width', () => {
+    const [block] = table(docBlocksOf('| A | B |\n|---|---|\n| only |\n| 1 | 2 | 3 |'))
+    expect(block).toMatchObject({
+      rows: [
+        ['only', ''],
+        ['1', '2'],
+      ],
+    })
+  })
+
+  test('a table inside a code fence is not detected', () => {
+    const blocks = docBlocksOf('```md\n| A | B |\n|---|---|\n| 1 | 2 |\n```')
+    expect(table(blocks)).toHaveLength(0)
+    expect(blocks).toEqual([
+      { kind: 'code', text: '| A | B |\n|---|---|\n| 1 | 2 |', language: 'md' },
+    ])
+  })
+
+  test('a pipe line without a delimiter row is prose', () => {
+    const blocks = docBlocksOf('a | b\njust text')
+    expect(blocks).toEqual([{ kind: 'markdown', text: 'a | b\njust text' }])
+  })
+})

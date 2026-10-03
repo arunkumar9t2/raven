@@ -1,4 +1,5 @@
 import { ELEMENT_TEXT_LIMIT } from '../core/view'
+import type { Align } from '../ui/table-layout'
 
 const FENCE = /^\s*(`{3,}|~{3,})/
 
@@ -66,6 +67,82 @@ export function markdownChunksOf(markdown: string, max = ELEMENT_TEXT_LIMIT): st
 export type DocBlock =
   | { kind: 'markdown'; text: string }
   | { kind: 'code'; text: string; language?: string }
+  | { kind: 'table'; header: string[]; align: Align[]; rows: string[][] }
+
+/** Splits a table row on its unescaped pipes (outer pipes optional); `\|` is a literal pipe. */
+function rowCellsOf(line: string): string[] {
+  let text = line.trim()
+  if (text.startsWith('|')) text = text.slice(1)
+  if (text.endsWith('|') && !text.endsWith('\\|')) text = text.slice(0, -1)
+  const cells: string[] = []
+  let cell = ''
+  for (let i = 0; i < text.length; i++) {
+    const char = text[i] as string
+    if (char === '\\' && text[i + 1] === '|') {
+      cell += '|'
+      i += 1
+    } else if (char === '|') {
+      cells.push(cell.trim())
+      cell = ''
+    } else {
+      cell += char
+    }
+  }
+  cells.push(cell.trim())
+  return cells
+}
+
+const hasPipe = (line: string) => /(^|[^\\])\|/.test(line)
+
+function alignsOf(line: string, count: number): Align[] | null {
+  if (!hasPipe(line) && !/^\s*:?-+:?\s*$/.test(line)) return null
+  const cells = rowCellsOf(line)
+  if (cells.length !== count || !cells.every(cell => /^:?-+:?$/.test(cell))) return null
+  return cells.map(cell =>
+    cell.startsWith(':')
+      ? cell.endsWith(':')
+        ? 'center'
+        : 'left'
+      : cell.endsWith(':')
+        ? 'right'
+        : 'left',
+  )
+}
+
+/** Prose lines as `markdown` blocks with each GFM table (header, delimiter row, body) split out. */
+function proseBlocksOf(lines: readonly string[]): DocBlock[] {
+  const blocks: DocBlock[] = []
+  let prose: string[] = []
+  const flush = () => {
+    const text = prose.join('\n').trim()
+    if (text !== '') blocks.push({ kind: 'markdown', text })
+    prose = []
+  }
+  for (let i = 0; i < lines.length; i++) {
+    const line = lines[i] as string
+    const delimiter = hasPipe(line) ? lines[i + 1] : undefined
+    const header = delimiter === undefined ? null : rowCellsOf(line)
+    const align = header && delimiter !== undefined ? alignsOf(delimiter, header.length) : null
+    if (!header || !align) {
+      prose.push(line)
+      continue
+    }
+    flush()
+    const rows: string[][] = []
+    let j = i + 2
+    for (; j < lines.length; j++) {
+      const body = lines[j] as string
+      if (body.trim() === '' || !hasPipe(body)) break
+      const cells = rowCellsOf(body).slice(0, header.length)
+      while (cells.length < header.length) cells.push('')
+      rows.push(cells)
+    }
+    blocks.push({ kind: 'table', header, align, rows })
+    i = j - 1
+  }
+  flush()
+  return blocks
+}
 
 /**
  * Splits one chunk (as `markdownChunksOf` cut it, fences balanced or running to the end) into
@@ -78,8 +155,7 @@ export function docBlocksOf(chunk: string): DocBlock[] {
   let fence: { marker: string; language?: string } | null = null
 
   const flushProse = () => {
-    const text = prose.join('\n').trim()
-    if (text !== '') blocks.push({ kind: 'markdown', text })
+    blocks.push(...proseBlocksOf(prose))
     prose = []
   }
 
