@@ -13,13 +13,14 @@ import type { Review } from '../review/review'
 import { chipRow, chipsFit } from '../ui/chips'
 import { row } from '../ui/row'
 import { table } from '../ui/table'
+import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
 import { noteLinesOf } from './diff/note-layout'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName } from './icons'
-import { type DocBlock, docBlocksOf, markdownChunksOf } from './markdown-chunks'
+import { type DocBlock, docBlocksOf, markdownChunksOf, type TableBlock } from './markdown-chunks'
 import { selectButtons } from './select-buttons'
 
 /** A document the pane can show: a file read from disk, or markdown handed over inline. */
@@ -73,6 +74,7 @@ export function createDocView(
   // not per frame.
   const chunksByShown = new WeakMap<Shown, readonly Chunk[]>()
   const sectionsByShown = new WeakMap<Shown, readonly SectionView[]>()
+  const tableRows = new WeakMap<TableBlock, { width: number; rows: DrawnLine[] }>()
 
   function chunksOf(shown: Shown, text: string): readonly Chunk[] {
     const cached = chunksByShown.get(shown)
@@ -155,6 +157,15 @@ export function createDocView(
     host.redraw()
   }
 
+  /** A table block's drawn rows at `width`, laid out once per width, not every frame. */
+  function tableRowsOf(block: TableBlock, width: number): DrawnLine[] {
+    const cached = tableRows.get(block)
+    if (cached && cached.width === width) return cached.rows
+    const rows = drawnRowsOf(layoutTable(block, Math.max(1, width)))
+    tableRows.set(block, { width, rows })
+    return rows
+  }
+
   /** A chunk's blocks as drawn elements: prose through `Markdown` (a file's with its pressable
    * links, following one to the doc it resolves to), code through `Code`. */
   function chunkElementsOf(
@@ -171,10 +182,7 @@ export function createDocView(
         if (block.kind === 'table') {
           return table(kit, {
             key: `${keyPrefix}table:${i}:${j}`,
-            header: block.header,
-            align: block.align,
-            rows: block.rows,
-            width: kit.columns,
+            rows: tableRowsOf(block, kit.columns),
             // A blank row either side, like a Markdown block's own gap — none at the very start
             // or end of the section.
             gapTop: i > 0 || j > 0,

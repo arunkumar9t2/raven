@@ -2,11 +2,11 @@ import { describe, expect, test } from 'bun:test'
 import {
   drawnRowsOf,
   layoutTable,
-  linesOf,
   spansOf,
   type TableData,
-  widthOf,
+  type TableLayout,
 } from '../../hooks/ui/table-layout'
+import { widthOf } from '../../hooks/ui/wrap'
 
 const simple: TableData = {
   header: ['Path', 'Note'],
@@ -26,6 +26,9 @@ const wide: TableData = {
   ],
 }
 
+/** A layout's drawn rows as plain strings. */
+const linesOf = (layout: TableLayout) =>
+  drawnRowsOf(layout).map(line => line.map(piece => piece.text).join(''))
 const maxWidth = (lines: string[]) => Math.max(...lines.map(widthOf))
 
 describe('spansOf', () => {

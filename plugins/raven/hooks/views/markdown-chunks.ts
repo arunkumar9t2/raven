@@ -1,5 +1,5 @@
 import { ELEMENT_TEXT_LIMIT } from '../core/view'
-import type { Align } from '../ui/table-layout'
+import type { Align, TableData } from '../ui/table-layout'
 
 const FENCE = /^\s*(`{3,}|~{3,})/
 
@@ -63,11 +63,14 @@ export function markdownChunksOf(markdown: string, max = ELEMENT_TEXT_LIMIT): st
   return chunks
 }
 
+/** A GFM table: its parsed cells (`TableData`) tagged for the doc pane to lay out. */
+export type TableBlock = { kind: 'table' } & TableData
+
 /** One drawable piece of a markdown chunk: prose for `Markdown`, or a fenced block for `Code`. */
 export type DocBlock =
   | { kind: 'markdown'; text: string }
   | { kind: 'code'; text: string; language?: string }
-  | { kind: 'table'; header: string[]; align: Align[]; rows: string[][] }
+  | TableBlock
 
 /** Splits a table row on its unescaped pipes (outer pipes optional); `\|` is a literal pipe. */
 function rowCellsOf(line: string): string[] {
