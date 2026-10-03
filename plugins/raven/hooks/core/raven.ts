@@ -291,6 +291,16 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       ? `Shown in the Raven pane: ${what}.`
       : `Raven could not dock its pane (the terminal is too narrow): ${what} was not shown.`
 
+  /** Shows `view` the way its slash command does, minus the toggle: always leaves it visible. */
+  const showView = (view: View) =>
+    view === diff ? showDiff() : view === tree ? showTree() : show(view)
+
+  function viewOf(subcommand: string): View {
+    const view = views.find(each => each.subcommand === subcommand)
+    if (!view) throw new Error(`Raven has no pane "${subcommand}"`)
+    return view
+  }
+
   async function runDirective(directive: Directive): Promise<string> {
     switch (directive.op) {
       case 'show':
@@ -305,6 +315,8 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         )
       case 'diff':
         return shownText(await showDiff(directive.path), 'the diff')
+      case 'open':
+        return shownText(await showView(viewOf(directive.pane)), `the ${directive.pane} pane`)
       case 'comments':
         return takeReviewText() ?? 'The user has no pending review comments.'
     }
@@ -363,8 +375,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       await hide(view)
       return resultOf('hidden', `${name} hidden`)
     }
-    const isShown =
-      view === diff ? await showDiff() : view === tree ? await showTree() : await show(view)
+    const isShown = await showView(view)
     return isShown ? resultOf('shown', `${name} shown`) : resultOf('narrow', NARROW_TEXT)
   }
 

@@ -11,6 +11,9 @@ export const DIFF_PANE = { id: NAME, title: 'Diff' } as const
 export const DOC_PANE = { id: `${NAME}-doc`, title: 'Doc' } as const
 export const TREE_PANE = { id: `${NAME}-files`, title: 'Files' } as const
 export const TASKS_PANE = { id: `${NAME}-tasks`, title: 'Tasks' } as const
+/** The `/raven <subcommand>` word of each pane, which `raven open <pane>` and the tool share. */
+export const PANE_SUBCOMMANDS = ['diff', 'doc', 'files', 'tasks'] as const
+export type PaneSubcommand = (typeof PANE_SUBCOMMANDS)[number]
 export const PANE_IDS: readonly string[] = [DIFF_PANE.id, DOC_PANE.id, TREE_PANE.id, TASKS_PANE.id]
 
 /** The short name `$.tool.register` takes; the model calls it as `mcp__<plugin>__show`. */

@@ -8,7 +8,14 @@ import { createRaven, type Raven } from './core/raven'
 import { settingsOf } from './core/settings'
 import type { ToolEvent } from './core/triggers'
 import { capabilitiesOf, type Kit, type Ui } from './core/view'
-import { COMMAND, COMMAND_DESCRIPTION, PANE_IDS, TOOL_NAME, toolNameOf } from './names'
+import {
+  COMMAND,
+  COMMAND_DESCRIPTION,
+  PANE_IDS,
+  PANE_SUBCOMMANDS,
+  TOOL_NAME,
+  toolNameOf,
+} from './names'
 import { commandOutputRow } from './views/band'
 
 // The plugin's own name is only known once `$` binds, so the tool's full name cannot be a static
@@ -25,11 +32,16 @@ const TOOL_INPUT_SCHEMA = {
       enum: [...DIRECTIVE_OPS],
       description:
         "'show' renders a file at `path`; 'note' renders the markdown you compose; 'diff' opens " +
-        "the diff, optionally at `path`; 'comments' reads the user's pending review comments.",
+        "the diff, optionally at `path`; 'comments' reads the user's pending review comments; " +
+        "'open' switches the pane to `pane` (leaving it showing if it already is).",
     },
     path: {
       type: 'string',
       description: 'A file path, relative to the session cwd unless absolute.',
+    },
+    pane: {
+      enum: [...PANE_SUBCOMMANDS],
+      description: 'The pane to show, for `op: "open"`.',
     },
     markdown: { type: 'string', description: 'Markdown to render, for `op: "note"`.' },
     title: {
