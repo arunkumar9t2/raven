@@ -158,3 +158,20 @@ describe('layoutTable', () => {
     expect(wideHead[3]).toBe('│     ab      │ 1 │')
   })
 })
+
+describe('wide emoji in cells', () => {
+  test('every drawn line has the same width, so the borders stay aligned', () => {
+    const data: TableData = {
+      header: ['State', 'Note'],
+      align: ['left', 'left'],
+      rows: [
+        ['✅ done', '❌ no'],
+        ['⭐ star', 'plain'],
+      ],
+    }
+    // ✅ ❌ ⭐ are one code point but two cells: count them twice for the real drawn width.
+    const cells = (line: string) => [...line].length + (line.match(/[✅❌⭐]/g) ?? []).length
+    const widths = new Set(linesOf(layoutTable(data, 40)).map(cells))
+    expect(widths.size).toBe(1)
+  })
+})

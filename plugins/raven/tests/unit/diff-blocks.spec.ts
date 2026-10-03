@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { ChangedFile } from '../../hooks/git/changes'
 import { bodyLinesOf, type Hunk } from '../../hooks/git/hunks'
 import type { Comment, Comments } from '../../hooks/review/comments'
+import { lineKeyOf, lineRowsOf } from '../../hooks/review/comments'
 import {
   addressedKeyOf,
   commentBoxKeyOf,
@@ -91,6 +92,23 @@ describe("a note block's rows", () => {
     expect(narrowLines.length).toBeLessThanOrEqual(NOTE_MAX_ROWS)
   })
 
+  test('when the right side leaves row 1 under 8 cells, row 1 holds no text and the text starts on row 2', () => {
+    const open = commentOf({
+      id: 'n1',
+      status: 'open',
+      line: { number: 12, side: 'new', text: 'x' },
+      text: 'please look at this again',
+    })
+    const lines = noteLinesOf(open, 40)
+    expect(lines[0]).toBe('')
+    expect(lines.slice(1).join(' ')).toContain('please look')
+    expect(noteRows(40, open.text)).toBeDefined()
+    const block = blocksOf(file, [hunkA], [open], null, { width: 41 }).find(
+      b => b.key === noteKeyOf('n1'),
+    )
+    expect(block).toMatchObject({ rows: lines.length })
+  })
+
   test('a very long note stops at six rows and ends with an ellipsis', () => {
     const lines = noteLinesOf(commentOf({ id: 'n1', text: 'x'.repeat(2000) }), 60)
     expect(lines).toHaveLength(NOTE_MAX_ROWS)
@@ -108,8 +126,15 @@ describe("a note block's rows", () => {
 describe('inline line threads (R39)', () => {
   // body rows: 0 ' a' (o1 n1), 1 '-b' (o2), 2 '+c' (n2), 3 ' d' (o3 n3), 4 '+e' (n4)
   const hunkL = hunkOf('@@ -1,3 +1,4 @@', [' a', '-b', '+c', ' d', '+e'])
-  const onLine = (id: string, number: number, side: 'old' | 'new' = 'new', text = 'x') =>
-    commentOf({ id, hunk: hunkL.header, text, line: { number, side, text: '' } })
+  const onLine = (id: string, number: number, side: 'old' | 'new' = 'new', text = 'x') => {
+    const line = lineRowsOf(hunkL).get(lineKeyOf({ number, side }))
+    return commentOf({
+      id,
+      hunk: hunkL.header,
+      text,
+      line: { number, side, text: line?.text ?? '' },
+    })
+  }
   const segmentsOf = (comments: Comments) =>
     blocksOf(file, [hunkL], comments, null).filter(b => b.kind === 'hunk')
   const bodiesOf = (blocks: ReturnType<typeof segmentsOf>) =>
@@ -164,6 +189,28 @@ describe('inline line threads (R39)', () => {
     const keys = keysOf([onLine('n1', 99)])
     expect(segmentsOf([onLine('n1', 99)])).toHaveLength(1)
     expect(keys.at(-1)).toBe(noteKeyOf('n1'))
+  })
+
+  test('a line whose text changed since the note was made stays after the hunk', () => {
+    const stale = commentOf({
+      id: 'n1',
+      hunk: hunkL.header,
+      line: { number: 2, side: 'new', text: 'something else' },
+    })
+    expect(segmentsOf([stale])).toHaveLength(1)
+    expect(keysOf([stale]).at(-1)).toBe(noteKeyOf('n1'))
+  })
+
+  test('a note on the last line before a "No newline" marker keeps the marker in its segment', () => {
+    const marked = hunkOf('@@ -1,2 +1,2 @@', [' a', '-b', '+B', '\\ No newline at end of file'])
+    const note = commentOf({
+      id: 'n1',
+      hunk: marked.header,
+      line: { number: 2, side: 'new', text: 'B' },
+    })
+    const hunks = blocksOf(file, [marked], [note], null).filter(b => b.kind === 'hunk')
+    expect(hunks).toHaveLength(1)
+    expect(bodyLinesOf((hunks[0] as { hunk: Hunk }).hunk)).toEqual(bodyLinesOf(marked))
   })
 
   test('hunk-wide notes stay after the hunk', () => {

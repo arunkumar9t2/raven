@@ -626,6 +626,28 @@ export function createDiffView(
   }
 
   /**
+   * A fixed block whose top `from` rows scrolled out of the window: the block drawn whole, shifted
+   * up by `from` inside a box only `to - from` rows tall that clips it, so the visible rows of a
+   * card still show and nothing below moves.
+   */
+  function clippedOf(
+    kit: Kit,
+    key: string,
+    element: RenderElement,
+    placed: Placed<BodyItem>,
+  ): RenderElement {
+    if (placed.from === 0) return element
+    const { Box } = kit.ui
+    return (
+      <Box key={key} height={placed.to - placed.from} overflow="hidden">
+        <Box position="absolute" top={-placed.from} left={0} right={0}>
+          {element}
+        </Box>
+      </Box>
+    )
+  }
+
+  /**
    * One block of the trailing orphans group — no `ChangedFile` backs these rows, so they never go
    * through `bodyRowOf`/`placedRowOf`'s file-rail logic; the rail is a flat `COLORS.inactive`
    * instead of a status colour. Only the item kinds `orphanBlocksOf` ever emits reach here.
@@ -654,13 +676,16 @@ export function createDiffView(
         content = <Box />
     }
 
-    return (
+    return clippedOf(
+      kit,
+      block.key,
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
         {railOf(kit, block.rows, COLORS.inactive)}
         <Box flexGrow={1} overflow="hidden">
           {content}
         </Box>
-      </Box>
+      </Box>,
+      placed,
     )
   }
 
@@ -713,13 +738,16 @@ export function createDiffView(
       return <Box key={block.key}>{bodyRowOf(kit, item, file, contentWidth)}</Box>
     }
 
-    return (
+    return clippedOf(
+      kit,
+      block.key,
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
         {railOf(kit, block.rows, railColor)}
         <Box flexGrow={1} overflow="hidden">
           {bodyRowOf(kit, item, file, contentWidth)}
         </Box>
-      </Box>
+      </Box>,
+      placed,
     )
   }
 

@@ -179,15 +179,21 @@ export function changedLinesOf(hunk: { header: string; text: string }): CommentL
 export const lineKeyOf = (line: Pick<CommentLine, 'number' | 'side'>): string =>
   `${line.side}:${line.number}`
 
+/** A hunk line located by `lineRowsOf`: the body row it draws on and its text without the prefix. */
+export type LineRow = { index: number; text: string }
+
 /**
- * The body row each line of `hunk` draws on (a context line on both its sides), by `lineKeyOf` — one walk per hunk, so many
- * notes cost one lookup each. A line the hunk lacks is absent.
+ * Where each line of `hunk` draws, by `lineKeyOf` (a context line on both its sides) — one walk
+ * per hunk, so many notes cost one lookup each. A line the hunk lacks is absent; the caller
+ * compares `text` to know the line is still the one a note was made on.
  */
-export function lineRowsOf(hunk: { header: string; text: string }): ReadonlyMap<string, number> {
-  const rows = new Map<string, number>()
+export function lineRowsOf(hunk: { header: string; text: string }): ReadonlyMap<string, LineRow> {
+  const body = bodyLinesOf(hunk)
+  const rows = new Map<string, LineRow>()
   for (const { index, kind, oldLine, newLine } of hunkLinesOf(hunk)) {
-    if (kind !== 'add') rows.set(lineKeyOf({ side: 'old', number: oldLine }), index)
-    if (kind !== 'del') rows.set(lineKeyOf({ side: 'new', number: newLine }), index)
+    const found = { index, text: (body[index] ?? '').slice(1) }
+    if (kind !== 'add') rows.set(lineKeyOf({ side: 'old', number: oldLine }), found)
+    if (kind !== 'del') rows.set(lineKeyOf({ side: 'new', number: newLine }), found)
   }
   return rows
 }
