@@ -19,6 +19,9 @@ export type BandActions = {
   send: () => void
 }
 
+/** Columns the engine keeps at the band's right edge (it draws its own marker there): the row stays clear of them. */
+const BAND_GUTTER = 3
+
 /** The band's mark: a bird (nf-md-bird) in the accent. */
 export const BAND_MARK = '\u{f15c6}'
 
@@ -49,6 +52,7 @@ export function band(kit: Kit, state: BandProps, actions: BandActions) {
   return (
     <Box
       flexDirection="row"
+      width={Math.max(1, kit.columns - BAND_GUTTER)}
       gap={2}
       justifyContent="space-between"
       overflow="hidden"
