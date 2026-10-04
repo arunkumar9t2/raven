@@ -22,6 +22,7 @@ import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { fill, ruleRow } from '../ui/card'
 import { chipsFit } from '../ui/chips'
+import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { pillRow } from '../ui/strip'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import {
@@ -768,7 +769,12 @@ export function createDiffView(
     const isReadOnly = sourceController.isReadOnly()
 
     if (!model.isLoaded) return <Text dimColor>Reading the repository…</Text>
-    if (!isReadOnly && !repository) return <Text dimColor>Not in a git repository.</Text>
+    if (!isReadOnly && !repository)
+      return emptyState(
+        kit,
+        EMPTY_ICONS.repo,
+        'Not a git repository — open Raven in a repo to review changes',
+      )
 
     const files = filesOf()
     const stream = streamFor(kit.capabilities, contentWidthOf(kit.columns))
@@ -776,8 +782,13 @@ export function createDiffView(
     // group): the empty-state text only wins when the stream is truly empty, not just the file
     // list.
     if (files.length === 0 && stream.blocks.length === 0) {
-      const text = isReadOnly ? 'This turn edited no files.' : 'No uncommitted changes.'
-      return <Text dimColor>{text}</Text>
+      return emptyState(
+        kit,
+        EMPTY_ICONS.changes,
+        isReadOnly
+          ? 'This turn edited no files'
+          : "No changes yet — Raven shows Claude's edits here as they land",
+      )
     }
 
     lastTitleRows = stream.titleRows

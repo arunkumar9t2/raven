@@ -11,6 +11,7 @@ import {
   toolNameOf,
 } from '../hooks/names'
 import {
+  anchorKeyOf,
   cancelKeyOf,
   commentButtonKeyOf,
   dropKeyOf,
@@ -279,9 +280,56 @@ describe('options: watched doc paths, defaults', () => {
       props: { ...PANE_PROPS, title: 'Doc' },
       requestId: DOC_PANE.id,
     })
-    expect(await ui.find({ text: /^\/work\/docs\/superpowers\/plans\/x\.md$/ })).toBeDefined()
+    // One title row: the card's `╭─` rule carries the icon and the path.
+    expect((await ui.find({ key: 'doc-title' }))?.text).toContain(
+      '/work/docs/superpowers/plans/x.md',
+    )
+    expect(await ui.find({ text: /^\/work\/docs\/superpowers\/plans\/x\.md$/ })).toBeUndefined()
     // The basename alone is no longer a row of its own.
     expect(await ui.find({ text: /^x\.md$/ })).toBeUndefined()
+  })
+
+  test('the doc body is an open card: a ╭─ title, a │ border column, a ╰ close, the heading drawn once', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n\n## Goals\n\n- a\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    expect((await ui.find({ key: 'doc-title' }))?.text).toMatch(/^╭─ .*x\.md/)
+    expect((await ui.find({ key: 'doc-close' }))?.text).toMatch(/^╰/)
+    const border = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('│\n│'))
+    expect(border?.props.color).toBe('subtle')
+    // Each section opens with `├─ § heading`, pill at the right; the Markdown draws no second heading.
+    expect(
+      (await ui.find({ key: `section-note:${anchorKeyOf({ path: DOC_PATH, hunk: '§1' })}` }))?.text,
+    ).toMatch(/^├─ § Goals/)
+    const markdown = (await ui.findAll({ type: 'Markdown' })).map(each => String(each.props.text))
+    expect(markdown.some(text => /#/.test(text))).toBe(false)
+    expect((await pillOf(ui, commentButtonKeyOf({ path: DOC_PATH, hunk: '§1' })))?.t).toContain(
+      'note',
+    )
+  })
+
+  test('nothing shown yet is a dim icon and a line', async ($, on) => {
+    openWorld(on)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('doc'))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const empty = await ui.find({ type: 'Text', text: /Nothing shown yet — plans and docs/ })
+    expect(empty?.text.startsWith('\u{f0219}')).toBe(true)
+    expect(empty?.props.dimColor).toBe(true)
   })
 
   test('a shown file with a caller title draws the title beside its path', async ($, on) => {
@@ -302,8 +350,8 @@ describe('options: watched doc paths, defaults', () => {
       props: { ...PANE_PROPS, title: 'Doc' },
       requestId: DOC_PANE.id,
     })
-    expect(await ui.find({ text: /^My plan$/ })).toBeDefined()
-    expect(await ui.find({ text: /^\/work\/docs\/superpowers\/plans\/x\.md$/ })).toBeDefined()
+    expect(await ui.find({ text: /My plan/ })).toBeDefined()
+    expect(await ui.find({ text: /\/work\/docs\/superpowers\/plans\/x\.md/ })).toBeDefined()
   })
 
   const DOC_PATH = '/work/docs/superpowers/plans/x.md'
@@ -381,7 +429,7 @@ describe('options: watched doc paths, defaults', () => {
     text = '# Still here\n\nnew topic\n'
     await $.tool.call(editOf(DOC_PATH))
 
-    expect(await ui.find({ text: 'Outdated' })).toBeDefined()
+    expect((await ui.find({ text: /^├─ Outdated/ }))?.text).toBeDefined()
     expect(await ui.find({ text: /orphan/ })).toBeDefined()
   })
 
@@ -2029,6 +2077,49 @@ describe('the Files tree', () => {
   })
 })
 
+describe('empty states', () => {
+  const emptyOf = async (ui: Awaited<ReturnType<typeof mountDiff>>, text: RegExp) => {
+    const found = await ui.find({ type: 'Text', text })
+    return { icon: [...(found?.text ?? '')][0], dim: found?.props.dimColor, text: found?.text }
+  }
+
+  test('a clean repo shows a dim icon and "No changes yet"', async ($, on) => {
+    gitWorld(on, {}, null, [])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+    const found = await emptyOf(ui, /No changes yet — Raven shows Claude's edits/)
+    expect(found.icon).toBe('\u{f02a2}')
+    expect(found.dim).toBe(true)
+  })
+
+  test('outside a git repository the diff says so, with a warning icon', async ($, on) => {
+    openWorld(on)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+    const found = await emptyOf(ui, /Not a git repository/)
+    expect(found.icon).toBe('\u{f071}')
+    expect(found.dim).toBe(true)
+  })
+
+  test('no tasks is a dim icon and a line', async ($, on) => {
+    openWorld(on)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('tasks'))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: TASKS_PANE.id,
+    })
+    const found = await ui.find({ type: 'Text', text: /No tasks yet — Claude's task list/ })
+    expect(found?.text.startsWith('\u{f0ae}')).toBe(true)
+    expect(found?.props.dimColor).toBe(true)
+  })
+})
+
 describe('the AbovePrompt status band', () => {
   test('shows pending comments when no Raven pane is open', async ($, on) => {
     const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
@@ -2037,7 +2128,7 @@ describe('the AbovePrompt status band', () => {
     await $.session.start(SESSION)
 
     const ui = await mountBand($)
-    expect(await ui.find({ text: /notes? pending/ })).toBeDefined()
+    expect(await ui.find({ text: /✎ 1 pending/ })).toBeDefined()
   })
 
   test('draws nothing while the diff pane is open and shown', async ($, on) => {
@@ -2067,14 +2158,17 @@ describe('the AbovePrompt status band', () => {
     expect(await ui.find({ text: /pending/ })).toBeUndefined()
   })
 
-  test('draws a coloured dot before the name, and open/send as chips, send primary', async ($, on) => {
+  test('draws a coloured mark, the ✎ N pending summary in the suggestion colour, and open/send as pills, send primary', async ($, on) => {
     const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
 
     await $.session.start(SESSION)
 
     const ui = await mountBand($)
-    expect(await ui.find({ text: '●' })).toBeDefined()
+    const mark = await ui.find({ type: 'Text', text: /^\u{f15c6}$/u })
+    expect(mark?.props.color).toBe('claude')
+    const summary = await ui.find({ type: 'Text', text: /^ ✎ 1 pending$/ })
+    expect(summary?.props.color).toBe('suggestion')
     expect((await pillOf(ui, 'band:open'))?.t).toContain('open')
     const send = await pillOf(ui, 'band:send')
     expect(send?.t).toContain('send')
