@@ -234,7 +234,11 @@ would draw `[ brackets ]` and cannot tint under the pointer. The one surface mod
 a one-line `left` and `right` list of segments (`t`, colours, bold/dim/italic, and an optional `id` that
 makes the segment a pill). It tracks the hovered row and pill, swaps in a pill's `hoverBg`/`hoverC`
 (and a row's `rowHoverBg`) and posts `{ press: id }` on a left click of a pill, else of an id'd row. It
-sets state only when the hover changes and starts no timers. A surface module cannot import plugin
+keeps the hovered row by id (a scroll or new props never leaves the highlight on another row). A click
+also gives the strip the keyboard: `surface.onKey` moves a focus ring (inverse text) with ←/→ along a
+row's pills and ↑/↓ between rows, and Enter or space posts the focused id. Only the one segment marked
+`shrink` (a path or title) shrinks and truncates in a narrow region; every other segment keeps its cells.
+It sets state only when the hover or focus changes and starts no timers. A surface module cannot import plugin
 code, so it carries its own small width function (wide characters and emoji count 2), kept equal to
 `ui/wrap.ts`'s by a unit test; hit boxes are computed from segment widths, the right side ending at
 the region's right edge.

@@ -10,8 +10,8 @@ A live preview pane for Claude Code. Raven docks beside the transcript and shows
   edits and runs commands. Comment on a file or a hunk; your comments ride the next prompt as a
   review, or go at once with the primary **send** chip.
 - **Review tools** — the header and file list stay pinned while the stream scrolls, and the list
-  stays in sync with whichever file is at the top; every control is a chip, dim at rest and
-  reachable by click or Tab+Enter, no letter keys, shrinking to icons on a narrow pane; comments on
+  stays in sync with whichever file is at the top; every control is a pill, reachable by click
+  (and by keyboard after a click in its strip, or fully with the `keyboardControls` setting), no letter keys, shrinking to icons on a narrow pane; comments on
   a single diff line, shown as margin notes; after Claude replies, Raven checks which comments it
   addressed and marks them ✓; stage or revert one hunk; compare against HEAD, the session's start,
   the branch point, or one turn's edits.
