@@ -20,7 +20,7 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { fill, ruleRow } from '../ui/card'
+import { closeRow, ruleRow } from '../ui/card'
 import { chipsFit } from '../ui/chips'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { pillRow } from '../ui/strip'
@@ -544,12 +544,7 @@ export function createDiffView(
     const { Box, Text } = kit.ui
     switch (item.kind) {
       case 'close':
-        return (
-          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-            <Text color={color}>╰</Text>
-            {fill(kit, color)}
-          </Box>
-        )
+        return closeRow(kit, color)
       case 'title': {
         const mark = statusMarkOf(item.file.status)
         const icon = iconOf(item.file.path)
