@@ -6,6 +6,7 @@ import type { RenderElement } from 'claude-code'
 import { PILL_COLORS, type PillKind } from '../core/colors'
 import type { Kit } from '../core/view'
 import type { Seg, StripRow } from '../surface/strip'
+import { type Chip, chipText } from './chips'
 
 export type { PillKind, Seg, StripRow }
 
@@ -47,6 +48,8 @@ export type StripOpts = {
   activeId?: string
   rowHoverBg?: string
   activeBg?: string
+  /** Whether the Client claims the free width (right-aligned segments need it); a pill row sizes to its pills. */
+  grow?: boolean
 }
 
 /**
@@ -73,7 +76,7 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
       <Client
         key={opts.key}
         module="../surface/strip.tsx"
-        flexGrow={1}
+        flexGrow={opts.grow === false ? undefined : 1}
         height={rows.length}
         props={{
           rows: data,
@@ -116,4 +119,47 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
 /** Drops the handler: what crosses to the surface is plain data. */
 function plainOf({ onPress: _onPress, ...seg }: KitSeg): Seg {
   return Object.fromEntries(Object.entries(seg).filter(([, v]) => v !== undefined)) as Seg
+}
+
+/**
+ * A row of chips as pills, one left-to-right strip sized to its pills (so it sits wherever its
+ * parent puts it: in a row's right slot, beside a label). `mode` is one for the row or one per chip
+ * (`chipsLayout`). A chip carrying an engine `action` draws as a `plain` Button first — a Client
+ * cannot bind a chord — sized like a pill so `chipsLayout`'s widths hold. `key` names the row; the
+ * strip's Client is `${key}:pills`.
+ */
+export function pillRow(
+  kit: Kit,
+  chips: readonly Chip[],
+  mode: 'words' | 'icons' | readonly ('words' | 'icons')[],
+  key: string,
+): RenderElement {
+  const { Box, Button } = kit.ui
+  const modeOf = (index: number): 'words' | 'icons' =>
+    typeof mode === 'string' ? mode : (mode[index] ?? 'icons')
+  const drawn = chips.map((chip, index) => ({ chip, text: chipText(chip, modeOf(index)) }))
+  const buttons = drawn.filter(({ chip }) => chip.action !== undefined)
+  const segs = drawn
+    .filter(({ chip }) => chip.action === undefined)
+    .flatMap(({ chip, text }, i) => {
+      const seg = pill(chip.key, '', text, chip.kind ?? 'normal', chip.onPress)
+      return i === 0 ? [seg] : [{ t: ' ' }, seg]
+    })
+  const pills = strip(kit, [{ left: segs }], { key: `${key}:pills`, grow: false })
+  if (buttons.length === 0) return pills
+  return (
+    <Box key={key} flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      {buttons.map(({ chip, text }) => (
+        <Button
+          key={chip.key}
+          plain
+          dimColor
+          action={chip.action}
+          label={` ${text} `}
+          onPress={chip.onPress}
+        />
+      ))}
+      {segs.length > 0 ? pills : null}
+    </Box>
+  )
 }

@@ -67,3 +67,65 @@ export function trackShownPanes(on: On, extraShownIds: readonly string[] = []) {
   on('ui.focus', () => ({}))
   return shown
 }
+
+/** The slice of a mounted drawing the pill helpers use. */
+type PillUi = {
+  findAll: (query: {
+    type?: string
+    key?: string
+    in?: string
+  }) => Promise<{ key: string | undefined; props: Record<string, unknown>; text: string }[]>
+  find: (query: {
+    type?: string
+    key?: string
+    in?: string
+    text?: string | RegExp
+  }) => Promise<{ text: string; props: Record<string, unknown> } | undefined>
+  post: (data: { press: string }, scope: { in: string }) => Promise<void>
+}
+
+/** The `Client` strip that draws the pill `id`, or undefined when none does. */
+async function clientOf(ui: PillUi, id: string): Promise<string | undefined> {
+  const needle = `"id":${JSON.stringify(id)}`
+  for (const client of await ui.findAll({ type: 'Client' })) {
+    if (client.key !== undefined && JSON.stringify(client.props.props).includes(needle)) {
+      return client.key
+    }
+  }
+  return undefined
+}
+
+/** Presses the pill `id` as a left click on it does: a post to the strip that draws it. */
+export async function pressPill(ui: PillUi, id: string): Promise<void> {
+  const client = await clientOf(ui, id)
+  if (client === undefined) throw new Error(`no pill "${id}" is drawn`)
+  await ui.post({ press: id }, { in: client })
+}
+
+/** What every strip in the drawing shows, joined — for "this label is on screen" checks. */
+export async function pillsText(ui: PillUi): Promise<string> {
+  const parts: string[] = []
+  for (const client of await ui.findAll({ type: 'Client' })) {
+    if (client.key === undefined) continue
+    parts.push((await ui.find({ in: client.key, type: 'Box' }))?.text ?? '')
+  }
+  return parts.join('\n')
+}
+
+/** One strip segment as `find` reports it inside a Client's props. */
+export type PillSeg = { t: string; id?: string; bg?: string; c?: string }
+
+/** The pill segment `id` as the strip's props carry it, or undefined when none is drawn. */
+export async function pillOf(ui: PillUi, id: string): Promise<PillSeg | undefined> {
+  for (const client of await ui.findAll({ type: 'Client' })) {
+    const props = client.props.props as
+      | { rows?: { left?: PillSeg[]; right?: PillSeg[] }[] }
+      | undefined
+    for (const row of props?.rows ?? []) {
+      for (const seg of [...(row.left ?? []), ...(row.right ?? [])]) {
+        if (seg.id === id) return seg
+      }
+    }
+  }
+  return undefined
+}

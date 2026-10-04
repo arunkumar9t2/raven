@@ -55,7 +55,7 @@ describe('pill', () => {
     expect(seg.t).toBe(' ✓ stage ')
     expect(seg.id).toBe('stage:x')
     expect(seg.bg).toBe('userMessageBackground')
-    expect(seg.hoverBg).toBe('userMessageBackgroundHover')
+    expect(seg.hoverBg).toBe('selectionBg')
     expect(typeof seg.onPress).toBe('function')
   })
 

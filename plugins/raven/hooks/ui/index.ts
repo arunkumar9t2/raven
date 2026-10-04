@@ -5,7 +5,7 @@
 export { ageOf } from './age'
 export { badge } from './badge'
 export { type ChangeMapCell, changeMap, changeMapOf } from './change-map'
-export { type Chip, chipRow, chipsFit, chipsLayout, chipsWidthOf } from './chips'
+export { type Chip, chipsFit, chipsLayout, chipsWidthOf, chipText } from './chips'
 export { diffStat } from './diff-stat'
 export { dot } from './dot'
 export { meta } from './meta'

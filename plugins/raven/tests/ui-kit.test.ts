@@ -3,7 +3,6 @@ import { describe, type Engine, expect, test, tier } from 'claude-code/testing'
 import { COLORS } from '../hooks/core/colors'
 import { FULL_CAPABILITIES, type Kit, type Ui } from '../hooks/core/view'
 import { badge } from '../hooks/ui/badge'
-import { chipRow } from '../hooks/ui/chips'
 import { diffStat } from '../hooks/ui/diff-stat'
 import { dot } from '../hooks/ui/dot'
 import { meta } from '../hooks/ui/meta'
@@ -11,6 +10,7 @@ import { progressBar } from '../hooks/ui/progress-bar'
 import { row } from '../hooks/ui/row'
 import { sectionHeader } from '../hooks/ui/section-header'
 import { statBar } from '../hooks/ui/stat-bar'
+import { pillRow } from '../hooks/ui/strip'
 import { baseWorld, SESSION } from './helpers'
 
 tier('user')
@@ -21,6 +21,8 @@ tier('user')
  * through it, with the surface's real elements (`$.ui.resolve(e)`) — so `$.ui.mount` validates
  * the tree exactly as it would a pane's.
  */
+const NO_CLIENT = { ...FULL_CAPABILITIES, canClient: false }
+
 function world(on: On) {
   baseWorld(on)
   on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
@@ -28,7 +30,7 @@ function world(on: On) {
       ui: (await $.ui.resolve(e)) as unknown as Ui,
       columns: 40,
       rows: 20,
-      capabilities: FULL_CAPABILITIES,
+      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
       press: () => {},
     }
 
@@ -55,7 +57,12 @@ function world(on: On) {
           key: 'kit-row',
           hover: { backgroundColor: COLORS.inactive },
         }),
-        chipRow(kit, [{ key: 'note', label: 'note', icon: '✎', onPress: () => {} }], 'words'),
+        pillRow(
+          kit,
+          [{ key: 'note', label: 'note', icon: '✎', onPress: () => {} }],
+          'words',
+          'kit-note',
+        ),
       ],
     }
   })
@@ -80,7 +87,7 @@ describe('the UI kit draws on the terminal surface', () => {
 })
 
 /**
- * `row` and `sectionHeader` draw `chipRow`/`progressBar` (both a `Box`) as `right`/`left`: the
+ * `row` and `sectionHeader` draw `pillRow`/`progressBar` (both a `Box`) as `right`/`left`: the
  * engine refuses a `Box` nested inside an inline `Text`, so these must route an element child
  * through a `Box`, never through `<Text>{element}</Text>`.
  */
@@ -91,29 +98,35 @@ function elementSlotWorld(on: On) {
       ui: (await $.ui.resolve(e)) as unknown as Ui,
       columns: 40,
       rows: 20,
-      capabilities: FULL_CAPABILITIES,
+      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
       press: () => {},
     }
-    const chips = chipRow(
-      kit,
-      [{ key: 'note', label: 'note', icon: '✎', onPress: () => {} }],
-      'words',
-    )
+    const chipsOf = (key: string) =>
+      pillRow(
+        kit,
+        [{ key: `${key}-chip`, label: 'note', icon: '✎', onPress: () => {} }],
+        'words',
+        key,
+      )
 
     return {
       type: 'Box',
       props: { flexDirection: 'column' },
       children: [
         row(kit, { left: 'src/api.ts', right: progressBar(kit, 3, 5, 5), key: 'row-progress' }),
-        row(kit, { left: chips, right: '+3 −3', key: 'row-chips-left' }),
-        sectionHeader(kit, { title: '6 files', color: COLORS.accent, right: chips }),
+        row(kit, { left: chipsOf('chips-left'), right: '+3 −3', key: 'row-chips-left' }),
+        sectionHeader(kit, {
+          title: '6 files',
+          color: COLORS.accent,
+          right: chipsOf('chips-right'),
+        }),
       ],
     }
   })
 }
 
 /**
- * `chipRow`'s quiet chips: an `isDim` chip draws `dimColor` (whose own documented behaviour is
+ * `pillRow`'s quiet chips: an `isDim` chip draws `dimColor` (whose own documented behaviour is
  * "full strength under the pointer or the focus" — D10's "quiet controls" without an explicit
  * `hover` override, see `chips.tsx`'s NEEDS_CONTEXT note); a `forceWords` chip keeps its words
  * in icons mode.
@@ -125,16 +138,16 @@ function chipHoverWorld(on: On) {
       ui: (await $.ui.resolve(e)) as unknown as Ui,
       columns: 40,
       rows: 20,
-      capabilities: FULL_CAPABILITIES,
+      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
       press: () => {},
     }
     return row(kit, {
       key: 'toolbar-row',
       left: 'L1–2',
-      right: chipRow(
+      right: pillRow(
         kit,
         [
-          { key: 'quiet', label: 'note', icon: '✎', isDim: true, onPress: () => {} },
+          { key: 'quiet', label: 'note', icon: '✎', onPress: () => {} },
           { key: 'armed', label: 'sure?', icon: '↺', forceWords: true, onPress: () => {} },
         ],
         'icons',
@@ -152,15 +165,15 @@ function scopedChipWorld(on: On) {
       ui: (await $.ui.resolve(e)) as unknown as Ui,
       columns: 40,
       rows: 20,
-      capabilities: FULL_CAPABILITIES,
+      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
       press: () => {},
     }
     return row(kit, {
       key: 'toolbar-row-2',
       left: 'L1–2',
-      right: chipRow(
+      right: pillRow(
         kit,
-        [{ key: 'quiet-scoped', label: 'note', icon: '✎', isDim: true, onPress: () => {} }],
+        [{ key: 'quiet-scoped', label: 'note', icon: '✎', onPress: () => {} }],
         'words',
         'toolbar-row-2',
       ),
@@ -168,8 +181,8 @@ function scopedChipWorld(on: On) {
   })
 }
 
-describe("chipRow's quiet chips", () => {
-  test('a dim chip draws dimColor', async ($: Engine, on: On) => {
+describe("pillRow's pills", () => {
+  test('a pill row off a Client surface draws plain Buttons keyed by the chips, no brackets', async ($: Engine, on: On) => {
     chipHoverWorld(on)
     await $.session.start(SESSION)
     const ui = await $.ui.mount({
@@ -179,8 +192,9 @@ describe("chipRow's quiet chips", () => {
       props: { text: 'kit', command: null },
     })
 
-    const quiet = await ui.find({ key: 'quiet' })
-    expect(quiet?.props.dimColor).toBe(true)
+    expect((await ui.find({ key: 'quiet' }))?.type).toBe('Button')
+    expect((await ui.find({ key: 'armed' }))?.type).toBe('Button')
+    expect((await ui.find({ key: 'toolbar-row:pills' }))?.text).not.toMatch(/[[\]]/)
   })
 
   test('a forceWords chip keeps its words even when the row draws icons', async ($: Engine, on: On) => {
@@ -193,14 +207,14 @@ describe("chipRow's quiet chips", () => {
       props: { text: 'kit', command: null },
     })
 
-    expect((await ui.find({ key: 'armed' }))?.text).toContain('↺ sure?')
-    expect((await ui.find({ key: 'quiet' }))?.text).not.toContain('note')
+    expect((await ui.find({ key: 'armed' }))?.props.label).toContain('↺ sure?')
+    expect((await ui.find({ key: 'quiet' }))?.props.label).not.toContain('note')
   })
 
   /**
-   * A `scope` passed to `chipRow` (D10 fix round 1, item 2) draws with no refusal — the kit's own
+   * A `scope` passed to `pillRow` (D10 fix round 1, item 2) draws with no refusal — the kit's own
    * side of the contract. `hover` itself is documented as never crossing back to the plugin
-   * (`chips.tsx`'s comment on `chipRow` quotes the exact line, three times over, for `Box`,
+   * (`chips.tsx`'s comment on `pillRow` quotes the exact line, three times over, for `Box`,
    * `Button` and `Text` alike), the same category `FoundElement.props` already excludes a
    * handler from, so there is no `.props.hover` this or any test can assert — confirmed
    * empirically against a bare `Box.hover` with no scope at all, not just this chip's case.
@@ -216,9 +230,7 @@ describe("chipRow's quiet chips", () => {
     })
 
     await expect(ui.drawn()).resolves.toBeDefined()
-    const quiet = await ui.find({ key: 'quiet-scoped' })
-    expect(quiet?.props.dimColor).toBe(true)
-    expect(quiet?.text).toContain('note')
+    expect((await ui.find({ key: 'quiet-scoped' }))?.props.label).toContain('note')
   })
 })
 
@@ -238,7 +250,7 @@ describe('row and sectionHeader take an element as well as text', () => {
     expect(await ui.find({ text: 'src/api.ts' })).toBeDefined()
   })
 
-  test('row with a chipRow (a Box) as left draws with no refusal', async ($: Engine, on: On) => {
+  test('row with a pillRow (a Box) as left draws with no refusal', async ($: Engine, on: On) => {
     elementSlotWorld(on)
 
     await $.session.start(SESSION)
@@ -253,7 +265,7 @@ describe('row and sectionHeader take an element as well as text', () => {
     expect(await ui.find({ text: 'note' })).toBeDefined()
   })
 
-  test('sectionHeader with a chipRow as right draws with no refusal', async ($: Engine, on: On) => {
+  test('sectionHeader with a pillRow as right draws with no refusal', async ($: Engine, on: On) => {
     elementSlotWorld(on)
 
     await $.session.start(SESSION)

@@ -80,7 +80,7 @@ export type Raven = {
    * The `AbovePrompt` band: null while a survey holds it, `maxRows` is too small, nothing is
    * pending, or a Raven pane is already visible (not just open behind another tab).
    */
-  band: (kit: Kit, hasSurvey: boolean) => Promise<RenderElement | null>
+  band: (kit: Kit, hasSurvey: boolean, requestId: string) => Promise<RenderElement | null>
   /** The kind a past `command()` call resolved `text` to; `'info'` when no call produced it. */
   resultKindOf: (text: string) => CommandKind
 }
@@ -496,7 +496,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       host.redraw()
     },
     noteViewport: columns => bandState.noteViewport(columns),
-    band: (kit, hasSurvey) => bandState.band(kit, hasSurvey),
+    band: (kit, hasSurvey, requestId) => {
+      presses.begin(requestId)
+      return bandState.band(kit, hasSurvey)
+    },
     resultKindOf: text => resultKindByText.get(text) ?? 'info',
   }
 }
