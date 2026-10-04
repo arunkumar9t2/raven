@@ -10,15 +10,16 @@ import { DOC_PANE } from '../names'
 import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
-import { fill, ruleRow } from '../ui/card'
+import { closeRow, ruleRow, stackOf } from '../ui/card'
 import { chipsFit } from '../ui/chips'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { pillRow } from '../ui/strip'
 import { table } from '../ui/table'
 import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
+import { widthOf } from '../ui/wrap'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { addressedRow, commentBox, note, noteChip } from './diff/comment-box'
-import { noteLinesOf } from './diff/note-layout'
+import { NOTE_MAX_LINES, noteLinesOf } from './diff/note-layout'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName, iconOf } from './icons'
@@ -57,9 +58,6 @@ const BORDER_COLOR = COLORS.subtle
 /** A note doc's title icon (a document), where a file's is its type icon. */
 const NOTE_ICON = '\u{f0219}' // nf-md-file_document
 
-/** More `│` rows than any pane is tall: the border column clips to the body's own height. */
-const BORDER_STACK = Array.from({ length: 500 }, () => '│').join('\n')
-
 const HEADING_LINE = /^ {0,3}#{1,6}\s/
 
 /**
@@ -83,6 +81,38 @@ const titleOf = (doc: Doc) => doc.title ?? (doc.kind === 'file' ? baseName(doc.p
  * sections sharing a heading never share controls. `hunk` only keys the controls; the comment
  * itself stores `section` (the heading) and `sectionIndex` (the index), never this string. */
 const sectionAnchorOf = (path: string, index: number): Anchor => ({ path, hunk: `§${index}` })
+
+/**
+ * An upper bound on the rows `text` takes at `width` cells: each source line wraps at most
+ * `ceil(cells / width)` times, plus slack for the gaps a renderer adds between blocks. A rail drawn
+ * this tall and clipped to the real height never leaves a gap.
+ */
+export function rowsBoundOf(text: string, width: number): number {
+  const rows = text
+    .split('\n')
+    .reduce((sum, line) => sum + Math.max(1, Math.ceil(widthOf(line) / Math.max(1, width))), 0)
+  return Math.ceil(rows * 1.5) + 2
+}
+
+/**
+ * `children` behind the card's `│ ` border: the rail is one absolute column clipped to the box's
+ * own height, `rows` tall at most (an upper bound, see `rowsBoundOf`) — so it spans the body
+ * however long, with no fixed cap.
+ */
+/** `kit` narrowed by the card border's cells. */
+const innerOf = (kit: Kit): Kit => ({ ...kit, columns: Math.max(1, kit.columns - BORDER_CELLS) })
+
+function railed(kit: Kit, key: string, rows: number, children: RenderElement): RenderElement {
+  const { Box, Text } = kit.ui
+  return (
+    <Box key={key} flexDirection="column" paddingLeft={BORDER_CELLS}>
+      <Box position="absolute" top={0} bottom={0} left={0} width={1} overflow="hidden">
+        <Text color={BORDER_COLOR}>{stackOf('│', rows)}</Text>
+      </Box>
+      {children}
+    </Box>
+  )
+}
 
 export function createDocView(
   host: Host,
@@ -192,6 +222,24 @@ export function createDocView(
     return rows
   }
 
+  /** An upper bound on the rows `chunks` draw at `width` (tables at their laid-out height). */
+  function chunksRowsBoundOf(chunks: readonly Chunk[], width: number): number {
+    return chunks.reduce(
+      (sum, chunk) =>
+        sum +
+        chunk.blocks.reduce(
+          (inner, block) =>
+            inner +
+            2 +
+            (block.kind === 'table'
+              ? tableRowsOf(block, width - 1).length
+              : rowsBoundOf(block.text, width)),
+          0,
+        ),
+      0,
+    )
+  }
+
   /** A chunk's blocks as drawn elements: prose through `Markdown` (a file's with its pressable
    * links, following one to the doc it resolves to), code through `Code`. */
   function chunkElementsOf(
@@ -256,11 +304,13 @@ export function createDocView(
    * entirely and is left for the diff stream alone.
    */
   function sectionsBody(
-    kit: Kit,
+    outer: Kit,
     shown: Shown,
     doc: Extract<Doc, { kind: 'file' }>,
     text: string,
   ): RenderElement {
+    // Everything inside lays out at the width the card's `│ ` border leaves.
+    const kit = innerOf(outer)
     const { Box, Text } = kit.ui
     const sections = sectionsOf(shown, text)
     const comments = review
@@ -299,8 +349,18 @@ export function createDocView(
       // (`addressedRow`), so a section's notes read the same way wherever they draw.
       const { addressed, visible } = splitAddressed(notes)
 
-      return (
-        <Box key={`section:${index}`} flexDirection="column">
+      const sectionRows =
+        1 +
+        chunksRowsBoundOf(sv.chunks, kit.columns) +
+        (addressed.length > 0 ? 1 : 0) +
+        visible.length * (NOTE_MAX_LINES + 3) +
+        (isComposing ? NOTE_MAX_LINES + 4 : 0)
+
+      return railed(
+        outer,
+        `section:${index}`,
+        sectionRows,
+        <Box flexDirection="column">
           <Box key={`section-note:${anchorKeyOf(anchor)}`}>
             {ruleRow(kit, {
               color: BORDER_COLOR,
@@ -345,7 +405,7 @@ export function createDocView(
                 onCancel: () => stopComposing(anchor),
               })
             : null}
-        </Box>
+        </Box>,
       )
     })
 
@@ -402,41 +462,56 @@ export function createDocView(
     const { Box, Text, Code, Image } = kit.ui
     if (shown.doc.kind === 'file' && isImage(shown.doc.path)) {
       const path = shown.doc.path
-      if (!kit.capabilities.canShowImage || !isPng(path)) return <Text dimColor>{path}</Text>
-      const columns = Math.max(1, Math.min(kit.columns, 60))
+      if (!kit.capabilities.canShowImage || !isPng(path)) {
+        return railed(kit, 'doc-body', 2, <Text dimColor>{path}</Text>)
+      }
+      const columns = Math.max(1, Math.min(innerOf(kit).columns, 60))
       const rows = Math.max(1, Math.round(columns / 2))
-      return (
+      return railed(
+        kit,
+        'doc-body',
+        rows + 1,
         <Image
           source={{ file: path, format: 'png' }}
           columns={columns}
           rows={rows}
           alt={baseName(path)}
-        />
+        />,
       )
     }
-    if (shown.text === null) return <Text color={COLORS.error}>Could not read: {shown.error}</Text>
+    if (shown.text === null) {
+      return railed(
+        kit,
+        'doc-body',
+        3,
+        <Text color={COLORS.error}>Could not read: {shown.error}</Text>,
+      )
+    }
     // Commenting applies only to a file doc: a comment anchors to `doc.path`, which an inline
     // 'note' doc has none of — it keeps the plain, uncommentable rendering it always had.
     if (shown.doc.kind === 'file' && isMarkdown(shown.doc.path)) {
       return sectionsBody(kit, shown, shown.doc, shown.text)
     }
+    const inner = innerOf(kit)
     if (shown.doc.kind === 'note') {
-      return (
-        <Box flexDirection="column">
-          {chunkElementsOf(kit, chunksOf(shown, shown.text), shown.doc, '')}
-        </Box>
+      const chunks = chunksOf(shown, shown.text)
+      return railed(
+        kit,
+        'doc-body',
+        chunksRowsBoundOf(chunks, inner.columns),
+        <Box flexDirection="column">{chunkElementsOf(inner, chunks, shown.doc, '')}</Box>,
       )
     }
     const isCut = shown.text.length > ELEMENT_TEXT_LIMIT
-    return (
+    const source = shown.text.slice(0, ELEMENT_TEXT_LIMIT)
+    return railed(
+      kit,
+      'doc-body',
+      rowsBoundOf(source, inner.columns) + 1,
       <Box flexDirection="column">
-        <Code
-          source={shown.text.slice(0, ELEMENT_TEXT_LIMIT)}
-          path={shown.doc.path}
-          startLine={1}
-        />
+        <Code source={source} path={shown.doc.path} startLine={1} />
         {isCut ? <Text dimColor>… the rest of the file is not shown</Text> : null}
-      </Box>
+      </Box>,
     )
   }
 
@@ -476,8 +551,6 @@ export function createDocView(
         historyButtons(kit, shown)
       )
 
-    // The card's `│ ` border takes two cells: everything inside lays out at the narrower width.
-    const inner: Kit = { ...kit, columns: Math.max(1, kit.columns - BORDER_CELLS) }
     const icon =
       shown.doc.kind === 'file' ? iconOf(shown.doc.path) : { glyph: NOTE_ICON, color: RAINBOW.blue }
     const heading = (
@@ -500,16 +573,10 @@ export function createDocView(
         <Box key="doc-title">
           {ruleRow(kit, { color: BORDER_COLOR, start: '╭─ ', left: heading })}
         </Box>
-        <Box key="doc-card" flexDirection="column" paddingLeft={BORDER_CELLS}>
-          <Box position="absolute" top={0} bottom={0} left={0} width={1} overflow="hidden">
-            <Text color={BORDER_COLOR}>{BORDER_STACK}</Text>
-          </Box>
-          {body(inner, shown)}
+        <Box key="doc-card" flexDirection="column">
+          {body(kit, shown)}
         </Box>
-        <Box key="doc-close" flexDirection="row" overflow="hidden" flexWrap="nowrap">
-          <Text color={BORDER_COLOR}>╰</Text>
-          {fill(kit, BORDER_COLOR)}
-        </Box>
+        <Box key="doc-close">{closeRow(kit, BORDER_COLOR)}</Box>
       </Box>
     )
   }

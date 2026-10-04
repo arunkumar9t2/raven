@@ -13,7 +13,7 @@ export const BOXED_CELLS = 4
 const FILL = '─'.repeat(400)
 
 /** `glyph` once per row, one under another. */
-const stackOf = (glyph: string, rows: number): string =>
+export const stackOf = (glyph: string, rows: number): string =>
   Array.from({ length: Math.max(1, rows) }, () => glyph).join('\n')
 
 /**
@@ -27,6 +27,21 @@ export function fill(kit: UiKit, color: string): RenderElement {
       <Text color={color} wrap="wrap">
         {FILL}
       </Text>
+    </Box>
+  )
+}
+
+/**
+ * A card's closing row: `╰` in `color`, the fill, and `end` (`╯` for a boxed card, none for an
+ * open one) — the one close every card draws.
+ */
+export function closeRow(kit: UiKit, color: string, end?: string): RenderElement {
+  const { Box, Text } = kit.ui
+  return (
+    <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
+      <Text color={color}>╰</Text>
+      {fill(kit, color)}
+      {end ? <Text color={color}>{end}</Text> : null}
     </Box>
   )
 }
@@ -108,11 +123,7 @@ export function boxedCard(kit: UiKit, props: BoxedCardProps): RenderElement {
         </Box>
         <Text color={color}>{stackOf(' │', rows)}</Text>
       </Box>
-      <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        <Text color={color}>╰</Text>
-        {fill(kit, color)}
-        <Text color={color}>╯</Text>
-      </Box>
+      {closeRow(kit, color, '╯')}
     </Box>
   )
 }

@@ -342,6 +342,27 @@ describe('options: watched doc paths, defaults', () => {
     )
   })
 
+  test('the card border spans a long doc to its last row (no fixed cap)', async ($, on) => {
+    const long = `# Long\n\n${Array.from({ length: 700 }, (_, i) => `- item ${i}`).join('\n')}\n`
+    openWorld(on, { [DOC_PATH]: long })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const rail = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('│\n│'))
+    // The rail is at least as tall as the 700 list rows the section draws.
+    expect(rail?.text.split('\n').length).toBeGreaterThanOrEqual(700)
+    expect((await ui.findAll({ type: 'Text' })).some(each => each.text.includes('BORDER'))).toBe(
+      false,
+    )
+  })
+
   test('nothing shown yet is a dim icon and a line', async ($, on) => {
     openWorld(on)
     await $.session.start(SESSION)
