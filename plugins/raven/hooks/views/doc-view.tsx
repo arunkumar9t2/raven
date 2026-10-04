@@ -10,8 +10,9 @@ import { DOC_PANE } from '../names'
 import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
-import { chipRow, chipsFit } from '../ui/chips'
+import { chipsFit } from '../ui/chips'
 import { row } from '../ui/row'
+import { pillRow } from '../ui/strip'
 import { table } from '../ui/table'
 import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
@@ -223,7 +224,7 @@ export function createDocView(
    * A markdown file's body, per `docSectionsOf` section: its blocks, then its notes (the doc's
    * comments whose `section`/`sectionIndex` match this section — a comment with no `sectionIndex`
    * matches the first section with its heading), the compose box while composing, then an idle
-   * `[ ✎ note ]` chip, right-aligned. A comment matching no section (its heading/index both gone)
+   * ` ✎ note ` pill, right-aligned. A comment matching no section (its heading/index both gone)
    * draws at the end under a dim `Outdated` row instead of being dropped. Only comments carrying a
    * `section` ever draw here — the same discriminator `blocks.ts`'s orphan group uses — so a diff
    * comment (hunk- or file-level) on this same path, which carries none, stays out of the Doc pane
@@ -302,10 +303,12 @@ export function createDocView(
           {chip
             ? row(kit, {
                 left: '',
-                // No `scope`: a single chip has no sibling in this row to hover-group with —
-                // `chipRow` itself now runs any `scope` through `scopeOf` (hooks/ui/scope.ts),
-                // so a doc's (often long) path is no longer the reason to omit one.
-                right: chipRow(kit, [chip], chipsFit([chip], kit.columns)),
+                right: pillRow(
+                  kit,
+                  [chip],
+                  chipsFit([chip], kit.columns),
+                  `${anchorKeyOf(anchor)}:note`,
+                ),
                 // Distinct from the chip's own key (commentButtonKeyOf) — the row and the chip it
                 // wraps must not share a key, or `ui.press`/`ui.input` can resolve the wrong node.
                 key: `section-note:${anchorKeyOf(anchor)}`,

@@ -8,9 +8,10 @@ import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import { changeMap, changeMapOf } from '../../ui/change-map'
-import { type Chip, chipRow, chipsLayout } from '../../ui/chips'
+import { type Chip, chipsLayout } from '../../ui/chips'
 import { diffStat } from '../../ui/diff-stat'
 import { statBar } from '../../ui/stat-bar'
+import { pillRow } from '../../ui/strip'
 import { selectButtons } from '../select-buttons'
 
 /** The source Select's element key, for a test or a focus target. */
@@ -96,7 +97,7 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
 /** The reserved minimum the change map keeps even at the narrowest docked body (rulings R28, R30)
  * — `changeMapOf`'s own overflow `…` rule still applies on top of this cap. `2`, not `3`: ruling
  * R30 below keeps nav in the row at every width, which costs 12 more columns than the old
- * nav-less floor (two `[ x ]` chips, 5 columns each, plus the two extra gaps between a now-5-chip
+ * nav-less floor (two icon pills, 3 columns each, plus the two extra gaps between a now-5-chip
  * instead of 3-chip row), and shaving one more cell off the map is part of what closes the
  * arithmetic back to 38 columns (measured against the R28/R30 test fixtures — 5 files, 2 pending,
  * `bodyColumns: 38`; a third fixture at 10 pending needed the compact notes summary's own digit
@@ -105,15 +106,15 @@ const MIN_MAP_CELLS = 2
 
 /**
  * `chips`' own icons-mode floor: every chip bare-iconed (`short` when given, else `icon`),
- * bracket-padded `[ x ]`, with one gap between — the same width model `chips.tsx`'s internal
- * `widthOf`/`buttonWidthOf` use for `chipsLayout`'s own sizing, kept here only for that floor
+ * padded as a pill (one cell each side), with one gap between — the same width model
+ * `chips.ts` uses for `chipsLayout`'s own sizing, kept here only for that floor
  * (nothing passed to it is ever `forceWords`; that only happens during an armed confirm, which
  * never reaches this helper) to decide whether nav and refresh must give way before the map and
  * the notes summary are squeezed below R28's reserved minimum.
  */
 function iconsWidthOf(chips: readonly Chip[]): number {
   if (chips.length === 0) return 0
-  const total = chips.reduce((sum, chip) => sum + (chip.short ?? chip.icon).length + 4, 0)
+  const total = chips.reduce((sum, chip) => sum + (chip.short ?? chip.icon).length + 2, 0)
   return total + (chips.length - 1)
 }
 
@@ -132,7 +133,7 @@ function iconsWidthOf(chips: readonly Chip[]): number {
  *
  * Ruling R28: with nothing armed, the map and the notes summary degrade instead of vanishing.
  * Every chip bare-iconed can still cost more than the row has — six chips, each drawn
- * `[ x ]`-bracketed, add up fast — which would otherwise starve the left side to nothing before
+ * as a padded pill, add up fast — which would otherwise starve the left side to nothing before
  * `chipsLayout` ever gets a say (the chips' own `Box` is `flexShrink: 0`; the left side's is
  * `flexShrink: 1`, so it is the one that gives, all the way to 0 if it has to — caught live at a
  * docked pane's real width, see the task report). When the full chip set's own icons floor would
@@ -155,8 +156,10 @@ function iconsWidthOf(chips: readonly Chip[]): number {
  * `tabIndex` escape from this, so nav instead stays visible at every width (this function's own
  * fallback, named in the original ruling) — confirmed live with the real fix: the same ctrl+x tab
  * and two Tabs reach the Select exactly as before, but Tab 3 now lands, marked, directly on
- * `[ ↑ ]`. `MIN_MAP_CELLS` (above) absorbs the extra columns nav's two Buttons always cost now
- * that they can no longer give way.
+ * ` ↑ `. `MIN_MAP_CELLS` (above) absorbs the extra columns nav's two Buttons always cost now
+ * that they can no longer give way. A `Client` strip cannot bind an engine chord, so nav keeps
+ * drawing as two `plain` Buttons (no brackets, label padded like a pill) beside the strip that
+ * `pillRow` draws for every other chip.
  */
 function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text } = kit.ui
@@ -171,7 +174,6 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           action: 'app:diffFileListUp',
           icon: '↑',
           label: '',
-          isDim: true,
           priority: 0,
           onPress: props.onPrevious,
         },
@@ -180,7 +182,6 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           action: 'app:diffFileListDown',
           icon: '↓',
           label: '',
-          isDim: true,
           priority: 0,
           onPress: props.onNext,
         },
@@ -190,7 +191,6 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           key: 'refresh',
           icon: '↻',
           label: 'refresh',
-          isDim: true,
           priority: 1,
           onPress: props.onRefresh,
         })
@@ -202,7 +202,6 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           key: 'edit-send',
           icon: '✎',
           label: 'edit & send',
-          isDim: true,
           priority: 3,
           onPress: props.onEditSend,
         },
@@ -211,7 +210,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           icon: '➤',
           short: `➤ ${pending}`,
           label: `send ${pending}`,
-          variant: 'primary',
+          kind: 'primary',
           priority: 4,
           onPress: props.onSend,
         },
@@ -221,7 +220,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       key: 'clear',
       icon: '⌫',
       label: confirmingClear ? 'clear all?' : 'clear',
-      isDim: !confirmingClear,
+      kind: confirmingClear ? 'armed' : 'danger',
       forceWords: confirmingClear,
       priority: 2,
       onPress: props.onClear,
@@ -261,7 +260,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
           </Text>
         ) : null}
       </Box>
-      <Box flexShrink={0}>{chipRow(kit, chips, modes, ACTIONS_ROW_KEY)}</Box>
+      <Box flexShrink={0}>{pillRow(kit, chips, modes, ACTIONS_ROW_KEY)}</Box>
     </Box>
   )
 }

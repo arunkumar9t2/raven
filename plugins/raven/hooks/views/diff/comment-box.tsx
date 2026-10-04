@@ -9,10 +9,10 @@ import { type Hunk, parseHeader } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../../review/comments'
 import { ageOf } from '../../ui/age'
 import { card } from '../../ui/card'
-import { type Chip, chipRow } from '../../ui/chips'
+import type { Chip } from '../../ui/chips'
 import { meta } from '../../ui/meta'
 import { row } from '../../ui/row'
-import { type KitSeg, pill, strip } from '../../ui/strip'
+import { type KitSeg, pill, pillRow, strip } from '../../ui/strip'
 import { widthOf } from '../../ui/wrap'
 import {
   type Anchor,
@@ -86,14 +86,13 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const hint = (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
       <Text dimColor>⏎ add</Text>
-      {chipRow(
+      {pillRow(
         kit,
         [
           {
             key: cancelKeyOf(anchor),
             icon: '✕',
             label: 'cancel',
-            isDim: true,
             onPress: props.onCancel,
           },
         ],
@@ -151,7 +150,7 @@ export function note(
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
       <Text color={color}>{STATUS_WORDS[comment.status]}</Text>
       {meta(kit, [lineLabel, ageOf(comment.createdAt, now)])}
-      {chipRow(kit, noteChipsOf(comment, onRemove, onResend), 'words', scope)}
+      {pillRow(kit, noteChipsOf(comment, onRemove, onResend), 'words', scope)}
     </Box>
   )
   return card(kit, {
@@ -180,7 +179,6 @@ export function noteChip(anchor: Anchor, onStart: (anchor: Anchor) => void): Chi
     key: commentButtonKeyOf(anchor),
     icon: '✎',
     label: 'note',
-    isDim: true,
     onPress: () => onStart(anchor),
   }
 }

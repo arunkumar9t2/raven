@@ -16,26 +16,26 @@ const TOOLBAR = [
 ]
 
 describe('chipsFit', () => {
-  test('words when [ ✎ note ] [ ✓ stage ] [ ↺ revert ] fits', () => {
-    // 10 + 1 + 11 + 1 + 12 = 35
-    expect(chipsFit(TOOLBAR, 35)).toBe('words')
+  test('words when the note, stage and revert pills fit', () => {
+    // 8 + 1 + 9 + 1 + 10 = 29
+    expect(chipsFit(TOOLBAR, 29)).toBe('words')
   })
   test('icons one column short of that', () => {
-    expect(chipsFit(TOOLBAR, 34)).toBe('icons')
+    expect(chipsFit(TOOLBAR, 28)).toBe('icons')
   })
   test('no chips fit anything', () => {
     expect(chipsFit([], 0)).toBe('words')
   })
 
   test('an icon-only or label-only chip still fits by its one real word (no stray space)', () => {
-    // buttonWidthOf('✕') = 1 + 4 = 5; buttonWidthOf('resend') = 6 + 4 = 10; +1 gap = 16.
+    // a pill is its text plus 2 padding cells: '✕' = 3, 'resend' = 8; +1 gap = 12.
     expect(
       chipsFit(
         [
           { icon: '✕', label: '' },
           { icon: '', label: 'resend' },
         ],
-        16,
+        12,
       ),
     ).toBe('words')
     expect(
@@ -44,15 +44,15 @@ describe('chipsFit', () => {
           { icon: '✕', label: '' },
           { icon: '', label: 'resend' },
         ],
-        15,
+        11,
       ),
     ).toBe('icons')
   })
 })
 
 describe('chipsLayout', () => {
-  // Three chips, same shape, distinguished only by `priority`: `buttonWidthOf('x xxxx')` = 10
-  // in words, `buttonWidthOf('x')` = 5 in icons. Total words width = 3*10 + 2 gaps = 32.
+  // Three chips, same shape, distinguished only by `priority`: a pill of 'x xxxx' is 8
+  // cells in words, 'x' is 3 in icons. Total words width = 3*8 + 2 gaps = 26.
   const CHIPS: readonly Chip[] = [
     chipOf({ key: 'a', icon: 'a', label: 'aaaa', priority: 2 }),
     chipOf({ key: 'b', icon: 'b', label: 'bbbb', priority: 0 }),
@@ -60,23 +60,23 @@ describe('chipsLayout', () => {
   ]
 
   test('everything fits: every chip stays words', () => {
-    expect(chipsLayout(CHIPS, 32)).toEqual(['words', 'words', 'words'])
+    expect(chipsLayout(CHIPS, 26)).toEqual(['words', 'words', 'words'])
   })
 
   test('one short of fitting: the lowest-priority chip (b, priority 0) shrinks alone', () => {
-    // 32 - (10 - 5) = 27 <= 28.
-    expect(chipsLayout(CHIPS, 28)).toEqual(['words', 'icons', 'words'])
+    // 26 - (8 - 3) = 21 <= 25.
+    expect(chipsLayout(CHIPS, 25)).toEqual(['words', 'icons', 'words'])
   })
 
   test('tighter still: priority 0 then priority 1 shrink, in that order', () => {
-    // 27 - 5 = 22 <= 22.
-    expect(chipsLayout(CHIPS, 22)).toEqual(['words', 'icons', 'icons'])
+    // 21 - 5 = 16 <= 17.
+    expect(chipsLayout(CHIPS, 17)).toEqual(['words', 'icons', 'icons'])
   })
 
   test('the highest-priority chip shrinks too, as a last resort, once nothing else can help', () => {
-    // Fully shrunk: 5*3 + 2 gaps = 17, still short of 16 — every chip ends up in icons mode
+    // Fully shrunk: 3*3 + 2 gaps = 11, still short of 10 — every chip ends up in icons mode
     // rather than leaving the row over its room with one chip left in words.
-    expect(chipsLayout(CHIPS, 16)).toEqual(['icons', 'icons', 'icons'])
+    expect(chipsLayout(CHIPS, 10)).toEqual(['icons', 'icons', 'icons'])
   })
 
   test('a forceWords chip is never shrunk, even as the lowest priority', () => {
@@ -85,8 +85,8 @@ describe('chipsLayout', () => {
       chipOf({ key: 'b', icon: 'b', label: 'bbbb', priority: 0, forceWords: true }),
       chipOf({ key: 'c', icon: 'c', label: 'cccc', priority: 1 }),
     ]
-    // b can't shrink, so c (priority 1) goes next instead: 32 - (10 - 5) = 27 <= 28.
-    expect(chipsLayout(chips, 28)).toEqual(['words', 'words', 'icons'])
+    // b can't shrink, so c (priority 1) goes next instead: 26 - (8 - 3) = 21 <= 25.
+    expect(chipsLayout(chips, 25)).toEqual(['words', 'words', 'icons'])
   })
 
   test('no chips lays out nothing', () => {

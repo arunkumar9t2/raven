@@ -38,6 +38,7 @@ const KIT = {
   columns: 100,
   rows: 7,
   capabilities: { canType: true, canPick: true, canShowImage: true, canClient: true },
+  press: () => {},
 } as unknown as Kit
 
 function flatten(children: unknown): unknown[] {

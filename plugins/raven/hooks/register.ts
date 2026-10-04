@@ -186,7 +186,7 @@ export function register(on: On, options: PluginOptions) {
       e.requestId,
     )
     if (!raven) return next(e)
-    const drawn = await raven.band(kit, e.props.hasSurvey)
+    const drawn = await raven.band(kit, e.props.hasSurvey, e.requestId)
     return drawn ?? next(e)
   })
 
@@ -204,9 +204,9 @@ export function register(on: On, options: PluginOptions) {
     },
   )
 
-  // A `Client` pill's press (`surface/strip.tsx` posts `{ press: id }`). `data` came from code, so
+  // A `Client` pill's press (`surface/strip.tsx` posts `{ press: id }`) from a pane or the band. `data` came from code, so
   // it is validated; a stale or unknown id is ignored. Answers `{}` either way: nothing to hand back.
-  on('ui.message', { requestId: PANE_IDS }, ($, e, next) => {
+  on('ui.message', ($, e, next) => {
     const data = e.data
     if (raven && isRecord(data) && typeof data.press === 'string') {
       raven.press(e.requestId, data.press)

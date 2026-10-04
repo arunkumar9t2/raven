@@ -21,7 +21,18 @@ import {
 } from '../hooks/views/diff/anchor'
 import { ACTIONS_ROW_KEY, SOURCE_SELECT_KEY, SUMMARY_ROW_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
-import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
+import {
+  baseWorld,
+  PANE_PROPS,
+  pillOf,
+  pillsText,
+  pressPill,
+  REPO,
+  ran,
+  ravenCommand,
+  SESSION,
+  trackShownPanes,
+} from './helpers'
 
 tier('user')
 
@@ -309,7 +320,7 @@ describe('options: watched doc paths, defaults', () => {
     })
     // Sections of '# Plan\n\nIntro\n\n## Goals\n\n- a\n' are [Plan (0), Goals (1)]: Goals is §1.
     const goals = { path: DOC_PATH, hunk: '§1' }
-    await ui.press({ key: commentButtonKeyOf(goals) })
+    await pressPill(ui, commentButtonKeyOf(goals))
     await ui.input({ key: inputKeyOf(goals), text: 'tighten the goals' })
     expect(await ui.find({ text: /tighten the goals/ })).toBeDefined()
 
@@ -331,7 +342,7 @@ describe('options: watched doc paths, defaults', () => {
       requestId: DOC_PANE.id,
     })
     const secondNotes = { path: DOC_PATH, hunk: '§1' }
-    await ui.press({ key: commentButtonKeyOf(secondNotes) })
+    await pressPill(ui, commentButtonKeyOf(secondNotes))
     await ui.input({ key: inputKeyOf(secondNotes), text: 'only on the second one' })
 
     expect((await ui.find({ key: 'section:1' }))?.text).toContain('only on the second one')
@@ -353,7 +364,7 @@ describe('options: watched doc paths, defaults', () => {
       requestId: DOC_PANE.id,
     })
     const gone = { path: DOC_PATH, hunk: '§0' }
-    await ui.press({ key: commentButtonKeyOf(gone) })
+    await pressPill(ui, commentButtonKeyOf(gone))
     await ui.input({ key: inputKeyOf(gone), text: 'orphan' })
     expect(await ui.find({ text: /orphan/ })).toBeDefined()
 
@@ -570,8 +581,8 @@ const mountDiff = ($: Engine) =>
  * An element's own real drawn width, reconstructed from the raw tree the mod-kit harness returns
  * (`type`, `props`, `children`) rather than `.text` — which flattens a `Button` down to its bare
  * label and drops every `Box`'s `gap`, so it cannot stand in for "does this actually fit" the way
- * the other narrowest-pane tests use it (see the R28 test above). A `Button` draws `[ label ]`
- * (`types/claude-code.d.ts`'s own documented convention, `chips.tsx`'s `buttonWidthOf`); a row
+ * the other narrowest-pane tests use it (see the R28 test above). A plain `Button` draws its label; a
+ * `Client` strip the cells of its first row's left segments; a row
  * `Box` sums its children plus one `gap` between each; any other `Box` (here, always a single
  * child) is its child's width; a `Text` is the length of its string children, recursing into any
  * nested `Text` (the change map nests one coloured `Text` per glyph).
@@ -580,7 +591,13 @@ function drawnWidth(
   el: { type: string; props?: Record<string, unknown>; children?: unknown[] } | undefined,
 ): number {
   if (!el) return 0
-  if (el.type === 'Button') return ((el.props?.label as string | undefined)?.length ?? 0) + 4
+  if (el.type === 'Button') {
+    return ((el.props?.label as string | undefined)?.length ?? 0) + (el.props?.plain ? 0 : 4)
+  }
+  if (el.type === 'Client') {
+    const rows = (el.props?.props as { rows?: { left: { t: string }[] }[] } | undefined)?.rows
+    return (rows?.[0]?.left ?? []).reduce((sum, seg) => sum + [...seg.t].length, 0)
+  }
   const kids = (el.children ?? []) as readonly unknown[]
   if (el.type === 'Text') {
     return kids.reduce(
@@ -1087,7 +1104,7 @@ describe('diff header', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'send' }))?.props.variant).toBe('primary')
+    expect((await pillOf(ui, 'send'))?.bg).toBe('claude')
   })
 
   test('an armed clear confirms with "clear all?"', async ($, on) => {
@@ -1098,8 +1115,8 @@ describe('diff header', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    await ui.press({ key: 'clear' })
-    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all?')
+    await pressPill(ui, 'clear')
+    expect((await pillOf(ui, 'clear'))?.t).toContain('clear all?')
   })
 
   test('the send chip shrinks to its icon and count at the narrowest docked pane', async ($, on) => {
@@ -1120,7 +1137,7 @@ describe('diff header', () => {
       requestId: DIFF_PANE.id,
     })
 
-    expect((await ui.find({ key: 'send' }))?.text).toContain('➤ 2')
+    expect((await pillOf(ui, 'send'))?.t).toContain('➤ 2')
   })
 
   test('an armed clear keeps its full confirm words even at the narrowest docked pane', async ($, on) => {
@@ -1137,8 +1154,8 @@ describe('diff header', () => {
       requestId: DIFF_PANE.id,
     })
 
-    await ui.press({ key: 'clear' })
-    expect((await ui.find({ key: 'clear' }))?.text).toContain('clear all?')
+    await pressPill(ui, 'clear')
+    expect((await pillOf(ui, 'clear'))?.t).toContain('clear all?')
   })
 
   test('row 2 starts with the change map, tallest glyph for the biggest change', async ($, on) => {
@@ -1183,11 +1200,11 @@ describe('diff header', () => {
   })
 
   test('row 2 shrinks refresh before edit & send and send, which keep their words at the default pane', async ($, on) => {
-    // 15 files, so the change map's left-side width (15 cells + the notes text) pushes the
+    // 30 files, so the change map's left-side width (30 cells + the notes text) pushes the
     // chips' room just under what every chip in words needs, but not so far under that the
     // shrink has to reach edit & send or send: only refresh (and nav, which looks the same
     // either way) need to give way.
-    const files = Array.from({ length: 15 }, (_, i) => `f${i}.ts`)
+    const files = Array.from({ length: 30 }, (_, i) => `f${i}.ts`)
     const pending = [
       { id: 'c1', path: 'f0.ts', text: 'fix this', status: 'pending', createdAt: 0 },
       { id: 'c2', path: 'f0.ts', text: 'fix that', status: 'pending', createdAt: 0 },
@@ -1198,9 +1215,9 @@ describe('diff header', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'send' }))?.text).toContain('send 2')
-    expect((await ui.find({ key: 'edit-send' }))?.text).toContain('edit & send')
-    expect((await ui.find({ key: 'refresh' }))?.text).not.toContain('refresh')
+    expect((await pillOf(ui, 'send'))?.t).toContain('send 2')
+    expect((await pillOf(ui, 'edit-send'))?.t).toContain('edit & send')
+    expect((await pillOf(ui, 'refresh'))?.t).not.toContain('refresh')
   })
 
   test('an armed clear drops nav and refresh from row 2 and keeps its own words whole, even at the narrowest pane with notes pending', async ($, on) => {
@@ -1221,18 +1238,18 @@ describe('diff header', () => {
       requestId: DIFF_PANE.id,
     })
 
-    await ui.press({ key: 'clear' })
+    await pressPill(ui, 'clear')
 
     expect(await ui.find({ key: 'previous' })).toBeUndefined()
     expect(await ui.find({ key: 'next' })).toBeUndefined()
-    expect(await ui.find({ key: 'refresh' })).toBeUndefined()
+    expect(await pillOf(ui, 'refresh')).toBeUndefined()
 
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
-    expect(row?.text).toContain('clear all?')
+    expect((await pillOf(ui, 'clear'))?.t).toContain('clear all?')
     // `.text` is the row's whole drawn content with no clipping applied by this harness, so its
     // length is the real proxy for "does this actually fit" — same convention as the hunk
     // toolbar's own narrowest-pane test.
-    expect(row?.text?.length ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(38)
+    expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
   test('with nothing armed, the map and the notes summary degrade instead of vanishing at the narrowest docked pane (R28)', async ($, on) => {
@@ -1302,7 +1319,7 @@ describe('diff header', () => {
 
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
     expect(row?.text).not.toContain('✎10')
-    expect((await ui.find({ key: 'send' }))?.text).toContain('➤ 10')
+    expect((await pillOf(ui, 'send'))?.t).toContain('➤ 10')
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
@@ -1335,14 +1352,31 @@ describe('diff header', () => {
     const next = await ui.find({ key: 'next' })
     expect(previous?.props.action).toBe('app:diffFileListUp')
     expect(next?.props.action).toBe('app:diffFileListDown')
-    expect(previous?.text).toBe('↑')
-    expect(next?.text).toBe('↓')
+    expect(previous?.text).toBe(' ↑ ')
+    expect(next?.text).toBe(' ↓ ')
 
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
     // Independent of the width arithmetic below: a `display: "none"` wrapper (ruling R30's first,
     // abandoned fix) would still measure 0 and could pass `drawnWidth <= 38` by accident.
     expect(anyDisplayNone(row)).toBe(false)
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
+  })
+
+  test('no control anywhere in the pane draws a square-bracket chip: header, heading, note card, compose', async ($, on) => {
+    const open = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'open', createdAt: 0 }
+    const pending = { id: 'c2', path: 'a.ts', text: 'and that', status: 'pending', createdAt: 0 }
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [open, pending] }, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
+    const strips = await pillsText(ui)
+    for (const label of ['clear', 'send 1', 'resend', 'cancel']) expect(strips).toContain(label)
+    expect(strips).not.toMatch(/[[\]]/)
+    expect(await ui.find({ text: /\[ / })).toBeUndefined()
+    expect(await ui.find({ text: / \]/ })).toBeUndefined()
   })
 
   test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {
@@ -1352,7 +1386,7 @@ describe('diff header', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: commentButtonKeyOf({ path: 'a.ts' }) }))?.text).toContain('✎ note')
+    expect((await pillOf(ui, commentButtonKeyOf({ path: 'a.ts' })))?.t).toContain('✎ note')
     expect(await ui.find({ text: /comment on this/ })).toBeUndefined()
   })
 })
@@ -1596,7 +1630,7 @@ describe('stage and revert a hunk', () => {
     // Right-aligned pills: ` ✎ note ` (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert ` (10) end at column 60,
     // so stage spans columns 40..48.
     await ui.pointer({ type: 'move', x: 44, y: 0, in: TOOLBAR_KEY })
-    expect(await bgOf()).toBe('userMessageBackgroundHover')
+    expect(await bgOf()).toBe('selectionBg')
     await ui.pointer({ type: 'move', x: 10, y: 0, in: TOOLBAR_KEY })
     expect(await bgOf()).toBe('userMessageBackground')
 
@@ -1875,11 +1909,11 @@ describe('the AbovePrompt status band', () => {
 
     const ui = await mountBand($)
     expect(await ui.find({ text: '●' })).toBeDefined()
-    const open = await ui.find({ key: 'band:open' })
-    expect(open?.type).toBe('Button')
-    const send = await ui.find({ key: 'band:send' })
-    expect(send?.type).toBe('Button')
-    expect(send?.props.variant).toBe('primary')
+    expect((await pillOf(ui, 'band:open'))?.t).toContain('open')
+    const send = await pillOf(ui, 'band:send')
+    expect(send?.t).toContain('send')
+    expect(send?.bg).toBe('claude')
+    expect(await pillsText(ui)).not.toMatch(/[[\]]/)
   })
 })
 
@@ -2143,7 +2177,7 @@ describe('a note is a card (R38)', () => {
     const ui = await mountDiff($)
 
     expect((await ui.find({ key: noteKeyOf('o1') }))?.text).toContain('open')
-    await ui.press({ key: commentButtonKeyOf({ path: 'a.ts' }) })
+    await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
     await ui.input({ key: inputKeyOf({ path: 'a.ts' }), text: 'fresh one' })
     expect(await ui.find({ text: /pending/ })).toBeDefined()
   })
@@ -2155,13 +2189,12 @@ describe('a note is a card (R38)', () => {
     const ui = await mountDiff($)
 
     const anchor = { path: 'a.ts' }
-    await ui.press({ key: commentButtonKeyOf(anchor) })
-    expect(await ui.find({ key: cancelKeyOf(anchor) })).toBeDefined()
+    await pressPill(ui, commentButtonKeyOf(anchor))
+    expect((await pillOf(ui, cancelKeyOf(anchor)))?.t).toContain('cancel')
     expect(await ui.find({ text: /⏎ add/ })).toBeDefined()
-    expect(await ui.find({ text: /cancel/ })).toBeDefined()
 
-    await ui.press({ key: cancelKeyOf(anchor) })
-    expect(await ui.find({ key: cancelKeyOf(anchor) })).toBeUndefined()
+    await pressPill(ui, cancelKeyOf(anchor))
+    expect(await pillOf(ui, cancelKeyOf(anchor))).toBeUndefined()
   })
 
   test("the Doc pane's section note is the same card", async ($, on) => {
@@ -2177,7 +2210,7 @@ describe('a note is a card (R38)', () => {
       requestId: DOC_PANE.id,
     })
     const section = { path: docPath, hunk: '§0' }
-    await ui.press({ key: commentButtonKeyOf(section) })
+    await pressPill(ui, commentButtonKeyOf(section))
     await ui.input({ key: inputKeyOf(section), text: 'doc card note' })
     expect(await ui.find({ text: /pending/ })).toBeDefined()
   })
@@ -2249,7 +2282,7 @@ describe('comments outside the stream (R32)', () => {
     expect(await ui.find({ text: 'gone.ts' })).toBeDefined()
     expect(await ui.find({ text: 'file gone' })).toBeDefined()
 
-    await ui.press({ key: dropKeyOf('c1') })
+    await pressPill(ui, dropKeyOf('c1'))
 
     expect(await ui.find({ text: 'Not in this diff' })).toBeUndefined()
   })

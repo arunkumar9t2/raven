@@ -36,7 +36,6 @@ export function noteChipsOf(
       key: resendKeyOf(comment.id),
       icon: '',
       label: 'resend',
-      isDim: true,
       onPress: onResend,
     })
   }
@@ -44,7 +43,6 @@ export function noteChipsOf(
     key: dropKeyOf(comment.id),
     icon: '✕',
     label: '',
-    isDim: true,
     onPress: () => onRemove(comment.id),
   })
   return chips

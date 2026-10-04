@@ -20,8 +20,9 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { chipRow, chipsFit } from '../ui/chips'
+import { chipsFit } from '../ui/chips'
 import { row } from '../ui/row'
+import { pillRow } from '../ui/strip'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import {
   type BodyItem,
@@ -569,7 +570,7 @@ export function createDiffView(
           // single note chip shrinks to its bare icon under the same pressure, the path (which
           // already truncates on its own via `wrap="truncate-end"`) giving way first.
           const mode = chipsFit([chip], Math.max(0, contentWidth - HEADER_MIN))
-          right = chipRow(kit, [chip], mode, titleKey)
+          right = pillRow(kit, [chip], mode, titleKey)
         }
         return row(kit, { left, right, key: titleKey })
       }

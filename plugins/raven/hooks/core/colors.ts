@@ -31,9 +31,9 @@ export const COLORS = {
   done: 'success',
   /** Body text at full strength: a pill's label at rest. */
   text: 'text',
-  /** The same tint under the pointer: a resting pill's hover background, a hovered row. */
+  /** The same tint under the pointer: a hovered list row (R41). */
   userMessageHover: 'userMessageBackgroundHover',
-  /** A selected or active list row's background. */
+  /** A hovered pill's background and an active list row's background (R41). */
   selection: 'selectionBg',
   /** Text on a filled accent or error background: a primary or armed pill's label. */
   inverseText: 'inverseText',
@@ -66,7 +66,7 @@ export type PillKind = 'normal' | 'primary' | 'danger' | 'armed' | 'on'
 
 /**
  * Each pill kind's text colour, background and hover pair, by theme key only. Normal rests on the
- * user-message tint and lights to its hover tint; primary is the accent fill; danger is error-
+ * user-message tint and lights to the selection tint (R41); primary is the accent fill; danger is error-
  * coloured text; armed (a confirm waiting for its second press) is a filled error pill; on is a
  * succeeded state (staged).
  */
@@ -74,9 +74,9 @@ export const PILL_COLORS: Record<
   PillKind,
   { c: string; bg: string; hoverC?: string; hoverBg: string }
 > = {
-  normal: { c: COLORS.text, bg: COLORS.userMessage, hoverBg: COLORS.userMessageHover },
+  normal: { c: COLORS.text, bg: COLORS.userMessage, hoverBg: COLORS.selection },
   primary: { c: COLORS.inverseText, bg: COLORS.accent, hoverBg: 'claudeShimmer' },
-  danger: { c: COLORS.error, bg: COLORS.userMessage, hoverBg: COLORS.userMessageHover },
-  armed: { c: COLORS.inverseText, bg: COLORS.error, hoverBg: 'rainbow_red' },
-  on: { c: COLORS.done, bg: COLORS.userMessage, hoverBg: COLORS.userMessageHover },
+  danger: { c: COLORS.error, bg: COLORS.userMessage, hoverBg: COLORS.selection },
+  armed: { c: COLORS.inverseText, bg: COLORS.error, hoverBg: COLORS.error },
+  on: { c: COLORS.done, bg: COLORS.userMessage, hoverBg: COLORS.selection },
 }

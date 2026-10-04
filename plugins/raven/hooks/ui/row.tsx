@@ -43,7 +43,7 @@ function slotOf(kit: UiKit, value: RenderElement | string, dim: boolean): Render
  * axis unless the child claims a share of the growth itself — only a column parent's default
  * `alignItems: stretch` would have filled the width for free, and nothing here is one. Without
  * this, `justifyContent="space-between"` has no free width to distribute and the right slot sits
- * right after the left instead of at the row's far edge (confirmed live: `+1 −1 [ ✎ note ]` with
+ * right after the left instead of at the row's far edge (confirmed live: `+1 −1` and the pill with
  * no gap at all).
  */
 export function row(kit: UiKit, props: RowProps): RenderElement {

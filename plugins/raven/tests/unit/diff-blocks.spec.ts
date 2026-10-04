@@ -99,11 +99,11 @@ describe("a note block's rows", () => {
       line: { number: 12, side: 'new', text: 'x' },
       text: 'please look at this again',
     })
-    const lines = noteLinesOf(open, 40)
+    const lines = noteLinesOf(open, 36)
     expect(lines[0]).toBe('')
     expect(lines.slice(1).join(' ')).toContain('please look')
-    expect(noteRows(40, open.text)).toBeDefined()
-    const block = blocksOf(file, [hunkA], [open], null, { width: 41 }).find(
+    expect(noteRows(36, open.text)).toBeDefined()
+    const block = blocksOf(file, [hunkA], [open], null, { width: 37 }).find(
       b => b.key === noteKeyOf('n1'),
     )
     expect(block).toMatchObject({ rows: lines.length })
