@@ -3,24 +3,25 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import { COLORS } from '../core/colors'
+import { COLORS, RAINBOW } from '../core/colors'
 import type { Host } from '../core/host'
 import { ELEMENT_TEXT_LIMIT, type Kit, type View } from '../core/view'
 import { DOC_PANE } from '../names'
 import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
+import { fill, ruleRow } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { row } from '../ui/row'
+import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { pillRow } from '../ui/strip'
 import { table } from '../ui/table'
 import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
+import { addressedRow, commentBox, note, noteChip } from './diff/comment-box'
 import { noteLinesOf } from './diff/note-layout'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { type DocSection, docSectionsOf } from './doc-sections'
-import { baseName } from './icons'
+import { baseName, iconOf } from './icons'
 import { type DocBlock, docBlocksOf, markdownChunksOf, type TableBlock } from './markdown-chunks'
 import { selectButtons } from './select-buttons'
 
@@ -48,6 +49,27 @@ export type DocView = View & {
 }
 
 const HISTORY_LIMIT = 10
+
+/** What the card's `│ ` left border takes of the pane's width. */
+const BORDER_CELLS = 2
+/** The calm colour of the card border and its `├─` separators. */
+const BORDER_COLOR = COLORS.subtle
+/** A note doc's title icon (a document), where a file's is its type icon. */
+const NOTE_ICON = '\u{f0219}' // nf-md-file_document
+
+/** More `│` rows than any pane is tall: the border column clips to the body's own height. */
+const BORDER_STACK = Array.from({ length: 500 }, () => '│').join('\n')
+
+const HEADING_LINE = /^ {0,3}#{1,6}\s/
+
+/**
+ * A section's text without its own heading line: the `├─ § heading` separator names the section,
+ * so the Markdown must not draw it a second time.
+ */
+function withoutHeading(text: string): string {
+  const [first = '', ...rest] = text.split('\n')
+  return HEADING_LINE.test(first) ? rest.join('\n').trim() : text
+}
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
 const isImage = (path: string) => /\.(png|jpe?g|gif|webp)$/i.test(path)
@@ -97,7 +119,7 @@ export function createDocView(
     const doc = shown.doc
     const sections = docSectionsOf(text).map(section => ({
       section,
-      chunks: markdownChunksOf(section.text).map(chunk => ({
+      chunks: markdownChunksOf(withoutHeading(section.text)).map(chunk => ({
         blocks: docBlocksOf(chunk),
         links: doc.kind === 'file' ? docLinksOf(doc.path, chunk) : undefined,
       })),
@@ -236,7 +258,7 @@ export function createDocView(
     doc: Extract<Doc, { kind: 'file' }>,
     text: string,
   ): RenderElement {
-    const { Box } = kit.ui
+    const { Box, Text } = kit.ui
     const sections = sectionsOf(shown, text)
     const comments = review
       .comments()
@@ -276,6 +298,26 @@ export function createDocView(
 
       return (
         <Box key={`section:${index}`} flexDirection="column">
+          <Box key={`section-note:${anchorKeyOf(anchor)}`}>
+            {ruleRow(kit, {
+              color: BORDER_COLOR,
+              start: '├─ ',
+              left: (
+                <Text wrap="truncate-end">
+                  <Text color={BORDER_COLOR}>§ </Text>
+                  <Text bold>{heading}</Text>
+                </Text>
+              ),
+              right: chip
+                ? pillRow(
+                    kit,
+                    [chip],
+                    chipsFit([chip], Math.max(0, kit.columns - 8)),
+                    `${anchorKeyOf(anchor)}:note`,
+                  )
+                : undefined,
+            })}
+          </Box>
           {chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)}
           {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
           {visible.map(comment =>
@@ -298,20 +340,6 @@ export function createDocView(
                 onLineChange: () => {},
                 onSubmit: submitted => submitComment(doc.path, heading, index, submitted),
                 onCancel: () => stopComposing(anchor),
-              })
-            : null}
-          {chip
-            ? row(kit, {
-                left: '',
-                right: pillRow(
-                  kit,
-                  [chip],
-                  chipsFit([chip], kit.columns),
-                  `${anchorKeyOf(anchor)}:note`,
-                ),
-                // Distinct from the chip's own key (commentButtonKeyOf) — the row and the chip it
-                // wraps must not share a key, or `ui.press`/`ui.input` can resolve the wrong node.
-                key: `section-note:${anchorKeyOf(anchor)}`,
               })
             : null}
         </Box>
@@ -337,7 +365,11 @@ export function createDocView(
         {sectionElements}
         {outdated.length > 0 ? (
           <Box flexDirection="column">
-            {outdatedTitle(kit)}
+            {ruleRow(kit, {
+              color: BORDER_COLOR,
+              start: '├─ ',
+              left: <Text dimColor>Outdated</Text>,
+            })}
             {[...outdatedGroups.entries()].map(([key, group]) => {
               const { addressed, visible } = splitAddressed(group)
               const anchor: Anchor = { path: doc.path, hunk: `§outdated:${key}` }
@@ -419,8 +451,13 @@ export function createDocView(
     const { Box, Text, Select } = kit.ui
     const shown = history.find(each => each.key === current)
 
-    if (!shown)
-      return <Text dimColor>Nothing shown yet. Plans and docs Claude writes open here.</Text>
+    if (!shown) {
+      return emptyState(
+        kit,
+        EMPTY_ICONS.doc,
+        'Nothing shown yet — plans and docs Claude writes open here',
+      )
+    }
 
     const picker =
       history.length <= 1 ? null : kit.capabilities.canPick ? (
@@ -435,24 +472,40 @@ export function createDocView(
         historyButtons(kit, shown)
       )
 
+    // The card's `│ ` border takes two cells: everything inside lays out at the narrower width.
+    const inner: Kit = { ...kit, columns: Math.max(1, kit.columns - BORDER_CELLS) }
+    const icon =
+      shown.doc.kind === 'file' ? iconOf(shown.doc.path) : { glyph: NOTE_ICON, color: RAINBOW.blue }
+    const heading = (
+      <Text wrap="truncate-end">
+        <Text color={icon.color}>{icon.glyph}</Text>
+        {shown.doc.kind === 'file' && shown.doc.title ? (
+          <Text>
+            <Text bold>{` ${shown.doc.title}`}</Text>
+            <Text dimColor>{`  ${shown.doc.path}`}</Text>
+          </Text>
+        ) : (
+          <Text bold>{` ${shown.doc.kind === 'file' ? shown.doc.path : shown.title}`}</Text>
+        )}
+      </Text>
+    )
+
     return (
-      <Box flexDirection="column" gap={1}>
+      <Box flexDirection="column">
         {picker}
-        <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
-          {shown.doc.kind === 'file' && shown.doc.title ? (
-            <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-              <Text bold>{shown.doc.title}</Text>
-              <Text dimColor wrap="truncate-end">
-                {shown.doc.path}
-              </Text>
-            </Box>
-          ) : (
-            <Text bold wrap="truncate-end">
-              {shown.doc.kind === 'file' ? shown.doc.path : shown.title}
-            </Text>
-          )}
+        <Box key="doc-title">
+          {ruleRow(kit, { color: BORDER_COLOR, start: '╭─ ', left: heading })}
         </Box>
-        {body(kit, shown)}
+        <Box key="doc-card" flexDirection="column" paddingLeft={BORDER_CELLS}>
+          <Box position="absolute" top={0} bottom={0} left={0} width={1} overflow="hidden">
+            <Text color={BORDER_COLOR}>{BORDER_STACK}</Text>
+          </Box>
+          {body(inner, shown)}
+        </Box>
+        <Box key="doc-close" flexDirection="row" overflow="hidden" flexWrap="nowrap">
+          <Text color={BORDER_COLOR}>╰</Text>
+          {fill(kit, BORDER_COLOR)}
+        </Box>
       </Box>
     )
   }

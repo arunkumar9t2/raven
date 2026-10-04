@@ -8,6 +8,7 @@ import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
 import { loadChanges, toplevelOf } from '../git/load'
 import { TREE_PANE } from '../names'
+import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { type KitRow, type KitSeg, strip } from '../ui/strip'
 import { clampTop } from './diff/layout'
 import { folderIconOf, iconOf, statusMarkOf } from './icons'
@@ -223,7 +224,12 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
   function render(kit: Kit): RenderElement {
     const { Text } = kit.ui
     if (!model.isLoaded) return <Text dimColor>Reading the repository…</Text>
-    if (!model.toplevel || !model.root) return <Text dimColor>Not in a git repository.</Text>
+    if (!model.toplevel || !model.root)
+      return emptyState(
+        kit,
+        EMPTY_ICONS.repo,
+        'Not a git repository — open Raven in a repo to browse its files',
+      )
 
     const rows = rowsOfModel(model)
     lastRows = kit.rows

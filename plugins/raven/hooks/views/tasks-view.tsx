@@ -8,6 +8,7 @@ import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
 import { TASKS_PANE } from '../names'
 import { type Task, type Tasks, tasksAfter } from '../review/tasks'
+import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { progressBar } from '../ui/progress-bar'
 import { sectionHeader } from '../ui/section-header'
 import { type KitRow, strip } from '../ui/strip'
@@ -42,8 +43,13 @@ export function createTasksView(host: Host): TasksView {
    * done) coloured by `TASK_STATE_COLORS`, the task text, and its state word dim at the right.
    */
   function render(kit: Kit): RenderElement {
-    const { Box, Text } = kit.ui
-    if (tasks.length === 0) return <Text dimColor>No tasks yet.</Text>
+    const { Box } = kit.ui
+    if (tasks.length === 0)
+      return emptyState(
+        kit,
+        EMPTY_ICONS.tasks,
+        "No tasks yet — Claude's task list shows up here as it plans",
+      )
 
     const done = tasks.filter(task => task.status === 'completed').length
 

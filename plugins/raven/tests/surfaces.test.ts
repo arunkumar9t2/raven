@@ -194,11 +194,12 @@ describe('doc tables', () => {
 
       const lines = (await ui.findAll({ type: 'Text' }))
         .map(each => each.text)
-        .filter(text => /[│┌└├]/.test(text))
+        .filter(text => /[│┌└├]/.test(text) && !text.includes('\n'))
       expect(lines.some(text => text.startsWith('┌'))).toBe(true)
       expect(lines.some(text => text.startsWith('└'))).toBe(true)
       expect(lines.length).toBeGreaterThan(5)
-      for (const text of lines) expect([...text].length).toBeLessThanOrEqual(bodyColumns)
+      // The card's `│ ` border takes two cells of the pane.
+      for (const text of lines) expect([...text].length).toBeLessThanOrEqual(bodyColumns - 2)
 
       await ui.unmount()
     }
