@@ -10,6 +10,7 @@ import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../..
 import { ageOf } from '../../ui/age'
 import { boxedCard, ruleRow } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
+import { RULE_START, ruleRoomFor } from '../../ui/chrome'
 import { pillRow } from '../../ui/strip'
 import {
   type Anchor,
@@ -254,17 +255,10 @@ export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
     </Text>
   )
 
-  if (props.isReadOnly) return ruleRow(kit, { color, start: '├─ ', left })
+  if (props.isReadOnly) return ruleRow(kit, { color, start: RULE_START.branch, left })
 
   const chips: Chip[] = []
-  if (props.canNote) {
-    chips.push({
-      key: commentButtonKeyOf(anchor),
-      icon: '✎',
-      label: 'note',
-      onPress: () => props.onStartNote(anchor),
-    })
-  }
+  if (props.canNote) chips.push(noteChip(anchor, props.onStartNote))
   chips.push({
     key: stageKeyOf(anchor),
     icon: '✓',
@@ -281,11 +275,10 @@ export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
     onPress: props.onRevert,
   })
 
-  // `├─ ` before and a space after the fill, then the label's own minimum.
-  const room = Math.max(0, props.columns - HEADER_MIN - 5)
+  const room = ruleRoomFor(props.columns, HEADER_MIN)
   return ruleRow(kit, {
     color,
-    start: '├─ ',
+    start: RULE_START.branch,
     left,
     right: pillRow(kit, chips, chipsFit(chips, room), key),
   })
@@ -301,16 +294,24 @@ export function addressedRow(kit: Kit, anchor: Anchor, count: number): RenderEle
   )
 }
 
-/** The dim title row above the outdated-comments group. */
-export function outdatedTitle(kit: Kit): RenderElement {
+/** A group's separator rule, `├─ title ────`, in the calm border colour. */
+function groupRule(kit: Kit, title: string): RenderElement {
   const { Text } = kit.ui
-  return <Text dimColor>Outdated</Text>
+  return ruleRow(kit, {
+    color: COLORS.subtle,
+    start: RULE_START.branch,
+    left: <Text dimColor>{title}</Text>,
+  })
 }
 
-/** The dim title row above the group for comments whose path matches no file in the stream. */
+/** The rule above the outdated-comments group (both panes). */
+export function outdatedTitle(kit: Kit): RenderElement {
+  return groupRule(kit, 'Outdated')
+}
+
+/** The rule above the group for comments whose path matches no file in the stream. */
 export function orphansTitle(kit: Kit): RenderElement {
-  const { Text } = kit.ui
-  return <Text dimColor>Not in this diff</Text>
+  return groupRule(kit, 'Not in this diff')
 }
 
 /** An orphaned path's own heading row: the path, plus a dim "file gone" when it no longer exists. */

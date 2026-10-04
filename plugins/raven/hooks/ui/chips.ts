@@ -46,8 +46,8 @@ export function chipText(
     : (chip.short ?? chip.icon)
 }
 
-/** Drawn width of a pill: its text with one padding cell each side. */
-const pillWidthOf = (text: string): number => cellsOf(text) + 2
+/** Drawn width of a pill: its text with one padding cell each side — the one pill-width rule. */
+export const pillWidthOf = (text: string): number => cellsOf(text) + 2
 
 /**
  * `'words'` when every chip drawn as a pill with its words, one space between chips, fits `room`;
@@ -66,6 +66,17 @@ export function chipsWidthOf(chips: readonly Pick<Chip, 'label' | 'icon'>[]): nu
   return (
     chips.reduce((sum, chip) => sum + pillWidthOf(wordsOf(chip.icon, chip.label)), 0) +
     (chips.length - 1)
+  )
+}
+
+/**
+ * The cells a row of chips takes with every chip bare-iconed (`short` when given, else `icon`), one
+ * gap between: the floor `chipsLayout` can shrink a row to. A `forceWords` chip is not special here.
+ */
+export function chipsIconsWidthOf(chips: readonly Pick<Chip, 'icon' | 'short'>[]): number {
+  if (chips.length === 0) return 0
+  return (
+    chips.reduce((sum, chip) => sum + pillWidthOf(chip.short ?? chip.icon), 0) + (chips.length - 1)
   )
 }
 

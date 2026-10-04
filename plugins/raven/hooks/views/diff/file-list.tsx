@@ -7,8 +7,8 @@ import { COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import { statBarCells } from '../../ui/stat-bar'
-import { type KitRow, type KitSeg, strip } from '../../ui/strip'
-import { iconOf, statusMarkOf } from '../icons'
+import { gap, type KitRow, type KitSeg, strip } from '../../ui/strip'
+import { iconOf, statusMarkOf, statusSegs } from '../icons'
 import { fileWindowOf } from './layout'
 
 export type FileListProps = {
@@ -77,13 +77,11 @@ function fileRow(file: ChangedFile, props: FileListProps, maxChange: number): Ki
 
   const left: KitSeg[] = [
     { t: file.path === props.selected ? '❯' : ' ', c: mark.color },
-    { t: ' ' },
-    { t: '●', c: mark.color },
-    { t: ' ' },
-    { t: mark.glyph, c: mark.color },
-    { t: ' ' },
+    gap(),
+    ...statusSegs(mark),
+    gap(),
     { t: icon.glyph, c: icon.color },
-    { t: ' ' },
+    gap(),
     {
       t: file.oldPath ? `${file.oldPath} → ${file.path}` : file.path,
       id,
@@ -93,13 +91,13 @@ function fileRow(file: ChangedFile, props: FileListProps, maxChange: number): Ki
   ]
   const right: KitSeg[] = [
     ...(file.adds > 0 ? [{ t: `+${file.adds}`, c: COLORS.added }] : []),
-    ...(file.adds > 0 && file.dels > 0 ? [{ t: ' ' }] : []),
+    ...(file.adds > 0 && file.dels > 0 ? [gap()] : []),
     ...(file.dels > 0 ? [{ t: `−${file.dels}`, c: COLORS.removed }] : []),
-    { t: ' ' },
+    gap(),
     { t: '■'.repeat(bar.added), c: COLORS.added },
     { t: '■'.repeat(bar.removed), c: COLORS.removed },
     { t: '□'.repeat(bar.rest), c: COLORS.inactive },
     ...(props.edited.has(file.path) ? [{ t: ' ◉', c: COLORS.accent }] : [{ t: '  ' }]),
   ]
-  return { id, key: `row:${file.path}`, left, right, onPress: select }
+  return { id, left, right, onPress: select }
 }

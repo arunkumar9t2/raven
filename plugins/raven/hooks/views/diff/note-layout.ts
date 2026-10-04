@@ -1,6 +1,6 @@
 import type { Comment } from '../../review/comments'
-import { BOXED_CELLS } from '../../ui/card'
 import type { Chip } from '../../ui/chips'
+import { BOXED_CELLS } from '../../ui/chrome'
 import { wrapText } from '../../ui/wrap'
 import { dropKeyOf, resendKeyOf } from './anchor'
 

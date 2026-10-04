@@ -1,5 +1,6 @@
 import { COLORS, RAINBOW } from '../core/colors'
 import type { ChangeStatus } from '../git/changes'
+import { gap, type KitSeg } from '../ui/strip'
 
 type Glyph = { glyph: string; color: string }
 
@@ -77,10 +78,11 @@ export function iconOf(path: string): Glyph {
   return GENERIC_ICON
 }
 
+const FOLDER_OPEN: Glyph = { glyph: '\u{f0770}', color: RAINBOW.yellow } // nf-md-folder_open
+const FOLDER_CLOSED: Glyph = { glyph: '\u{f024b}', color: RAINBOW.yellow } // nf-md-folder
+
 /** The folder glyph of the Files tree, open or closed, in the folder yellow. */
-export function folderIconOf(isOpen: boolean): Glyph {
-  return { glyph: isOpen ? '\u{f0770}' : '\u{f024b}', color: RAINBOW.yellow } // nf-md-folder_open / folder
-}
+export const folderIconOf = (isOpen: boolean): Glyph => (isOpen ? FOLDER_OPEN : FOLDER_CLOSED)
 
 const STATUS_MARKS: Record<ChangeStatus, Glyph> = {
   added: { glyph: 'A', color: COLORS.added },
@@ -93,4 +95,9 @@ const STATUS_MARKS: Record<ChangeStatus, Glyph> = {
 /** Glyph + color for a change status. */
 export function statusMarkOf(status: ChangeStatus): Glyph {
   return STATUS_MARKS[status]
+}
+
+/** A change's status as strip segments: `● M`, both in the status colour. */
+export function statusSegs(mark: Glyph): KitSeg[] {
+  return [{ t: '●', c: mark.color }, gap(), { t: mark.glyph, c: mark.color }]
 }

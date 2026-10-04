@@ -11,7 +11,7 @@ import { type Task, type Tasks, tasksAfter } from '../review/tasks'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { progressBar } from '../ui/progress-bar'
 import { sectionHeader } from '../ui/section-header'
-import { type KitRow, strip } from '../ui/strip'
+import { gap, type KitRow, strip } from '../ui/strip'
 
 /** The dim meta at a task row's right edge. */
 const STATE_WORDS: Record<Task['status'], string> = {
@@ -65,7 +65,7 @@ export function createTasksView(host: Host): TasksView {
       key: `task:${task.id}`,
       left: [
         { t: TASK_STATE_GLYPHS[task.status], c: TASK_STATE_COLORS[task.status] },
-        { t: ' ' },
+        gap(),
         {
           t: task.status === 'in_progress' ? (task.activeForm ?? task.subject) : task.subject,
           dim: task.status === 'completed',

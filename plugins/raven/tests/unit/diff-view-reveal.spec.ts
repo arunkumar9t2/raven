@@ -116,7 +116,7 @@ describe('createDiffView', () => {
     tree = view.render(KIT)
     expect(findByKey(tree, 'a.ts#title')).toBeDefined()
     expect(findByKey(tree, 'b.ts#title')).toBeUndefined()
-    expect(textUnder(findByKey(tree, 'row:a.ts'))).toContain('❯')
+    expect(textUnder(findByKey(tree, 'row:file:a.ts'))).toContain('❯')
   })
 
   test("scrolling applies even when a follow's pendingReveal is still latched", async () => {

@@ -16,7 +16,7 @@ export type KitSeg = Seg & { onPress?: () => void }
 /** A strip row whose pill segments carry their handlers; `onPress` is the row's own. */
 export type KitRow = {
   id?: string
-  /** The fallback's row `Box` key (the Client addresses a row by `id`). */
+  /** The fallback's row `Box` key; `row:<id>` when omitted (the Client addresses a row by `id`). */
   key?: string
   left: KitSeg[]
   right?: KitSeg[]
@@ -50,6 +50,9 @@ export function pill(
   }
 }
 
+/** `n` blank cells between segments. */
+export const gap = (n = 1): KitSeg => ({ t: ' '.repeat(n) })
+
 export type StripOpts = {
   /** The `Client`'s key: unique in the drawing; what `ui.message` reports as `e.element`. */
   key: string
@@ -76,12 +79,12 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
       if (seg.id && seg.onPress) kit.press(seg.id, seg.onPress)
     }
   }
-  const { Box, Text, Button, Client } = kit.ui
+  const { Box, Text, Client } = kit.ui
   if (kit.capabilities.canClient) {
     const data: StripRow[] = rows.map(r => ({
       ...(r.id ? { id: r.id } : {}),
-      left: r.left.map(plainOf),
-      ...(r.right ? { right: r.right.map(plainOf) } : {}),
+      left: plainOf(r.left),
+      ...(r.right ? { right: plainOf(r.right) } : {}),
     }))
     return (
       <Client
@@ -101,7 +104,7 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
   }
   const draw = (seg: KitSeg, k: string) =>
     seg.id ? (
-      <Button key={seg.id} plain label={seg.t.trim()} onPress={seg.onPress ?? (() => {})} />
+      buttonOf(kit, { key: seg.id, text: seg.t, onPress: seg.onPress ?? (() => {}) })
     ) : (
       <Text key={k} color={seg.c} bold={seg.b} dimColor={seg.dim} italic={seg.i}>
         {seg.t}
@@ -111,7 +114,7 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
     <Box key={opts.key} flexDirection="column">
       {rows.map((r, i) => (
         <Box
-          key={r.key ?? r.id ?? `${opts.key}:${i}`}
+          key={r.key ?? (r.id ? `row:${r.id}` : `${opts.key}:${i}`)}
           flexDirection="row"
           gap={1}
           overflow="hidden"
@@ -128,9 +131,62 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
   )
 }
 
-/** Drops the handler: what crosses to the surface is plain data. */
-function plainOf({ onPress: _onPress, ...seg }: KitSeg): Seg {
-  return Object.fromEntries(Object.entries(seg).filter(([, v]) => v !== undefined)) as Seg
+/**
+ * The plain `Button` every fallback draws — a pill, a list row's path, a chip carrying an engine
+ * `action`. `text` is the label verbatim, so one padding convention holds: a pill's text is already
+ * padded by `pill` (`chipText` plus a cell each side), anything else draws as given.
+ */
+function buttonOf(
+  kit: Kit,
+  props: { key: string; text: string; onPress: () => void; dim?: boolean; action?: string },
+): RenderElement {
+  const { Button } = kit.ui
+  return (
+    <Button
+      key={props.key}
+      plain
+      dimColor={props.dim}
+      action={props.action}
+      label={props.text}
+      onPress={props.onPress}
+    />
+  )
+}
+
+/** The style a segment's neighbours must share for the two to draw as one. */
+const sameStyle = (a: Seg, b: Seg): boolean =>
+  a.c === b.c && a.bg === b.bg && a.b === b.b && a.dim === b.dim && a.i === b.i
+
+/**
+ * What crosses to the surface: plain data, no handler, no undefined fields, and adjacent segments
+ * of one style (and neither a pill nor the shrinking one) merged into one — the same cells with
+ * fewer nodes.
+ */
+function plainOf(segs: readonly KitSeg[]): Seg[] {
+  const out: Seg[] = []
+  for (const { onPress: _onPress, ...seg } of segs) {
+    const clean = { t: seg.t } as Seg
+    for (const field of [
+      'c',
+      'bg',
+      'b',
+      'dim',
+      'i',
+      'shrink',
+      'id',
+      'hoverBg',
+      'hoverC',
+    ] as const) {
+      if (seg[field] !== undefined) Object.assign(clean, { [field]: seg[field] })
+    }
+    const prev = out[out.length - 1]
+    if (prev && !prev.id && !clean.id && !prev.shrink && !clean.shrink && sameStyle(prev, clean)) {
+      prev.t += clean.t
+    } else {
+      out.push(clean)
+    }
+  }
+  return out
 }
 
 /**
@@ -146,7 +202,7 @@ export function pillRow(
   mode: 'words' | 'icons' | readonly ('words' | 'icons')[],
   key: string,
 ): RenderElement {
-  const { Box, Button } = kit.ui
+  const { Box } = kit.ui
   const modeOf = (index: number): 'words' | 'icons' =>
     typeof mode === 'string' ? mode : (mode[index] ?? 'icons')
   const drawn = chips.map((chip, index) => ({ chip, text: chipText(chip, modeOf(index)) }))
@@ -155,22 +211,21 @@ export function pillRow(
     .filter(({ chip }) => chip.action === undefined)
     .flatMap(({ chip, text }, i) => {
       const seg = pill(chip.key, '', text, chip.kind ?? 'normal', chip.onPress)
-      return i === 0 ? [seg] : [{ t: ' ' }, seg]
+      return i === 0 ? [seg] : [gap(), seg]
     })
   const pills = strip(kit, [{ left: segs }], { key: `${key}:pills`, grow: false })
   if (buttons.length === 0) return pills
   return (
     <Box key={key} flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-      {buttons.map(({ chip, text }) => (
-        <Button
-          key={chip.key}
-          plain
-          dimColor
-          action={chip.action}
-          label={` ${text} `}
-          onPress={chip.onPress}
-        />
-      ))}
+      {buttons.map(({ chip, text }) =>
+        buttonOf(kit, {
+          key: chip.key,
+          text: ` ${text} `,
+          onPress: chip.onPress,
+          dim: true,
+          action: chip.action,
+        }),
+      )}
       {segs.length > 0 ? pills : null}
     </Box>
   )

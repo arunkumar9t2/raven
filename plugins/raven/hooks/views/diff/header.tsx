@@ -8,7 +8,7 @@ import { countOf } from '../../core/format'
 import type { Kit } from '../../core/view'
 import type { ChangedFile } from '../../git/changes'
 import { changeMap, changeMapOf } from '../../ui/change-map'
-import { type Chip, chipsLayout } from '../../ui/chips'
+import { type Chip, chipsIconsWidthOf, chipsLayout } from '../../ui/chips'
 import { diffStat } from '../../ui/diff-stat'
 import { statBar } from '../../ui/stat-bar'
 import { pillRow } from '../../ui/strip'
@@ -107,20 +107,6 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
  * `bodyColumns: 38`; a third fixture at 10 pending needed the compact notes summary's own digit
  * dropped too — see `compactNotesText` below). */
 const MIN_MAP_CELLS = 2
-
-/**
- * `chips`' own icons-mode floor: every chip bare-iconed (`short` when given, else `icon`),
- * padded as a pill (one cell each side), with one gap between — the same width model
- * `chips.ts` uses for `chipsLayout`'s own sizing, kept here only for that floor
- * (nothing passed to it is ever `forceWords`; that only happens during an armed confirm, which
- * never reaches this helper) to decide whether nav and refresh must give way before the map and
- * the notes summary are squeezed below R28's reserved minimum.
- */
-function iconsWidthOf(chips: readonly Chip[]): number {
-  if (chips.length === 0) return 0
-  const total = chips.reduce((sum, chip) => sum + (chip.short ?? chip.icon).length + 2, 0)
-  return total + (chips.length - 1)
-}
 
 /**
  * Row 2: the change map — one glyph per file, the shape of the whole change at a glance, D10
@@ -239,7 +225,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const fullChips = chipsOf(true)
   const fullMapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
   const fullLeftWidth = fullMapCells.length + (fullNotesText === '' ? 0 : 1 + fullNotesText.length)
-  const ample = confirmingClear || fullLeftWidth + 2 + iconsWidthOf(fullChips) <= kit.columns
+  const ample = confirmingClear || fullLeftWidth + 2 + chipsIconsWidthOf(fullChips) <= kit.columns
 
   const effectiveMaxCells = ample ? maxCells : MIN_MAP_CELLS
   const notesText = ample ? fullNotesText : compactNotesText

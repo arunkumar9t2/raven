@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { type Chip, chipsFit, chipsLayout } from '../../hooks/ui/chips'
+import { type Chip, chipsFit, chipsIconsWidthOf, chipsLayout } from '../../hooks/ui/chips'
 
 const noop = () => {}
 
@@ -91,5 +91,13 @@ describe('chipsLayout', () => {
 
   test('no chips lays out nothing', () => {
     expect(chipsLayout([], 0)).toEqual([])
+  })
+})
+
+describe('chipsIconsWidthOf', () => {
+  test('pads each bare icon (or short) as a pill, one gap between', () => {
+    expect(chipsIconsWidthOf([])).toBe(0)
+    expect(chipsIconsWidthOf([{ icon: '✎' }])).toBe(3)
+    expect(chipsIconsWidthOf([{ icon: '✎' }, { icon: '➤', short: '➤ 2' }])).toBe(3 + 1 + 5)
   })
 })

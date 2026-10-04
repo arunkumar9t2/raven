@@ -5,9 +5,7 @@ import type { RenderElement } from 'claude-code'
 
 import { COLORS } from '../core/colors'
 import type { UiKit } from '../core/view'
-
-/** What the side borders take of a boxed card's width: `│ ` on the left, ` │` on the right. */
-export const BOXED_CELLS = 4
+import { RULE_START } from './chrome'
 
 /** More `─` than any pane is wide: a fill clips to the room its flex box is given. */
 const FILL = '─'.repeat(400)
@@ -105,7 +103,7 @@ export function boxedCard(kit: UiKit, props: BoxedCardProps): RenderElement {
     <Box flexDirection="column" flexGrow={1} overflow="hidden">
       {ruleRow(kit, {
         color,
-        start: '╭─ ',
+        start: RULE_START.open,
         left: props.title,
         right: props.right,
         end: props.right ? '─╮' : '╮',

@@ -12,13 +12,14 @@ import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
 import { closeRow, ruleRow, stackOf } from '../ui/card'
 import { chipsFit } from '../ui/chips'
+import { BORDER_CELLS, RULE_START, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { pillRow } from '../ui/strip'
 import { table } from '../ui/table'
 import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
 import { widthOf } from '../ui/wrap'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { addressedRow, commentBox, note, noteChip } from './diff/comment-box'
+import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
 import { NOTE_MAX_LINES, noteLinesOf } from './diff/note-layout'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { type DocSection, docSectionsOf } from './doc-sections'
@@ -51,8 +52,8 @@ export type DocView = View & {
 
 const HISTORY_LIMIT = 10
 
-/** What the card's `│ ` left border takes of the pane's width. */
-const BORDER_CELLS = 2
+/** The least a section's `§ heading` title keeps before its pill shrinks to an icon. */
+const SECTION_TITLE_MIN = 3
 /** The calm colour of the card border and its `├─` separators. */
 const BORDER_COLOR = COLORS.subtle
 /** A note doc's title icon (a document), where a file's is its type icon. */
@@ -364,7 +365,7 @@ export function createDocView(
           <Box key={`section-note:${anchorKeyOf(anchor)}`}>
             {ruleRow(kit, {
               color: BORDER_COLOR,
-              start: '├─ ',
+              start: RULE_START.branch,
               left: (
                 <Text wrap="truncate-end">
                   <Text color={BORDER_COLOR}>§ </Text>
@@ -375,7 +376,7 @@ export function createDocView(
                 ? pillRow(
                     kit,
                     [chip],
-                    chipsFit([chip], Math.max(0, kit.columns - 8)),
+                    chipsFit([chip], ruleRoomFor(kit.columns, SECTION_TITLE_MIN)),
                     `${anchorKeyOf(anchor)}:note`,
                   )
                 : undefined,
@@ -428,11 +429,7 @@ export function createDocView(
         {sectionElements}
         {outdated.length > 0 ? (
           <Box flexDirection="column">
-            {ruleRow(kit, {
-              color: BORDER_COLOR,
-              start: '├─ ',
-              left: <Text dimColor>Outdated</Text>,
-            })}
+            {outdatedTitle(kit)}
             {[...outdatedGroups.entries()].map(([key, group]) => {
               const { addressed, visible } = splitAddressed(group)
               const anchor: Anchor = { path: doc.path, hunk: `§outdated:${key}` }
@@ -571,7 +568,7 @@ export function createDocView(
       <Box flexDirection="column">
         {picker}
         <Box key="doc-title">
-          {ruleRow(kit, { color: BORDER_COLOR, start: '╭─ ', left: heading })}
+          {ruleRow(kit, { color: BORDER_COLOR, start: RULE_START.open, left: heading })}
         </Box>
         <Box key="doc-card" flexDirection="column">
           {body(kit, shown)}
