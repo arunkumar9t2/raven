@@ -15,6 +15,7 @@ import { type CommandKind, type CommandResult, NARROW_TEXT } from './command-gly
 import { type Directive, directiveOf } from './directive'
 import { countOf } from './format'
 import { type Host, loggedAs } from './host'
+import { createPresses } from './presses'
 import type { RavenSettings } from './settings'
 import {
   type Action,
@@ -63,6 +64,13 @@ export type Raven = {
    */
   turnCompleted: (turn: TurnCompleteInput) => Promise<void>
   render: (paneId: string, kit: Kit) => RenderElement | null
+  /**
+   * Runs the handler a `Client` pill's `{ press: id }` post names, in the pane `paneId` drew it in;
+   * false when the id is not (or no longer) drawn there.
+   */
+  press: (paneId: string, id: string) => boolean
+  /** Registers the handler for a pill `id` drawn in `paneId`'s current render (`Kit.press`). */
+  registerPress: (paneId: string, id: string, onPress: () => void) => void
   /** Moves a pane's own scroll by `by` rows; true when its view handled the move. */
   scroll: (paneId: string, by: number) => boolean
   paneClosed: (paneId: string) => void
@@ -114,6 +122,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   // The kind the most recent `command()` call resolved each reply text to, for a `CommandOutput`
   // row the engine asks Raven to redraw without re-running the command.
   const resultKindByText = new Map<string, CommandKind>()
+  const presses = createPresses()
 
   const bandState = createBandState(host, review, {
     openDiff: async () => {
@@ -466,6 +475,8 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       diff.turnEnded()
       if (turn.reason === 'answer') await resolveSent()
     },
+    press: (paneId, id) => presses.dispatch(paneId, id),
+    registerPress: (paneId, id, onPress) => presses.add(paneId, id, onPress),
     render: (paneId, kit) => {
       const view = views.find(each => each.pane.id === paneId)
       if (!view) return null
@@ -476,6 +487,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         void view.refresh?.().catch(error => host.debug(`raven: refresh failed: ${String(error)}`))
       }
       if (view === doc) bandState.noteDocRendered()
+      presses.begin(paneId)
       return view.render(kit)
     },
     scroll: (paneId, by) => views.find(view => view.pane.id === paneId)?.scroll?.(by) ?? false,

@@ -28,7 +28,7 @@ const KIT = {
   ui: { Box, Text },
   columns: 40,
   rows: 10,
-  capabilities: { canType: true, canPick: true, canShowImage: true },
+  capabilities: { canType: true, canPick: true, canShowImage: true, canClient: true },
 } as unknown as Kit
 
 describe('row', () => {

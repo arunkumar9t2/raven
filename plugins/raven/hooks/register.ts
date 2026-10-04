@@ -73,6 +73,7 @@ export function register(on: On, options: PluginOptions) {
     columns: number,
     rows: number,
     surface: RenderSurface,
+    requestId: string,
   ): Kit {
     raven?.noteViewport(viewport?.columns)
     let cached: Ui | undefined
@@ -84,6 +85,7 @@ export function register(on: On, options: PluginOptions) {
       columns,
       rows,
       capabilities: capabilitiesOf(surface),
+      press: (id, onPress) => raven?.registerPress(requestId, id, onPress),
     }
   }
 
@@ -167,6 +169,7 @@ export function register(on: On, options: PluginOptions) {
       e.props.bodyColumns,
       e.props.scroll.bodyRows,
       e.surface,
+      e.requestId,
     )
     if (!raven || !PANE_IDS.includes(e.requestId)) return next(e)
     const drawn = raven.render(e.requestId, kit)
@@ -180,6 +183,7 @@ export function register(on: On, options: PluginOptions) {
       e.props.bodyColumns,
       e.props.maxRows,
       e.surface,
+      e.requestId,
     )
     if (!raven) return next(e)
     const drawn = await raven.band(kit, e.props.hasSurvey)
@@ -190,7 +194,7 @@ export function register(on: On, options: PluginOptions) {
     'ui.render',
     { component: 'CommandOutput', props: { command: COMMAND } },
     async ($, e, next) => {
-      const kit = kitOf(e.viewport, () => $.ui.resolve(e), 0, 0, e.surface)
+      const kit = kitOf(e.viewport, () => $.ui.resolve(e), 0, 0, e.surface, e.requestId)
       if (!raven) return next(e)
       return commandOutputRow(kit, {
         text: e.props.text,
@@ -199,6 +203,17 @@ export function register(on: On, options: PluginOptions) {
       })
     },
   )
+
+  // A `Client` pill's press (`surface/strip.tsx` posts `{ press: id }`). `data` came from code, so
+  // it is validated; a stale or unknown id is ignored. Answers `{}` either way: nothing to hand back.
+  on('ui.message', { requestId: PANE_IDS }, ($, e, next) => {
+    const data = e.data
+    if (raven && isRecord(data) && typeof data.press === 'string') {
+      raven.press(e.requestId, data.press)
+      return {}
+    }
+    return next(e)
+  })
 
   on('ui.scroll', { requestId: PANE_IDS }, ($, e, next) => {
     if (!raven || e.origin.kind !== 'person' || !raven.scroll(e.requestId, e.by)) return next(e)
