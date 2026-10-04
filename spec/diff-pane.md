@@ -8,8 +8,8 @@ Claude to describe what it changed.
 
 ## Layout
 
-Two fixed rows form the header (`plugins/raven/hooks/views/diff/header.tsx`): row 1 is counts and
-source — `N files  +adds −dels ■■■□□ · source <picker>`, the stat bar scaled to the whole diff's
+Two fixed rows form the header (`plugins/raven/hooks/views/diff/header.tsx`): row 1 is a Nerd Font git mark (`COLORS.git`), counts and
+source — `󰊢 N files  +adds −dels ■■■□□ · source <picker>`, the stat bar scaled to the whole diff's
 own total (no `max`); row 2 is the change map (one glyph per file, the shape of the whole change
 at a glance — see [below](#the-change-map)), the pending-notes summary, and the action chips —
 ` ↑ ` ` ↓ ` ` ↻ refresh `, then — once a comment is pending — ` ✎ edit & send ` and the
@@ -26,29 +26,32 @@ own `➤ N` still carries the count). Beneath it sits the file list
 (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
 trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
-every changed file's section at once — its heading (status mark, icon, bold path, `+adds` `−dels`,
-and a right-aligned ` ✎ note ` chip), then its file-level notes, then each hunk in turn: its
-toolbar row (the hunk's function context and line range, and — unless read-only — right-aligned
-` ✎ note `, ` ✓ stage `, ` ↺ revert ` pills), its code, its own notes, then (only while that hunk
-is being composed) its compose box — a blank row between one file's section and the next, no
-blank row between hunks (`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). Every row of a
-file's section — heading, notes, each hunk's toolbar and code — draws behind a 2-column left rail,
-`▌ `, in the file's status colour; the file being edited this turn draws its rail in the accent
-colour instead, so the live feed is visible without reading any text (see
-[Live feed](#live-feed)). A file's heading carries the same status mark, icon and `+adds`/`−dels`
-as its file-list row and the same bold path (`bodyRowOf`'s `'title'` case in `diff-view.tsx`) —
-except for a renamed file, whose heading shows only its new path; the `old → new` label is the
-file-list row's alone. The whole stream is laid out into one scrollable window so wheel and
+every changed file as a **card** at once. The card opens with a title row,
+`╭─ <icon> <path>  <status> +adds −dels ──── pills`: a Nerd Font file-type icon coloured by type
+(`views/icons.ts`, rainbow theme keys), the bold path, the status mark, the counts, a `─` fill in the
+card's border colour and the file's ` ✎ note ` pill at the right. Then come its file-level notes, and
+each hunk in turn: a toolbar row, `├─ ƒ name  L1–7 ──── pills` (the hunk's function context and line
+range, and — unless read-only — right-aligned ` ✎ note `, ` ✓ stage `, ` ↺ revert ` pills), its code,
+its own notes, then (only while that hunk is being composed) its compose box. The card ends with a
+closing row, `╰────`; a blank row separates one card from the next, and none sits between hunks
+(`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). Every body row — notes, each hunk's
+toolbar and code, a status line — draws behind a 2-column left border, `│ `, in the file's status
+colour; the file being edited this turn draws the whole card's border (title, `│`, `╰`) in the accent
+colour instead, so the live feed is visible without reading any text (see [Live feed](#live-feed)).
+A file's title carries the same status mark, icon and `+adds`/`−dels` as its file-list row and the
+same bold path (`bodyRowOf`'s `'title'` case in `diff-view.tsx`) — except for a renamed file, whose
+title shows only its new path; the `old → new` label is the file-list row's alone. A status line
+("Loading…", "Not read", "Binary file") sits inside the card, between title and close. The whole stream is laid out into one scrollable window so wheel and
 arrow-key scrolling moves through it without redrawing the header or file list
 (`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling body total 2
-(header) + min(file count, 8) (file list) + 1 (rule). Within the body, a heading, a status line, the
+(header) + min(file count, 8) (file list) + 1 (rule). Within the body, a title, a closing row, a status line, the
 collapsed "✓ N addressed" row, a hunk's toolbar row, the "Outdated" title, the "Not in
 this diff" title, an orphan path's own row, and the blank row between files are each one row; a
-note is a card of as many rows as its text wraps to at the stream's width (1 to 6, see
-[review](review.md#status)); a note chip draws idle on the heading or a hunk's toolbar row
-rather than as a row of its own, and opens a compose box in its place — two rows (Input plus
-the `⏎ add`/` ✕ cancel ` hint row), three when a hunk's line picker draws above the Input — only
-while that anchor is being composed. A multi-row fixed block's rail runs its full height. A card the scroll position cuts through stays
+note is a boxed card of its wrapped text lines plus a top and a bottom border (1 to 6 lines, so
+3 to 8 rows, see [review](review.md#status)); a note chip draws idle on the heading or a hunk's toolbar row
+rather than as a row of its own, and opens a compose box in its place — five rows (two borders,
+the Input's two rows, the `⏎ add`/` ✕ cancel ` hint row), six when a hunk's line picker draws above
+the Input — only while that anchor is being composed. A multi-row fixed block's border runs its full height. A card the scroll position cuts through stays
 placed and is clipped at the top (`windowOf` places it from its first visible row), so the rows
 below never shift; the compose box is `pinned` and always placed whole. A hunk with line notes is several `hunk`
 blocks, each a body-line `range` — the lines up to and including a commented line, that line's
@@ -66,7 +69,7 @@ changed file, chosen from `▁▂▃▄▅▆▇█` by that file's share of the
 in the set (`max = Math.max(1, ...sizes)`, `ratio = size / max` — the file with the most changed
 lines always draws `█`, every other file scaled against it, not against the diff's total) — a
 skyline of the change set before reading any of it. Each glyph is coloured by the file's status;
-the file being edited this turn draws in the accent colour, same as its rail. A changed file
+the file being edited this turn draws in the accent colour, same as its card border. A changed file
 never draws below `▁` even next to a much larger one, so nothing goes invisible. More files than
 fit the row's share of `kit.columns` keep the first few and end with one dim `…` cell rather than
 wrapping or dropping files silently.
@@ -107,7 +110,7 @@ list order and scroll to it the same way pressing its row does.
 A file an `Edit`/`Write`/`NotebookEdit`/`MultiEdit` call changes during the current turn — from the
 main loop or a subagent — draws a trailing `◉` in `COLORS.accent` in its file-list row, after its
 `+adds`/`−dels` counts and stat bar (`plugins/raven/hooks/views/diff/file-list.tsx`); the same file
-also draws its stream section's left rail and its change-map glyph in the accent colour, so the
+also draws its card's border and its change-map glyph in the accent colour, so the
 live feed is visible from the file list, the map, or the stream itself. The mark clears once the
 turn ends, on any main-loop turn-completion reason — an answer, an interrupt, or an error — not
 only a clean answer.

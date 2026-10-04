@@ -587,17 +587,25 @@ export function createDiffView(
       case 'note':
         return noteRowOf(kit, item)
       case 'comment-box':
-        return commentBox(kit, {
-          anchor: item.anchor,
-          inputKey: inputKeyOf(item.anchor),
-          hunk: item.hunk,
-          hasPicker: item.hasPicker,
-          line: model.composingLine,
-          columns: contentWidth,
-          onLineChange: line => update({ composingLine: line }),
-          onSubmit: text => submitComment(item.anchor, text),
-          onCancel: () => stopComposing(item.anchor),
-        })
+        // Indented one cell after the border, like a note card.
+        return (
+          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
+            <Text> </Text>
+            <Box flexGrow={1} overflow="hidden">
+              {commentBox(kit, {
+                anchor: item.anchor,
+                inputKey: inputKeyOf(item.anchor),
+                hunk: item.hunk,
+                hasPicker: item.hasPicker,
+                line: model.composingLine,
+                columns: Math.max(1, contentWidth - 1),
+                onLineChange: line => update({ composingLine: line }),
+                onSubmit: text => submitComment(item.anchor, text),
+                onCancel: () => stopComposing(item.anchor),
+              })}
+            </Box>
+          </Box>
+        )
       case 'hunk-header':
         return (
           <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
