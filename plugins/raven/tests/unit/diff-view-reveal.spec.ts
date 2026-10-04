@@ -37,7 +37,7 @@ const KIT = {
   ui: { Box, Text, Button, Code, Markdown },
   columns: 100,
   rows: 7,
-  capabilities: { canType: true, canPick: true, canShowImage: true, canClient: true },
+  capabilities: { canType: true, canPick: true, canShowImage: true, canClient: false },
   press: () => {},
 } as unknown as Kit
 

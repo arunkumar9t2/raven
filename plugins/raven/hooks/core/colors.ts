@@ -58,11 +58,11 @@ export const TASK_STATE_COLORS: Record<TaskStatus, string> = {
   completed: COLORS.done,
 } as const
 
-/** A task's `TaskStatus` to its state-dot glyph: open, half-full while working, filled when done. */
+/** A task's `TaskStatus` to its Nerd Font state icon: an empty circle, a dotted one while working, a check when done. */
 export const TASK_STATE_GLYPHS: Record<TaskStatus, string> = {
-  pending: '○',
-  in_progress: '◐',
-  completed: '●',
+  pending: '\u{f10c}', // nf-fa-circle_o
+  in_progress: '\u{f192}', // nf-fa-dot_circle_o
+  completed: '\u{f058}', // nf-fa-check_circle
 } as const
 
 /** A pill's visual kind (`ui/strip.tsx`): the colours it draws at rest and under the pointer. */

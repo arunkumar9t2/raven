@@ -1,5 +1,6 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
+import { TASK_STATE_COLORS, TASK_STATE_GLYPHS } from '../hooks/core/colors'
 import {
   commentsStoreKeyOf,
   DIFF_PANE,
@@ -22,6 +23,7 @@ import {
 import { ACTIONS_ROW_KEY, SOURCE_SELECT_KEY, SUMMARY_ROW_KEY } from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
 import {
+  allSegs,
   baseWorld,
   PANE_PROPS,
   pillOf,
@@ -30,7 +32,9 @@ import {
   REPO,
   ran,
   ravenCommand,
+  rowText,
   SESSION,
+  stripRowOf,
   trackShownPanes,
 } from './helpers'
 
@@ -178,9 +182,14 @@ describe('register', () => {
       requestId: TASKS_PANE.id,
     })
     expect(await ui.find({ text: /█/ })).toBeDefined()
-    expect(await ui.find({ text: '●' })).toBeDefined()
-    expect(await ui.find({ text: '◐' })).toBeDefined()
-    expect(await ui.find({ text: '○' })).toBeDefined()
+    // Each task is a strip row led by its Nerd Font state icon, coloured by the task's state.
+    const segs = await allSegs(ui)
+    const iconOf = (glyph: string) => segs.find(seg => seg.t === glyph)
+    expect(iconOf(TASK_STATE_GLYPHS.completed)?.c).toBe(TASK_STATE_COLORS.completed)
+    expect(iconOf(TASK_STATE_GLYPHS.in_progress)?.c).toBe(TASK_STATE_COLORS.in_progress)
+    expect(iconOf(TASK_STATE_GLYPHS.pending)?.c).toBe(TASK_STATE_COLORS.pending)
+    expect(segs.some(seg => seg.t === 'ship it')).toBe(true)
+    expect(segs.some(seg => seg.t === 'in progress' && seg.dim)).toBe(true)
   })
 })
 
@@ -707,13 +716,43 @@ describe('diff view keyboard control', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'row:a.ts' }))?.text).toContain('❯')
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('❯')
+    expect(await rowText(ui, 'file:a.ts')).toContain('❯')
+    expect(await rowText(ui, 'file:b.ts')).not.toContain('❯')
 
     await ui.press({ key: 'next' })
 
-    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('❯')
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
+    expect(await rowText(ui, 'file:a.ts')).not.toContain('❯')
+    expect(await rowText(ui, 'file:b.ts')).toContain('❯')
+  })
+
+  test('the file list is one strip: the selected row on the selection tint, hover on the message tint', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const client = (await ui.findAll({ type: 'Client' })).find(c => c.key === 'file-list')
+    const props = client?.props.props as {
+      activeId?: string
+      activeBg?: string
+      rowHoverBg?: string
+    }
+    expect(props.activeId).toBe('file:a.ts')
+    expect(props.activeBg).toBe('selectionBg')
+    expect(props.rowHoverBg).toBe('userMessageBackgroundHover')
+
+    await ui.resize({ columns: 80, rows: 2, in: 'file-list' })
+    const bgs = async () =>
+      (await ui.findAll({ in: 'file-list', type: 'Box' })).map(box => box.props.backgroundColor)
+    expect(await bgs()).toContain('selectionBg')
+    expect(await bgs()).not.toContain('userMessageBackgroundHover')
+    // Hovering the other row lights it; a left click anywhere on it selects it.
+    await ui.pointer({ type: 'move', x: 40, y: 1, in: 'file-list' })
+    expect(await bgs()).toContain('userMessageBackgroundHover')
+    await ui.pointer({ type: 'down', x: 40, y: 1, button: 'left', in: 'file-list' })
+    expect(await rowText(ui, 'file:b.ts')).toContain('❯')
+    expect(await rowText(ui, 'file:a.ts')).not.toContain('❯')
   })
 
   test('no control carries a letter hotkey; the list arrows ride the engine list actions', async ($, on) => {
@@ -747,9 +786,9 @@ describe('review stream', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const row = await ui.find({ key: 'row:a.ts' })
-    expect(row?.text).toContain('●')
-    expect(row?.text).toContain('■')
+    const row = await rowText(ui, 'file:a.ts')
+    expect(row).toContain('●')
+    expect(row).toContain('■')
   })
 
   test("a much smaller change's stat bar draws fewer filled cells than the list's biggest change", async ($, on) => {
@@ -781,8 +820,8 @@ describe('review stream', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const small = (await ui.find({ key: 'row:a.ts' }))?.text ?? ''
-    const big = (await ui.find({ key: 'row:b.ts' }))?.text ?? ''
+    const small = (await rowText(ui, 'file:a.ts')) ?? ''
+    const big = (await rowText(ui, 'file:b.ts')) ?? ''
     const fillCountOf = (text: string) => (text.match(/■/g) ?? []).length
     expect(fillCountOf(small)).toBeLessThan(fillCountOf(big))
   })
@@ -858,6 +897,23 @@ describe('review stream', () => {
     expect((await ui.find({ key: 'a.ts#close' }))?.text.startsWith('╰')).toBe(true)
   })
 
+  test('one blank row separates two file cards: close, gap, next title', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts'])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    // The stream's own block boxes, in drawing order (their keys are `path#block`).
+    const keys = (await ui.findAll({ type: 'Box' }))
+      .map(box => box.key)
+      .filter(key => key?.includes('#') && !key.includes(':'))
+    const at = (key: string) => keys.indexOf(key)
+    expect(at('a.ts#close')).toBeGreaterThan(-1)
+    expect(at('b.ts#sep')).toBe(at('a.ts#close') + 1)
+    expect(at('b.ts#title')).toBe(at('b.ts#sep') + 1)
+    expect((await ui.find({ key: 'b.ts#sep' }))?.text.trim()).toBe('')
+  })
+
   test('pressing a file row scrolls its heading to the top of the stream', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     await $.session.start(SESSION)
@@ -871,10 +927,10 @@ describe('review stream', () => {
       props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 8 } },
       requestId: DIFF_PANE.id,
     })
-    await ui.press({ key: 'file:b.ts' })
+    await pressPill(ui, 'file:b.ts')
     expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
     expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
+    expect(await rowText(ui, 'file:b.ts')).toContain('❯')
   })
 
   test("scrolling the stream by wheel moves the list's ❯ to the file at the top", async ($, on) => {
@@ -892,7 +948,7 @@ describe('review stream', () => {
       props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 7 } },
       requestId: DIFF_PANE.id,
     })
-    expect((await ui.find({ key: 'row:a.ts' }))?.text).toContain('❯')
+    expect(await rowText(ui, 'file:a.ts')).toContain('❯')
 
     await $.ui.scroll({
       component: 'Pane',
@@ -904,8 +960,8 @@ describe('review stream', () => {
       origin: { kind: 'person' },
     })
 
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('❯')
-    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('❯')
+    expect(await rowText(ui, 'file:b.ts')).toContain('❯')
+    expect(await rowText(ui, 'file:a.ts')).not.toContain('❯')
   })
 
   test('a file edited this turn is marked in the list until the turn ends', async ($, on) => {
@@ -916,11 +972,11 @@ describe('review stream', () => {
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('◉')
-    expect((await ui.find({ key: 'row:a.ts' }))?.text).not.toContain('◉')
+    expect(await rowText(ui, 'file:b.ts')).toContain('◉')
+    expect(await rowText(ui, 'file:a.ts')).not.toContain('◉')
 
     await $.turn.complete(mainLoopTurn('done'))
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('◉')
+    expect(await rowText(ui, 'file:b.ts')).not.toContain('◉')
   })
 
   test("an edit's refresh follows its file into view when it starts out of view", async ($, on) => {
@@ -1043,7 +1099,7 @@ describe('review stream', () => {
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('◉')
+    expect(await rowText(ui, 'file:b.ts')).toContain('◉')
   })
 
   test('a file-list press turns follow off for the rest of the turn', async ($, on) => {
@@ -1066,7 +1122,7 @@ describe('review stream', () => {
     expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
 
     // The person presses a.ts's row, bringing the view back and dropping follow for the turn.
-    await ui.press({ key: 'file:a.ts' })
+    await pressPill(ui, 'file:a.ts')
     expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
 
     // A second edit on b.ts must not pull the view away again this turn.
@@ -1487,10 +1543,10 @@ describe('turn.complete resets the live feed on every reason', () => {
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
 
     const ui = await mountDiff($)
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).toContain('◉')
+    expect(await rowText(ui, 'file:b.ts')).toContain('◉')
 
     await $.turn.complete({ ...mainLoopTurn('done'), reason: 'aborted' })
-    expect((await ui.find({ key: 'row:b.ts' }))?.text).not.toContain('◉')
+    expect(await rowText(ui, 'file:b.ts')).not.toContain('◉')
   })
 
   test('an aborted turn does not fork to resolve sent comments', async ($, on) => {
@@ -1811,11 +1867,11 @@ describe('switching the diff source to a turn', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect(await ui.find({ key: 'row:/work/util.ts' })).toBeUndefined()
+    expect(await rowText(ui, 'file:/work/util.ts')).toBeUndefined()
 
     await ui.select({ key: SOURCE_SELECT_KEY, value: turnValueOf(1) })
 
-    expect(await ui.find({ key: 'row:/work/util.ts' })).toBeDefined()
+    expect(await rowText(ui, 'file:/work/util.ts')).toBeDefined()
     // The header's source picker already names the turn; the stream heading names its file.
     expect((await ui.find({ key: '/work/util.ts#title' }))?.text).toContain('/work/util.ts')
   })
@@ -1864,9 +1920,84 @@ describe('the Files tree', () => {
       props: PANE_PROPS,
       requestId: TREE_PANE.id,
     })
-    const row = await ui.find({ key: 'file:src/a.ts' })
-    expect(row?.text).toContain('a.ts')
-    expect(row?.text).toContain('●')
+    const row = await rowText(ui, 'file:src/a.ts')
+    expect(row).toContain('a.ts')
+    expect(row).toContain('●')
+  })
+
+  test('rows are strip rows: guides, chevron and folder icon, a file icon, the opened file active', async ($, on) => {
+    gitWorld(on, {}, null, ['src/a.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: TREE_PANE.id,
+    })
+    const dir = await stripRowOf(ui, 'dir:src')
+    expect(dir?.left[0]?.t).toBe('\u{f078}') // expanded: a changed dir starts open
+    expect(dir?.left[0]?.dim).toBe(true)
+    expect(dir?.left.some(seg => seg.t === '\u{f0770}' && seg.c === 'rainbow_yellow')).toBe(true)
+    expect(dir?.right?.[0]?.t).toBe('(1)')
+    const file = await stripRowOf(ui, 'file:src/a.ts')
+    expect(file?.left[0]).toEqual({ t: '│ ', dim: true })
+    expect(file?.left.some(seg => seg.c === 'rainbow_blue')).toBe(true)
+    expect(file?.right?.map(seg => seg.t).join('')).toBe('● M')
+    expect(file?.activeId).toBeUndefined()
+    expect(file?.rowHoverBg).toBe('userMessageBackgroundHover')
+
+    await pressPill(ui, 'file:src/a.ts')
+    const after = await stripRowOf(ui, 'file:src/a.ts')
+    expect(after?.activeId).toBe('file:src/a.ts')
+    expect(after?.activeBg).toBe('selectionBg')
+  })
+
+  test('a click on a folder row collapses and expands it', async ($, on) => {
+    gitWorld(on, {}, null, ['src/a.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: TREE_PANE.id,
+    })
+    expect(await rowText(ui, 'file:src/a.ts')).toBeDefined()
+    await pressPill(ui, 'dir:src')
+    expect(await rowText(ui, 'file:src/a.ts')).toBeUndefined()
+    expect((await stripRowOf(ui, 'dir:src'))?.left[0]?.t).toBe('\u{f054}') // collapsed
+    await pressPill(ui, 'dir:src')
+    expect(await rowText(ui, 'file:src/a.ts')).toBeDefined()
+  })
+
+  test('hovering a tree row swaps in the hover background', async ($, on) => {
+    gitWorld(on, {}, null, ['src/a.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: PANE_PROPS,
+      requestId: TREE_PANE.id,
+    })
+    await ui.resize({ columns: 60, rows: 2, in: 'tree' })
+    const bgs = async () =>
+      (await ui.findAll({ in: 'tree', type: 'Box' })).map(box => box.props.backgroundColor)
+    expect(await bgs()).not.toContain('userMessageBackgroundHover')
+    await ui.pointer({ type: 'move', x: 20, y: 1, in: 'tree' })
+    expect(await bgs()).toContain('userMessageBackgroundHover')
+    await ui.pointer({ type: 'leave', x: 0, y: 0, in: 'tree' })
+    expect(await bgs()).not.toContain('userMessageBackgroundHover')
   })
 
   test('an untracked and an added file keep their own status letters, not just the same-coloured dot', async ($, on) => {
@@ -1893,8 +2024,8 @@ describe('the Files tree', () => {
       props: PANE_PROPS,
       requestId: TREE_PANE.id,
     })
-    expect((await ui.find({ key: 'file:new.ts' }))?.text).toContain('U')
-    expect((await ui.find({ key: 'file:added.ts' }))?.text).toContain('A')
+    expect(await rowText(ui, 'file:new.ts')).toContain('U')
+    expect(await rowText(ui, 'file:added.ts')).toContain('A')
   })
 })
 
@@ -2209,6 +2340,25 @@ describe('a note is a card (R38)', () => {
     expect(await ui.find({ text: '╰' })).toBeDefined()
   })
 
+  test("a note's top border reads status · line · age, a dim ` · ` between every part", async ($, on) => {
+    gitWorld(
+      on,
+      {
+        [commentsStoreKeyOf(REPO)]: [
+          card({ text: 'on a line', line: { number: 5, side: 'new', text: 'x' } }),
+          card({ id: 'c2', text: 'on the file' }),
+        ],
+      },
+      null,
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    expect((await ui.find({ key: noteKeyOf('c1') }))?.text).toMatch(/^● pending · L5 · \S+$/)
+    expect((await ui.find({ key: noteKeyOf('c2') }))?.text).toMatch(/^● pending · \S+$/)
+  })
+
   test('an overlong comment is cut at six lines with an ellipsis', async ($, on) => {
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: [card({ text: 'lorem '.repeat(300) })] }, null)
     await $.session.start(SESSION)
@@ -2245,7 +2395,10 @@ describe('a note is a card (R38)', () => {
     const titleText = await ui.find({ type: 'Text', text: '✎ comment for Claude' })
     expect(titleText?.props.color).toBe('claude')
     expect(await ui.find({ type: 'Input', key: inputKeyOf({ path: 'a.ts' }) })).toBeDefined()
-    expect(await ui.find({ text: /⏎ add/ })).toBeDefined()
+    // The Input's own submit label is the only `⏎ add` (no second hint text beside the cancel pill).
+    const input = await ui.find({ type: 'Input', key: inputKeyOf({ path: 'a.ts' }) })
+    expect(input?.props.submitLabel).toBe('add')
+    expect(await ui.find({ type: 'Text', text: /⏎ add/ })).toBeUndefined()
     expect((await pillOf(ui, cancelKeyOf({ path: 'a.ts' })))?.t).toContain('cancel')
     expect(await ui.find({ text: '╮' })).toBeDefined()
     expect(await ui.find({ text: '╯' })).toBeDefined()
@@ -2260,7 +2413,6 @@ describe('a note is a card (R38)', () => {
     const anchor = { path: 'a.ts' }
     await pressPill(ui, commentButtonKeyOf(anchor))
     expect((await pillOf(ui, cancelKeyOf(anchor)))?.t).toContain('cancel')
-    expect(await ui.find({ text: /⏎ add/ })).toBeDefined()
 
     await pressPill(ui, cancelKeyOf(anchor))
     expect(await pillOf(ui, cancelKeyOf(anchor))).toBeUndefined()

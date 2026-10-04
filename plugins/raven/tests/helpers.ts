@@ -129,3 +129,52 @@ export async function pillOf(ui: PillUi, id: string): Promise<PillSeg | undefine
   }
   return undefined
 }
+
+/** One strip row as the Client's props carry it, with the strip's active/hover colours. */
+export type StripRowOf = {
+  id?: string
+  left: (PillSeg & { dim?: boolean })[]
+  right?: (PillSeg & { dim?: boolean })[]
+  /** The strip's `activeId` / `activeBg` / `rowHoverBg`. */
+  activeId?: string
+  activeBg?: string
+  rowHoverBg?: string
+}
+
+/** The strip row `id` (a list row's press id), or undefined when none is drawn. */
+export async function stripRowOf(ui: PillUi, id: string): Promise<StripRowOf | undefined> {
+  for (const client of await ui.findAll({ type: 'Client' })) {
+    const props = client.props.props as
+      | (Omit<StripRowOf, 'left' | 'right' | 'id'> & { rows?: StripRowOf[] })
+      | undefined
+    const found = props?.rows?.find(r => r.id === id)
+    if (found) {
+      return {
+        ...found,
+        activeId: props?.activeId,
+        activeBg: props?.activeBg,
+        rowHoverBg: props?.rowHoverBg,
+      }
+    }
+  }
+  return undefined
+}
+
+/** The text a strip row draws (left then right, joined), or undefined when no such row is drawn. */
+export async function rowText(ui: PillUi, id: string): Promise<string | undefined> {
+  const row = await stripRowOf(ui, id)
+  if (!row) return undefined
+  return [...row.left, ...(row.right ?? [])].map(seg => seg.t).join('')
+}
+
+/** Every segment of every strip in the drawing, in order. */
+export async function allSegs(ui: PillUi): Promise<(PillSeg & { dim?: boolean })[]> {
+  const out: (PillSeg & { dim?: boolean })[] = []
+  for (const client of await ui.findAll({ type: 'Client' })) {
+    const props = client.props.props as
+      | { rows?: { left?: PillSeg[]; right?: PillSeg[] }[] }
+      | undefined
+    for (const row of props?.rows ?? []) out.push(...(row.left ?? []), ...(row.right ?? []))
+  }
+  return out
+}

@@ -7,9 +7,17 @@ import { COLORS, TASK_STATE_COLORS, TASK_STATE_GLYPHS } from '../core/colors'
 import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
 import { TASKS_PANE } from '../names'
-import { type Tasks, tasksAfter } from '../review/tasks'
+import { type Task, type Tasks, tasksAfter } from '../review/tasks'
 import { progressBar } from '../ui/progress-bar'
 import { sectionHeader } from '../ui/section-header'
+import { type KitRow, strip } from '../ui/strip'
+
+/** The dim meta at a task row's right edge. */
+const STATE_WORDS: Record<Task['status'], string> = {
+  pending: 'pending',
+  in_progress: 'in progress',
+  completed: 'done',
+}
 
 export type TasksView = View & {
   /** Folds a landed task-tool call in; true when the list changed. */
@@ -30,14 +38,27 @@ export function createTasksView(host: Host): TasksView {
 
   /**
    * A `sectionHeader` carrying the done/total `progressBar` on the right, then each task behind
-   * a state dot — ○ pending, ◐ in progress, ● done — coloured by `TASK_STATE_COLORS`, D9's kit
-   * applied to the Tasks pane.
+   * a strip row led by a Nerd Font state icon (circle pending, dotted circle in progress, check
+   * done) coloured by `TASK_STATE_COLORS`, the task text, and its state word dim at the right.
    */
   function render(kit: Kit): RenderElement {
     const { Box, Text } = kit.ui
     if (tasks.length === 0) return <Text dimColor>No tasks yet.</Text>
 
     const done = tasks.filter(task => task.status === 'completed').length
+
+    const rows: KitRow[] = tasks.map(task => ({
+      key: `task:${task.id}`,
+      left: [
+        { t: TASK_STATE_GLYPHS[task.status], c: TASK_STATE_COLORS[task.status] },
+        { t: ' ' },
+        {
+          t: task.status === 'in_progress' ? (task.activeForm ?? task.subject) : task.subject,
+          dim: task.status === 'completed',
+        },
+      ],
+      right: [{ t: STATE_WORDS[task.status], dim: true }],
+    }))
 
     return (
       <Box flexDirection="column">
@@ -46,14 +67,7 @@ export function createTasksView(host: Host): TasksView {
           color: COLORS.accent,
           right: progressBar(kit, done, tasks.length),
         })}
-        {tasks.map(task => (
-          <Box key={task.id} flexDirection="row" gap={1}>
-            <Text color={TASK_STATE_COLORS[task.status]}>{TASK_STATE_GLYPHS[task.status]}</Text>
-            <Text dimColor={task.status === 'completed'} wrap="truncate-end">
-              {task.status === 'in_progress' ? (task.activeForm ?? task.subject) : task.subject}
-            </Text>
-          </Box>
-        ))}
+        {strip(kit, rows, { key: 'tasks', grow: 'stretch' })}
       </Box>
     )
   }

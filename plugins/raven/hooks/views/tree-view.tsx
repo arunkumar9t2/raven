@@ -3,13 +3,14 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
+import { COLORS } from '../core/colors'
 import type { Host } from '../core/host'
 import type { Kit, View } from '../core/view'
 import { loadChanges, toplevelOf } from '../git/load'
 import { TREE_PANE } from '../names'
-import { dot } from '../ui/dot'
+import { type KitRow, type KitSeg, strip } from '../ui/strip'
 import { clampTop } from './diff/layout'
-import { iconOf, statusMarkOf } from './icons'
+import { folderIconOf, iconOf, statusMarkOf } from './icons'
 import {
   changedDirsOf,
   listingKeyOf,
@@ -19,6 +20,12 @@ import {
   type TreeRow,
   treeOf,
 } from './tree/tree'
+
+/** An indentation guide cell, dim; one per depth level. */
+const GUIDE = '│'
+/** Folder chevrons: Nerd Font angle-down (open) and angle-right (closed). */
+const CHEVRON_OPEN = '\u{f078}' // nf-fa-chevron_down
+const CHEVRON_CLOSED = '\u{f054}' // nf-fa-chevron_right
 
 /** What the tree view asks of the controller when a file row is pressed. */
 export type TreeActions = {
@@ -83,6 +90,8 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
   }
   let hasExpandedOnce = false
   let lastRows = 0
+  // The file last opened from the list: its row is the active one.
+  let active: string | null = null
 
   // Bumped by each refresh, so a slow read that lands after a newer one is dropped.
   let generation = 0
@@ -153,53 +162,66 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
   }
 
   function open(path: string) {
+    active = path
     if (model.toplevel) actions.open(`${model.toplevel}/${path}`)
+    host.redraw()
   }
 
-  function nodeRow(kit: Kit, row: TreeRow): RenderElement {
-    const { Box, Text, Button } = kit.ui
-    const indent = '  '.repeat(row.depth)
+  /**
+   * One tree row as strip segments: dim `│ ` guides for the depth, a dim chevron and a yellow
+   * folder (a dir) or a blank and the file-type icon (a file), the name, and on the right a
+   * changed dir's dim count or a changed file's status dot and letter. A press anywhere on the
+   * row toggles the dir or opens the file.
+   */
+  function nodeRow(row: TreeRow): KitRow {
+    const guides: KitSeg[] = Array.from({ length: row.depth }, () => ({
+      t: `${GUIDE} `,
+      dim: true,
+    }))
 
     if (row.node.kind === 'dir') {
-      const arrow = row.isExpanded ? '▾' : '▸'
-      return (
-        <Box key={`dir:${row.node.path}`} flexDirection="row" gap={1}>
-          <Text>{`${indent}${arrow}`}</Text>
-          <Button
-            key={`dir-btn:${row.node.path}`}
-            plain
-            label={row.node.name}
-            onPress={() => toggle(row.node.path)}
-          />
-          {row.node.changed > 0 ? <Text dimColor>({row.node.changed})</Text> : null}
-        </Box>
-      )
+      const path = row.node.path
+      const id = `dir:${path}`
+      const folder = folderIconOf(row.isExpanded)
+      const press = () => toggle(path)
+      return {
+        id,
+        key: id,
+        onPress: press,
+        left: [
+          ...guides,
+          { t: row.isExpanded ? CHEVRON_OPEN : CHEVRON_CLOSED, dim: true },
+          { t: ' ' },
+          { t: folder.glyph, c: folder.color },
+          { t: ' ' },
+          { t: row.node.name, id, onPress: press },
+        ],
+        right: row.node.changed > 0 ? [{ t: `(${row.node.changed})`, dim: true }] : [],
+      }
     }
 
-    const icon = iconOf(row.node.path)
+    const path = row.node.path
+    const id = `file:${path}`
+    const icon = iconOf(path)
     const mark = row.node.status ? statusMarkOf(row.node.status) : null
-    return (
-      <Box key={`file:${row.node.path}`} flexDirection="row" gap={1}>
-        <Text>{indent}</Text>
-        <Text color={icon.color}>{icon.glyph}</Text>
-        <Button
-          key={`file-btn:${row.node.path}`}
-          plain
-          label={row.node.name}
-          onPress={() => open(row.node.path)}
-        />
-        {mark ? (
-          <Box flexDirection="row" gap={1}>
-            {dot(kit, mark.color)}
-            <Text color={mark.color}>{mark.glyph}</Text>
-          </Box>
-        ) : null}
-      </Box>
-    )
+    const press = () => open(path)
+    return {
+      id,
+      key: id,
+      onPress: press,
+      left: [
+        ...guides,
+        { t: '  ' },
+        { t: icon.glyph, c: icon.color },
+        { t: ' ' },
+        { t: row.node.name, id, onPress: press },
+      ],
+      right: mark ? [{ t: '●', c: mark.color }, { t: ' ' }, { t: mark.glyph, c: mark.color }] : [],
+    }
   }
 
   function render(kit: Kit): RenderElement {
-    const { Box, Text } = kit.ui
+    const { Text } = kit.ui
     if (!model.isLoaded) return <Text dimColor>Reading the repository…</Text>
     if (!model.toplevel || !model.root) return <Text dimColor>Not in a git repository.</Text>
 
@@ -209,19 +231,19 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
     if (top !== model.top) model = { ...model, top }
     const windowed = rows.slice(top, top + kit.rows)
 
-    return (
-      <Box flexDirection="column">
-        {windowed.map(item =>
-          item.kind === 'capped' ? (
-            <Text key="capped" dimColor>
-              … capped at 5000 files
-            </Text>
-          ) : (
-            nodeRow(kit, item.row)
-          ),
-        )}
-      </Box>
+    const items: KitRow[] = windowed.map(item =>
+      item.kind === 'capped'
+        ? { key: 'capped', left: [{ t: '… capped at 5000 files', dim: true }] }
+        : nodeRow(item.row),
     )
+
+    return strip(kit, items, {
+      key: 'tree',
+      grow: 'stretch',
+      activeId: active ? `file:${active}` : undefined,
+      rowHoverBg: COLORS.userMessageHover,
+      activeBg: COLORS.selection,
+    })
   }
 
   function scroll(by: number): boolean {
