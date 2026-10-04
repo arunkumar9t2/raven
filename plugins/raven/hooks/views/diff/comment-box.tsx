@@ -10,7 +10,6 @@ import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../..
 import { ageOf } from '../../ui/age'
 import { boxedCard, ruleRow } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
-import { meta } from '../../ui/meta'
 import { pillRow } from '../../ui/strip'
 import {
   type Anchor,
@@ -83,7 +82,6 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
 
   const hint = (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-      <Text dimColor>⏎ add</Text>
       {pillRow(
         kit,
         [
@@ -153,11 +151,13 @@ export function note(
   const word =
     comment.status === 'addressed' ? STATUS_WORDS.addressed : `● ${STATUS_WORDS[comment.status]}`
   const title = (
-    <Box key={scope} flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+    <Box key={scope} flexDirection="row" overflow="hidden" flexWrap="nowrap">
       <Text color={color} wrap="truncate-end">
         {word}
       </Text>
-      {meta(kit, [lineLabel, ageOf(comment.createdAt, now)])}
+      <Text
+        dimColor
+      >{` · ${[lineLabel, ageOf(comment.createdAt, now)].filter(Boolean).join(' · ')}`}</Text>
     </Box>
   )
   return boxedCard(kit, {

@@ -77,6 +77,11 @@ export function iconOf(path: string): Glyph {
   return GENERIC_ICON
 }
 
+/** The folder glyph of the Files tree, open or closed, in the folder yellow. */
+export function folderIconOf(isOpen: boolean): Glyph {
+  return { glyph: isOpen ? '\u{f0770}' : '\u{f024b}', color: RAINBOW.yellow } // nf-md-folder_open / folder
+}
+
 const STATUS_MARKS: Record<ChangeStatus, Glyph> = {
   added: { glyph: 'A', color: COLORS.added },
   modified: { glyph: 'M', color: COLORS.modified },
