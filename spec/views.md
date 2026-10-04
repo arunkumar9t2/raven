@@ -92,12 +92,16 @@ The Files view (`plugins/raven/hooks/views/tree-view.tsx`, pane id `raven-files`
 instead of the remainder (`plugins/raven/hooks/views/tree/tree.ts`).
 
 The listing is a dir/file tree, directories sorted before files at each level, both sorted by name.
-A directory row carries an expand arrow and, dimmed, a count of its changed descendants; a directory
+Rows are one `strip` (a `Client`; plain Buttons on a surface without one): dim `│ ` indentation
+guides per depth, a dim Nerd Font chevron (down open, right closed) and a `rainbow_yellow` folder icon
+(open or closed) on a directory, a blank where the chevron would be and the coloured file-type icon on
+a file. A row lights on the user-message hover tint under the pointer, and the file last opened from
+the list holds the selection tint (R41). A directory row carries, dimmed at the right, a count of its changed descendants; a directory
 containing a change starts expanded, every other directory starts collapsed, and the person's manual
 expand/collapse choices persist across refreshes once they have expanded anything. A file row
-carries its type icon and a change-status dot and letter mark — added, modified, deleted, renamed,
+carries its type icon and, at the right, a change-status dot and letter mark — added, modified, deleted, renamed,
 untracked — computed against `HEAD`, coloured by status the same way the diff pane's file list and
-change map are (`hooks/ui/dot.tsx`). Clicking a directory row toggles it; clicking a file row opens
+change map are (`hooks/ui/dot.tsx`). Clicking anywhere on a directory row toggles it; clicking a file row opens
 it in the Doc view.
 
 Raven colours its chrome — status marks, add/remove counts, errors, comment text — by Claude Code
@@ -122,9 +126,11 @@ when the update's status is `deleted`. Any input `tasksAfter` cannot parse leave
 unchanged rather than clearing it.
 
 The view draws a `sectionHeader` ("Tasks", the accent colour) carrying a `progressBar` — done/total
-cells plus the count, `███░░ 3/5` — right-aligned, then one row per task behind a state dot
-(`TASK_STATE_GLYPHS`/`TASK_STATE_COLORS`): `○` pending, `◐` in_progress (showing the task's
-`activeForm` when set, else its subject), `●` completed and dimmed.
+cells plus the count, `███░░ 3/5` — right-aligned, then one `strip` row per task led by a Nerd Font state icon
+(`TASK_STATE_GLYPHS`/`TASK_STATE_COLORS`): a circle pending, a dotted circle in_progress (showing the
+task's `activeForm` when set, else its subject), a check completed and dimmed, each in its state's
+colour, with the state word dim at the right edge. Task rows are not pressable. With no tasks the pane
+shows a dim "No tasks yet."
 
 The view opens itself as a background tab the first time the task list becomes non-empty, but only
 when no Raven pane is open yet — it never steals focus from a pane already open, and never reopens
