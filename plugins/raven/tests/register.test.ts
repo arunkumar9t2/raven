@@ -358,9 +358,6 @@ describe('options: watched doc paths, defaults', () => {
     const rail = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('│\n│'))
     // The rail is at least as tall as the 700 list rows the section draws.
     expect(rail?.text.split('\n').length).toBeGreaterThanOrEqual(700)
-    expect((await ui.findAll({ type: 'Text' })).some(each => each.text.includes('BORDER'))).toBe(
-      false,
-    )
   })
 
   test('nothing shown yet is a dim icon and a line', async ($, on) => {

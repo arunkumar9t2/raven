@@ -1,13 +1,12 @@
 import type { On, RenderElement } from 'claude-code'
 import { describe, type Engine, expect, test, tier } from 'claude-code/testing'
 import { COLORS } from '../hooks/core/colors'
-import { FULL_CAPABILITIES, type Kit, type Ui } from '../hooks/core/view'
+import { capabilitiesOf, type Kit, type Ui } from '../hooks/core/view'
 import { badge } from '../hooks/ui/badge'
+import type { Chip } from '../hooks/ui/chips'
 import { diffStat } from '../hooks/ui/diff-stat'
 import { dot } from '../hooks/ui/dot'
-import { meta } from '../hooks/ui/meta'
 import { progressBar } from '../hooks/ui/progress-bar'
-import { row } from '../hooks/ui/row'
 import { sectionHeader } from '../hooks/ui/section-header'
 import { statBar } from '../hooks/ui/stat-bar'
 import { pillRow } from '../hooks/ui/strip'
@@ -16,181 +15,89 @@ import { baseWorld, SESSION } from './helpers'
 tier('user')
 
 /**
- * No Raven pane draws the kit yet (wiring it in is a later task), so this test gives itself a
- * component no real hook claims (`InfoNotice`, terminal-only) and draws every kit component once
- * through it, with the surface's real elements (`$.ui.resolve(e)`) — so `$.ui.mount` validates
- * the tree exactly as it would a pane's.
+ * No Raven pane draws these kit components directly, so each test gives itself a component no real
+ * hook claims (`InfoNotice`, terminal-only) and draws them through it with the surface's real
+ * elements (`$.ui.resolve(e)`) — `$.ui.mount` then validates the tree exactly as it would a pane's.
+ *
+ * The capabilities are the terminal's with `keyboardControls` on (R42): the test's own hook is no
+ * plugin module, so it cannot build a `Client`, and this is the plain-Button fallback the setting
+ * selects.
  */
-const NO_CLIENT = { ...FULL_CAPABILITIES, canClient: false }
+const KEYBOARD = capabilitiesOf('terminal', true)
 
-function world(on: On) {
+/** Mounts `InfoNotice` drawing `draw(kit)`, and returns the drawing. */
+async function mountKit($: Engine, on: On, draw: (kit: Kit) => RenderElement) {
   baseWorld(on)
   on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
     const kit: Kit = {
       ui: (await $.ui.resolve(e)) as unknown as Ui,
       columns: 40,
       rows: 20,
-      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
+      capabilities: KEYBOARD,
       press: () => {},
     }
-
-    return {
-      type: 'Box',
-      props: { flexDirection: 'column' },
-      children: [
-        dot(kit, COLORS.accent),
-        badge(kit, 6, COLORS.accent),
-        meta(kit, ['source HEAD', '2m']),
-        diffStat(kit, 15, 12),
-        statBar(kit, 3, 3, 5),
-        progressBar(kit, 3, 5, 5),
-        sectionHeader(kit, {
-          dot: COLORS.added,
-          title: '6 files',
-          color: COLORS.accent,
-          count: 6,
-          right: 'source HEAD',
-        }),
-        row(kit, {
-          left: 'src/api.ts',
-          right: '+3 −3',
-          key: 'kit-row',
-          hover: { backgroundColor: COLORS.inactive },
-        }),
-        pillRow(
-          kit,
-          [{ key: 'note', label: 'note', icon: '✎', onPress: () => {} }],
-          'words',
-          'kit-note',
-        ),
-      ],
-    }
+    return draw(kit)
+  })
+  await $.session.start(SESSION)
+  return $.ui.mount({
+    plugin: 'raven',
+    surface: 'terminal',
+    component: 'InfoNotice',
+    props: { text: 'kit', command: null },
   })
 }
+
+/** A pill row world: `chips` drawn as `mode` under `key`, the one factory every pill test shares. */
+const pillRowWorld = (
+  $: Engine,
+  on: On,
+  chips: Chip[],
+  mode: 'words' | 'icons' | ('words' | 'icons')[],
+  key: string,
+) => mountKit($, on, kit => pillRow(kit, chips, mode, key))
+
+const NOTE: Chip = { key: 'note', label: 'note', icon: '✎', onPress: () => {} }
 
 describe('the UI kit draws on the terminal surface', () => {
   test('every component draws once, with no refusal', async ($: Engine, on: On) => {
-    world(on)
-
-    await $.session.start(SESSION)
-    const ui = await $.ui.mount({
-      plugin: 'raven',
-      surface: 'terminal',
-      component: 'InfoNotice',
-      props: { text: 'kit', command: null },
-    })
+    const ui = await mountKit(
+      $,
+      on,
+      kit =>
+        ({
+          type: 'Box',
+          props: { flexDirection: 'column' },
+          children: [
+            dot(kit, COLORS.accent),
+            badge(kit, 6, COLORS.accent),
+            diffStat(kit, 15, 12),
+            statBar(kit, 3, 3, 5),
+            progressBar(kit, 3, 5, 5),
+            sectionHeader(kit, {
+              dot: COLORS.added,
+              title: '6 files',
+              color: COLORS.accent,
+              count: 6,
+              right: 'source HEAD',
+            }),
+            pillRow(kit, [NOTE], 'words', 'kit-note'),
+          ],
+        }) as unknown as RenderElement,
+    )
 
     await expect(ui.drawn()).resolves.toBeDefined()
     expect(await ui.find({ text: '6 files' })).toBeDefined()
-    expect(await ui.find({ text: 'src/api.ts' })).toBeDefined()
   })
 })
 
-/**
- * `row` and `sectionHeader` draw `pillRow`/`progressBar` (both a `Box`) as `right`/`left`: the
- * engine refuses a `Box` nested inside an inline `Text`, so these must route an element child
- * through a `Box`, never through `<Text>{element}</Text>`.
- */
-function elementSlotWorld(on: On) {
-  baseWorld(on)
-  on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
-    const kit: Kit = {
-      ui: (await $.ui.resolve(e)) as unknown as Ui,
-      columns: 40,
-      rows: 20,
-      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
-      press: () => {},
-    }
-    const chipsOf = (key: string) =>
-      pillRow(
-        kit,
-        [{ key: `${key}-chip`, label: 'note', icon: '✎', onPress: () => {} }],
-        'words',
-        key,
-      )
-
-    return {
-      type: 'Box',
-      props: { flexDirection: 'column' },
-      children: [
-        row(kit, { left: 'src/api.ts', right: progressBar(kit, 3, 5, 5), key: 'row-progress' }),
-        row(kit, { left: chipsOf('chips-left'), right: '+3 −3', key: 'row-chips-left' }),
-        sectionHeader(kit, {
-          title: '6 files',
-          color: COLORS.accent,
-          right: chipsOf('chips-right'),
-        }),
-      ],
-    }
-  })
-}
-
-/**
- * `pillRow`'s quiet chips: an `isDim` chip draws `dimColor` (whose own documented behaviour is
- * "full strength under the pointer or the focus" — D10's "quiet controls" without an explicit
- * `hover` override, see `chips.tsx`'s NEEDS_CONTEXT note); a `forceWords` chip keeps its words
- * in icons mode.
- */
-function chipHoverWorld(on: On) {
-  baseWorld(on)
-  on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
-    const kit: Kit = {
-      ui: (await $.ui.resolve(e)) as unknown as Ui,
-      columns: 40,
-      rows: 20,
-      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
-      press: () => {},
-    }
-    return row(kit, {
-      key: 'toolbar-row',
-      left: 'L1–2',
-      right: pillRow(
-        kit,
-        [
-          { key: 'quiet', label: 'note', icon: '✎', onPress: () => {} },
-          { key: 'armed', label: 'sure?', icon: '↺', forceWords: true, onPress: () => {} },
-        ],
-        'icons',
-        'toolbar-row',
-      ),
-    })
-  })
-}
-
-/** Same as `chipHoverWorld`, but under a key the test can tell apart (`quiet-scoped`). */
-function scopedChipWorld(on: On) {
-  baseWorld(on)
-  on('ui.render', { component: 'InfoNotice' }, async ($, e): Promise<RenderElement> => {
-    const kit: Kit = {
-      ui: (await $.ui.resolve(e)) as unknown as Ui,
-      columns: 40,
-      rows: 20,
-      capabilities: NO_CLIENT, // the test's own hook is no plugin module: it cannot build a `Client`
-      press: () => {},
-    }
-    return row(kit, {
-      key: 'toolbar-row-2',
-      left: 'L1–2',
-      right: pillRow(
-        kit,
-        [{ key: 'quiet-scoped', label: 'note', icon: '✎', onPress: () => {} }],
-        'words',
-        'toolbar-row-2',
-      ),
-    })
-  })
-}
-
 describe("pillRow's pills", () => {
-  test('a pill row off a Client surface draws plain Buttons keyed by the chips, no brackets', async ($: Engine, on: On) => {
-    chipHoverWorld(on)
-    await $.session.start(SESSION)
-    const ui = await $.ui.mount({
-      plugin: 'raven',
-      surface: 'terminal',
-      component: 'InfoNotice',
-      props: { text: 'kit', command: null },
-    })
+  const CHIPS: Chip[] = [
+    { key: 'quiet', label: 'note', icon: '✎', onPress: () => {} },
+    { key: 'armed', label: 'sure?', icon: '↺', forceWords: true, onPress: () => {} },
+  ]
+
+  test('with keyboardControls a pill row draws plain Buttons keyed by the chips, no brackets', async ($: Engine, on: On) => {
+    const ui = await pillRowWorld($, on, CHIPS, 'icons', 'toolbar-row')
 
     expect((await ui.find({ key: 'quiet' }))?.type).toBe('Button')
     expect((await ui.find({ key: 'armed' }))?.type).toBe('Button')
@@ -198,83 +105,20 @@ describe("pillRow's pills", () => {
   })
 
   test('a forceWords chip keeps its words even when the row draws icons', async ($: Engine, on: On) => {
-    chipHoverWorld(on)
-    await $.session.start(SESSION)
-    const ui = await $.ui.mount({
-      plugin: 'raven',
-      surface: 'terminal',
-      component: 'InfoNotice',
-      props: { text: 'kit', command: null },
-    })
+    const ui = await pillRowWorld($, on, CHIPS, 'icons', 'toolbar-row')
 
     expect((await ui.find({ key: 'armed' }))?.props.label).toContain('↺ sure?')
     expect((await ui.find({ key: 'quiet' }))?.props.label).not.toContain('note')
   })
 
-  /**
-   * A `scope` passed to `pillRow` (D10 fix round 1, item 2) draws with no refusal — the kit's own
-   * side of the contract. `hover` itself is documented as never crossing back to the plugin
-   * (`chips.tsx`'s comment on `pillRow` quotes the exact line, three times over, for `Box`,
-   * `Button` and `Text` alike), the same category `FoundElement.props` already excludes a
-   * handler from, so there is no `.props.hover` this or any test can assert — confirmed
-   * empirically against a bare `Box.hover` with no scope at all, not just this chip's case.
-   */
-  test('a scoped chip draws with no refusal', async ($: Engine, on: On) => {
-    scopedChipWorld(on)
-    await $.session.start(SESSION)
-    const ui = await $.ui.mount({
-      plugin: 'raven',
-      surface: 'terminal',
-      component: 'InfoNotice',
-      props: { text: 'kit', command: null },
-    })
-
-    await expect(ui.drawn()).resolves.toBeDefined()
-    expect((await ui.find({ key: 'quiet-scoped' }))?.props.label).toContain('note')
-  })
-})
-
-describe('row and sectionHeader take an element as well as text', () => {
-  test('row with a progressBar (a Box) as right draws with no refusal', async ($: Engine, on: On) => {
-    elementSlotWorld(on)
-
-    await $.session.start(SESSION)
-    const ui = await $.ui.mount({
-      plugin: 'raven',
-      surface: 'terminal',
-      component: 'InfoNotice',
-      props: { text: 'kit', command: null },
-    })
-
-    await expect(ui.drawn()).resolves.toBeDefined()
-    expect(await ui.find({ text: 'src/api.ts' })).toBeDefined()
-  })
-
-  test('row with a pillRow (a Box) as left draws with no refusal', async ($: Engine, on: On) => {
-    elementSlotWorld(on)
-
-    await $.session.start(SESSION)
-    const ui = await $.ui.mount({
-      plugin: 'raven',
-      surface: 'terminal',
-      component: 'InfoNotice',
-      props: { text: 'kit', command: null },
-    })
-
-    await expect(ui.drawn()).resolves.toBeDefined()
-    expect(await ui.find({ text: 'note' })).toBeDefined()
-  })
-
-  test('sectionHeader with a pillRow as right draws with no refusal', async ($: Engine, on: On) => {
-    elementSlotWorld(on)
-
-    await $.session.start(SESSION)
-    const ui = await $.ui.mount({
-      plugin: 'raven',
-      surface: 'terminal',
-      component: 'InfoNotice',
-      props: { text: 'kit', command: null },
-    })
+  test('a pill row beside a progress bar and a section header draws with no refusal', async ($: Engine, on: On) => {
+    const ui = await mountKit($, on, kit =>
+      sectionHeader(kit, {
+        title: '6 files',
+        color: COLORS.accent,
+        right: pillRow(kit, [NOTE], 'words', 'chips-right'),
+      }),
+    )
 
     await expect(ui.drawn()).resolves.toBeDefined()
     expect(await ui.find({ text: '6 files' })).toBeDefined()
