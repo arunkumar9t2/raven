@@ -160,6 +160,32 @@ describe('register', () => {
     expect(result.text).toBe('Raven tasks shown')
   })
 
+  test('the Tasks rows are windowed to the pane, the in-progress task kept in view', async ($, on) => {
+    world(on, '')
+    on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))
+
+    await $.session.start(SESSION)
+    await $.tool.call({
+      tool: 'TodoWrite',
+      todos: Array.from({ length: 12 }, (_, i) => ({
+        content: `task ${i}`,
+        status: i < 6 ? 'completed' : i === 6 ? 'in_progress' : 'pending',
+      })),
+    })
+    await $.command.run(ravenCommand('tasks'))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 5 } },
+      requestId: TASKS_PANE.id,
+    })
+    const texts = (await allSegs(ui)).map(seg => seg.t)
+    expect(texts.filter(t => /^task \d+$/.test(t))).toHaveLength(3)
+    expect(texts).toContain('task 6')
+    expect(await ui.find({ text: /… 9 more/ })).toBeDefined()
+  })
+
   test('the Tasks pane draws a progress bar and a state dot per task, coloured by status', async ($, on) => {
     world(on, '')
     on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))

@@ -387,6 +387,9 @@ export function createDiffView(
     void refresh()
   }
 
+  // Whether the last render drew a `Client` strip: its note pill is then no keyed element to focus.
+  let isClient = false
+
   function startComposing(anchor: Anchor) {
     update({ composing: anchor, composingLine: null })
     actions.focus(inputKeyOf(anchor))
@@ -395,7 +398,7 @@ export function createDiffView(
   /** Closes the compose box and hands the keyboard back to its anchor's comment button. */
   function stopComposing(anchor: Anchor) {
     update({ composing: null, composingLine: null })
-    actions.focus(commentButtonKeyOf(anchor))
+    if (!isClient) actions.focus(commentButtonKeyOf(anchor))
   }
 
   function submitComment(anchor: Anchor, text: string) {
@@ -765,6 +768,7 @@ export function createDiffView(
 
   function render(kit: Kit): RenderElement {
     const { Box, Text } = kit.ui
+    isClient = kit.capabilities.canClient
     const { repository } = model
     const isReadOnly = sourceController.isReadOnly()
 

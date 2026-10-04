@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Kit } from '../../hooks/core/view'
 import type { Run } from '../../hooks/git/load'
 import { createReview } from '../../hooks/review/review'
+import { cancelKeyOf, commentButtonKeyOf, inputKeyOf } from '../../hooks/views/diff/anchor'
 import { createDiffView, type DiffActions } from '../../hooks/views/diff-view'
 import { fakeHost } from './fake-host'
 
@@ -137,5 +138,40 @@ describe('createDiffView', () => {
     const tree = view.render(KIT)
     expect(findByKey(tree, 'a.ts#title')).toBeDefined()
     expect(findByKey(tree, 'b.ts#title')).toBeUndefined()
+  })
+
+  test('closing the compose box focuses the note button only where it is a keyed element', async () => {
+    for (const canClient of [true, false]) {
+      const focused: string[] = []
+      const handlers = new Map<string, () => void>()
+      const kit = {
+        ...KIT,
+        ui: { ...KIT.ui, Client: () => null, Input: () => null, Select: () => null },
+        capabilities: { ...KIT.capabilities, canClient },
+        press: (id: string, fn: () => void) => handlers.set(id, fn),
+      } as unknown as Kit
+      const host = fakeHost({ run: runOf() })
+      const view = createDiffView(
+        host,
+        createReview(host, () => 0),
+        { ...NO_ACTIONS, focus: async key => void focused.push(key) },
+        () => 0,
+      )
+      await view.refresh()
+      const anchor = { path: 'a.ts' }
+      view.render(kit)
+      // On a Client surface the note pill is a press handler; elsewhere a Button's onPress.
+      const open = canClient
+        ? handlers.get(commentButtonKeyOf(anchor))
+        : (findByKey(view.render(kit), commentButtonKeyOf(anchor))?.props.onPress as () => void)
+      open?.()
+      expect(focused).toEqual([inputKeyOf(anchor)])
+      const tree = view.render(kit)
+      const cancel = canClient
+        ? handlers.get(cancelKeyOf(anchor))
+        : (findByKey(tree, cancelKeyOf(anchor))?.props.onPress as () => void)
+      cancel?.()
+      expect(focused.includes(commentButtonKeyOf(anchor))).toBe(!canClient)
+    }
   })
 })

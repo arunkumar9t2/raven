@@ -134,6 +134,9 @@ export function createDocView(
     host.redraw()
   }
 
+  // Whether the last render drew a `Client` strip: its note pill is then no keyed element to focus.
+  let isClient = false
+
   function startComposing(anchor: Anchor) {
     composing = anchor
     host.redraw()
@@ -143,7 +146,7 @@ export function createDocView(
   function stopComposing(anchor: Anchor) {
     composing = null
     host.redraw()
-    actions.focus(commentButtonKeyOf(anchor))
+    if (!isClient) actions.focus(commentButtonKeyOf(anchor))
   }
 
   function submitComment(path: string, heading: string, index: number, text: string) {
@@ -449,6 +452,7 @@ export function createDocView(
 
   function render(kit: Kit): RenderElement {
     const { Box, Text, Select } = kit.ui
+    isClient = kit.capabilities.canClient
     const shown = history.find(each => each.key === current)
 
     if (!shown) {
