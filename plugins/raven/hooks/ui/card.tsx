@@ -16,12 +16,15 @@ const FILL = '─'.repeat(400)
 const stackOf = (glyph: string, rows: number): string =>
   Array.from({ length: Math.max(1, rows) }, () => glyph).join('\n')
 
-/** A run of `─` that takes whatever room its siblings leave, clipped at the end. */
+/**
+ * A run of `─` that takes whatever room its siblings leave. It wraps inside a one-row box that
+ * clips the overflow, rather than truncating: `truncate-end` would end the line with a `…`.
+ */
 export function fill(kit: UiKit, color: string): RenderElement {
   const { Box, Text } = kit.ui
   return (
-    <Box width={0} flexGrow={1} flexShrink={1} overflow="hidden">
-      <Text color={color} wrap="truncate-end">
+    <Box width={0} height={1} flexGrow={1} flexShrink={1} overflow="hidden">
+      <Text color={color} wrap="wrap">
         {FILL}
       </Text>
     </Box>
