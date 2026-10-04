@@ -29,7 +29,7 @@ trailing "… N more" row. A one-row rule follows, then the body: **one review s
 every changed file's section at once — its heading (status mark, icon, bold path, `+adds` `−dels`,
 and a right-aligned `[ ✎ note ]` chip), then its file-level notes, then each hunk in turn: its
 toolbar row (the hunk's function context and line range, and — unless read-only — right-aligned
-`[ ✎ note ] [ ✓ stage ] [ ↺ revert ]` chips), its code, its own notes, then (only while that hunk
+` ✎ note `, ` ✓ stage `, ` ↺ revert ` pills), its code, its own notes, then (only while that hunk
 is being composed) its compose box — a blank row between one file's section and the next, no
 blank row between hunks (`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). Every row of a
 file's section — heading, notes, each hunk's toolbar and code — draws behind a 2-column left rail,
@@ -191,33 +191,34 @@ No control carries a letter hotkey; every action is reachable by click and by Ta
 list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
 the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
 file's note chip, right-aligned on its heading row, reads `[ ✎ note ]`; a hunk's, on its toolbar
-row alongside `[ ✓ stage ]` and `[ ↺ revert ]`, reads the same `[ ✎ note ]` — both shrink to their
-bare icon (`[ ✎ ]`) under `chipsFit`/`chipsLayout` when the row is too narrow for every chip's
-words, the heading's path giving way first. Submitting or cancelling a comment returns the
+row alongside the stage and revert pills, is the ` ✎ note ` pill — the heading's shrinks to its bare
+icon (`[ ✎ ]`) under `chipsFit`/`chipsLayout` when the row is too narrow for every chip's words, the
+heading's path giving way first; the toolbar's pills shrink to bare icons the same way. Submitting or cancelling a comment returns the
 keyboard to that anchor's note chip, so Esc/Enter flow stays inside the pane rather than jumping
 to the composer.
 
 ## Stage and revert one hunk
 
-Each hunk in a non-read-only source carries its toolbar's right-aligned chips: `[ ✎ note ]` (when
-the surface has `canType` and the hunk isn't being composed), then `[ ✓ stage ]`, then
-`[ ↺ revert ]` — icons only (`[ ✎ ] [ ✓ ] [ ↺ ]`) once the row is too narrow for every chip's
-words. Before either runs, Raven re-reads that one file's current hunks and requires an exact
+Each hunk in a non-read-only source carries its toolbar's right-aligned **pills**, drawn as one
+`Client` strip (`hooks/ui/strip.tsx`; [mod-api](./mod-api.md#client-and-uimessage)): ` ✎ note ` (when
+the surface has `canType` and the hunk isn't being composed), then ` ✓ stage `, then ` ↺ revert ` —
+coloured text on a tinted background, no brackets, the background lighting under the pointer; icons
+only (` ✎ `, ` ✓ `, ` ↺ `) once the row is too narrow for every pill's words. A left click posts the
+pill's id, which the press registry maps to the same handler a `Button` would have run. On a surface
+without `canClient` the same labels draw as `plain` Buttons. Before either runs, Raven re-reads that one file's current hunks and requires an exact
 header-and-text match against the hunk the button was drawn for. A mismatch — the working tree
 moved since the last render — toasts "The hunk changed — refreshed, try again", refreshes the
 whole stream with the current hunks, and applies nothing.
 
 `stage` runs `git apply --cached --recount` against a patch built for that one hunk
-(`plugins/raven/hooks/git/patch.ts`); once it succeeds the chip reads `[ ✓ staged ]` (`[ ✓ ]` in
-icons mode) at full strength instead of dim — `Chip` carries no colour field, so staging flips
-`isDim` off rather than recolouring the chip — and stops responding until a refresh drops the
-mark, which happens once the hunk's header no longer appears in a fresh load. `revert` runs
-`git apply -R --recount`
-on the same patch, restoring the working tree; the first press relabels the chip `[ ↺ sure? ]`,
-shown at full strength and keeping its words even in icons mode (`forceWords`; `Button` has no
-colour prop, so there is no colour change), and any other action anywhere in the pane — including
-a background refresh or a scroll, not only a deliberate one — resets that arming, so a second,
-immediately-following press is what applies it. Reverting an added or untracked file's
+(`plugins/raven/hooks/git/patch.ts`); once it succeeds the pill reads ` ✓ staged ` (` ✓ ` in icons
+mode) in the `on` kind (success colour) and stops responding until a refresh drops the mark, which
+happens once the hunk's header no longer appears in a fresh load. `revert` runs `git apply -R
+--recount` on the same patch, restoring the working tree; the first press turns the pill into the
+`armed` kind — ` ↺ sure? ` on a filled error background, keeping its words even when the other pills
+shrink to icons — and any other action anywhere in the pane — including a background refresh or a
+scroll, not only a deliberate one — resets that arming, so a second, immediately-following press is
+what applies it. Reverting an added or untracked file's
 one hunk deletes the file outright: its forward patch is "create this file", so `git apply -R`
 undoes that. Either way, success re-reads and re-renders every file's hunks — the same refresh
 [above](#reading-hunks) — not just the one file the hunk belonged to.

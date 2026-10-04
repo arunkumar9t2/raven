@@ -58,12 +58,12 @@ The one source of truth is a fixed, per-surface table (`CAPABILITIES_BY_SURFACE`
 `core/view.ts`, mirroring the engine's own `Elements` type) that `capabilitiesOf` reads by surface
 name:
 
-| Surface | `Input`/`Select` (`canType`/`canPick`) | `Image` (`canShowImage`) |
-| --- | --- | --- |
-| `terminal` | yes | yes |
-| `desktop` | yes | no |
-| `vscode` | yes | no |
-| `mobile` | no | no |
+| Surface | `Input`/`Select` (`canType`/`canPick`) | `Image` (`canShowImage`) | `Client` (`canClient`) |
+| --- | --- | --- | --- |
+| `terminal` | yes | yes | yes |
+| `desktop` | yes | no | yes |
+| `vscode` | yes | no | no |
+| `mobile` | no | no | no |
 
 `register.ts`'s `kitOf` computes this once per `ui.render` event, off `e.surface`, and puts it on
 `Kit` as `kit.capabilities` — the only thing any view reads to decide whether it can type, pick, or
@@ -76,7 +76,7 @@ crashing or drawing nothing useful:
 
 - Without `canType`, neither the diff pane nor the Doc view draws a `[ ✎ note ]` chip anywhere —
   not on a diff file's heading, a hunk's toolbar row, or a doc section's own row — and no compose
-  box opens anywhere; a hunk's `[ ✓ stage ]` and `[ ↺ revert ]` chips still draw and work, since
+  box opens anywhere; a hunk's stage and revert pills still draw and work, since
   staging and reverting need no typing. An anchor's existing notes still render normally either
   way, on either view.
 - Without `canPick`, a picker falls back to a row of plain buttons over the same options
@@ -85,6 +85,9 @@ crashing or drawing nothing useful:
   view's history picker (its 3 most recent documents instead of the full list). A hunk's compose box
   without `canPick` also drops its line picker, so every comment on that surface anchors to the
   whole hunk rather than one line.
+- Without `canClient`, a strip (the hunk toolbar's pills) draws the same text with each pill as a
+  `plain` `Button` carrying its label, keyed by the pill's id — no brackets, no hover tint, the same
+  handler (`plugins/raven/hooks/ui/strip.tsx`; see [mod-api](./mod-api.md#client-and-uimessage)).
 - Without `canShowImage`, or for any non-PNG image format even with it, the Doc view shows the
   image's path as dim text instead of attempting to render it.
 

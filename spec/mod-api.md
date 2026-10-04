@@ -231,6 +231,35 @@ carries no colour or style, and the active tab is drawn in reverse video (`inver
 its highlight comes from the terminal's own palette rather than the theme. A plugin that wants its
 own highlights to match draws them with `inverse` and colours everything else by theme key.
 
+## Client and ui.message
+
+A `Client` is a region drawn by a *surface module*: a function of plain-data props and a `surface`
+(`ClientModule`), run on the drawing thread, with a pointer listener, local state and `surface.post`.
+Raven uses it for one thing — rows of coloured segments with real hover and click, where a `Button`
+would draw `[ brackets ]` and cannot tint under the pointer. The one surface module is
+`plugins/raven/hooks/surface/strip.tsx`: props `{ rows, activeId?, rowHoverBg?, activeBg? }`, each row
+a one-line `left` and `right` list of segments (`t`, colours, bold/dim/italic, and an optional `id` that
+makes the segment a pill). It tracks the hovered row and pill, swaps in a pill's `hoverBg`/`hoverC`
+(and a row's `rowHoverBg`) and posts `{ press: id }` on a left click of a pill, else of an id'd row. It
+sets state only when the hover changes and starts no timers. A surface module cannot import plugin
+code, so it carries its own small width function (wide characters and emoji count 2), kept equal to
+`ui/wrap.ts`'s by a unit test; hit boxes are computed from segment widths, the right side ending at
+the region's right edge.
+
+The `<Client module="…">` tag need not sit in the hooks entry: the engine finds surface modules by the
+literal path in any hooks-side source file and resolves it relative to *that* file, so the one call
+site lives in `hooks/ui/strip.tsx` (`module="../surface/strip.tsx"`) and `claude plugin validate`
+lists the module. Only `Client` and the elements it nests sit in a surface module; a surface module's
+own JSX uses the same `h` pragma the hooks files carry.
+
+A press travels `surface.post` → the plugin's `ui.message` hook (`register.ts`, matched on the pane
+ids) → `raven.press(requestId, id)` → the **press registry** (`core/presses.ts`). Every render of a
+pane clears that pane's entries and re-registers the handler of each pill it draws through `kit.press`,
+so an id a later render no longer draws is dead and a stale post is ignored. `e.data` came from code
+and is validated (`{ press: string }`); the hook answers `{}`. Surfaces without a `Client` (`canClient`
+false: vscode, mobile) get a fallback of `plain` Buttons keyed by the same ids, whose `onPress` runs the
+same handler.
+
 ## Panes
 
 `$.ui.open({id, title?, focus?, closeOnEscape?, holdToasts?, rows?, columns?})` opens or re-surfaces a
