@@ -48,7 +48,7 @@ attach: each section draws its own notes (the same margin style a diff hunk's no
 every addressed one into a single dim "✓ N addressed" row exactly as a diff anchor does — one
 shared split, `splitAddressed` in `plugins/raven/hooks/review/comments.ts`) beneath its body, then,
 only on a surface with `canType` and only while that section isn't already being composed, a
-right-aligned `[ ✎ note ]` chip on a row of its own. Only a comment carrying a `section` draws here
+right-aligned ` ✎ note ` chip on a row of its own. Only a comment carrying a `section` draws here
 — the same discriminator the diff stream's own orphan group uses to leave doc comments out of
 itself — so a diff comment (file- or hunk-level) on this same path, shown here only because the
 file happens to also be open in this pane, stays out: it belongs to the diff pane's own stream and
@@ -133,21 +133,21 @@ itself once dismissed.
 ## Status band
 
 Above the prompt (`AbovePrompt`), one row reads `● raven  N notes pending · plan updated
-[ open ] [ ➤ send ]` (`plugins/raven/hooks/views/band.tsx`, state in
+` open ` ` ➤ send ` (`plugins/raven/hooks/views/band.tsx`, state in
 `plugins/raven/hooks/core/band-state.ts`): an accent `dot` and the name on the left, the
-notes/plan summary beside it, then `[ open ]` and — only while comments are pending — the primary
-`[ ➤ send ]` as right-aligned chips, drawn with the same `hooks/ui/` kit every view uses. It draws
+notes/plan summary beside it, then ` open ` and — only while comments are pending — the primary
+` ➤ send ` as right-aligned chips, drawn with the same `hooks/ui/` kit every view uses. It draws
 only when something is
 pending — pending review comments, or a doc/plan shown since the pane was last visible — and only
 while no Raven pane is currently visible, whether the dock is closed or a Raven pane is open
 behind another tab. It never draws while a survey holds the band, and sizes itself to the
-surface's `bodyColumns` with `wrap="truncate-end"`; `chipsLayout` shrinks `[ open ]` before
-`[ ➤ send ]` gives up its words, the same priority rule as the diff header's own chips.
+surface's `bodyColumns` with `wrap="truncate-end"`; `chipsLayout` shrinks ` open ` before
+` ➤ send ` gives up its words, the same priority rule as the diff header's own chips.
 
 A doc counts as unseen from the moment it is shown (or reloaded, for a doc the person has opened
 here before) until the Doc pane is actually drawn again; the count and the unseen flag both
-invalidate the band's render so it updates without a keystroke. The row's `[ open ]` chip opens
-the diff when comments are pending, else the doc; `[ ➤ send ]`, drawn only while comments are
+invalidate the band's render so it updates without a keystroke. The row's ` open ` chip opens
+the diff when comments are pending, else the doc; ` ➤ send `, drawn only while comments are
 pending, submits the review exactly as `/raven send` does.
 
 ## The `/raven` command row

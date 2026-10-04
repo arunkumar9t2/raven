@@ -57,7 +57,7 @@ A comment's status moves `pending` → `sent` → `addressed` or `open`. A note 
 (`note` in `plugins/raven/hooks/views/diff/comment-box.tsx`, one component for the diff stream and
 the Doc pane): a heavy bar `┃` in the status colour (`NOTE_STATE_COLORS`) runs down every row of
 the card. Row 1 reads the comment's first line, then — right-aligned — the status word in the
-status colour, a dim `Lnn · age` and the chips: `┃ text ··· pending L12 · 2m [ resend ] [ ✕ ]`.
+status colour, a dim `Lnn · age` and the chips: `┃ text ··· pending L12 · 2m ` resend ` ` ✕ `.
 The card sits on the theme's `userMessageBackground` (`COLORS.userMessage`) from the bar to the
 right edge — the tint Claude Code puts behind the person's own messages, since a note is theirs;
 the file rail and indent beside it stay untinted. The rest of the text follows on rows 2..n, wrapped
@@ -75,16 +75,16 @@ starts on row 2 (still at most 6 rows in all).
   anchor into one dim "✓ N addressed" row, once a resolution names it (a card that does draw reads
   `✓ addressed`).
 - **open** — word `open`, `warning`-coloured (the same colour as the `M` status mark), with
-  a `[ resend ]` chip. A comment lands here two ways: a main-loop turn finished without naming it,
+  a ` resend ` chip. A comment lands here two ways: a main-loop turn finished without naming it,
   or (diff comments only) a composer/Remote Control prompt's carry check found its file gone — see
   [Delivery](#delivery). The chip is not scoped to the row it sits on: pressing resend on any one
   open comment moves every open comment back to `pending` — there is no per-comment resend, only a
-  resend-all triggered from any open row. Every note row also carries a `[ ✕ ]` chip that removes it
+  resend-all triggered from any open row. Every note row also carries a ` ✕ ` chip that removes it
   outright, regardless of status.
 
 The compose box (`commentBox`, same file) sits on the same tint, railed by an accent `┃`
 (`suggestion`) down its rows: the line picker (hunks only), the Input with its placeholder, then one
-hint row — dim `⏎ add` and a `[ ✕ cancel ]` chip that closes the box. The Input soft-wraps and
+hint row — dim `⏎ add` and a ` ✕ cancel ` chip that closes the box. The Input soft-wraps and
 draws at most two rows (longer text scrolls inside them), so the box's rows are constant
 (`composeRowsOf`): 3, or 4 with the line picker; a short comment leaves one spare tinted row. The
 box is never clipped at the top of a scrolled window, so its Input stays mounted.

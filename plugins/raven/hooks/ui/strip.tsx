@@ -7,6 +7,7 @@ import { PILL_COLORS, type PillKind } from '../core/colors'
 import type { Kit } from '../core/view'
 import type { Seg, StripRow } from '../surface/strip'
 import { type Chip, chipText } from './chips'
+import { widthOf } from './wrap'
 
 export type { PillKind, Seg, StripRow }
 
@@ -77,6 +78,7 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
         key={opts.key}
         module="../surface/strip.tsx"
         flexGrow={opts.grow === false ? undefined : 1}
+        width={opts.grow === false ? widestOf(rows) : undefined}
         height={rows.length}
         props={{
           rows: data,
@@ -161,5 +163,13 @@ export function pillRow(
       ))}
       {segs.length > 0 ? pills : null}
     </Box>
+  )
+}
+
+/** The cells the widest row's segments take: a pill row's explicit region width (an unsized `Client` collapses in a flex row). */
+function widestOf(rows: readonly KitRow[]): number {
+  return Math.max(
+    0,
+    ...rows.map(r => [...r.left, ...(r.right ?? [])].reduce((sum, seg) => sum + widthOf(seg.t), 0)),
   )
 }

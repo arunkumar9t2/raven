@@ -121,10 +121,10 @@ Enter lands, which would start a real model turn instead of toggling the pane fo
 a full subcommand — `/raven diff` (or `doc`/`files`/`tasks`/`send`) — never the bare `/raven`, in
 any script that must not spend tokens.
 
-A chip row's hover (see `chips.tsx`'s `chipRow` doc comment) can be probed from this harness too:
-`cc.ts hover <col> <row>` sends an SGR mouse *motion* event over a chip's cell, driving hover the
-same as a real pointer move, with no click. A `cap` right after shows the chip's hover-group
-siblings jump from dim to full strength and the pointed chip itself invert.
+A pill's hover (`surface/strip.tsx`) can be probed from this harness too: `cc.ts hover <col> <row>`
+sends an SGR mouse *motion* event over a pill's cell, driving hover the same as a real pointer move,
+with no click. A `tmux capture-pane -p -e` right after shows the pill's background change to the
+selection tint (`48;5;66` on the dark theme); `cc.ts click` presses it.
 
 ## Local loading
 

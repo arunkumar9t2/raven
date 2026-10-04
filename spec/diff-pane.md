@@ -12,13 +12,13 @@ Two fixed rows form the header (`plugins/raven/hooks/views/diff/header.tsx`): ro
 source — `N files  +adds −dels ■■■□□ · source <picker>`, the stat bar scaled to the whole diff's
 own total (no `max`); row 2 is the change map (one glyph per file, the shape of the whole change
 at a glance — see [below](#the-change-map)), the pending-notes summary, and the action chips —
-`[ ↑ ] [ ↓ ] [ ↻ refresh ]`, then — once a comment is pending — `[ ✎ edit & send ]` and the
-primary `[ ➤ send N ]` (the pane's main action), then `[ ⌫ clear ]` — laid out by `chipsLayout`,
+` ↑ ` ` ↓ ` ` ↻ refresh `, then — once a comment is pending — ` ✎ edit & send ` and the
+primary ` ➤ send N ` (the pane's main action), then ` ⌫ clear ` — laid out by `chipsLayout` and drawn as one pill strip (`pillRow`), clear in the danger colours (armed: filled error),
 which shrinks the lowest-priority chip to its bare icon first so `send N` keeps its words longest.
 While a clear is armed, row 2 drops the nav/refresh chips and the map/notes summary entirely —
 nothing competes with the confirm while the person decides. With nothing armed, the same row
-degrades instead of vanishing as the pane narrows: `[ ↑ ] [ ↓ ]` never give way, in words, icons,
-or by dropping, since they are the file list's only carriers of the person's own list chords, so
+degrades instead of vanishing as the pane narrows: ` ↑ ` ` ↓ ` never give way, in words, icons,
+or by dropping, since they are the file list's only carriers of the person's own list chords (a `Client` cannot bind an engine chord, so these two draw as `plain` Buttons beside the strip, padded like pills), so
 `refresh` gives way first; the change map's own cell count caps at 2 instead of scaling to the
 pane's width (two changed files each still draw their own glyph; more than two draw one glyph plus
 the overflow `…`); and the notes summary compacts from `✎ N pending` to a bare `✎` (the send chip's
@@ -27,7 +27,7 @@ own `➤ N` still carries the count). Beneath it sits the file list
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
 trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
 every changed file's section at once — its heading (status mark, icon, bold path, `+adds` `−dels`,
-and a right-aligned `[ ✎ note ]` chip), then its file-level notes, then each hunk in turn: its
+and a right-aligned ` ✎ note ` chip), then its file-level notes, then each hunk in turn: its
 toolbar row (the hunk's function context and line range, and — unless read-only — right-aligned
 ` ✎ note `, ` ✓ stage `, ` ↺ revert ` pills), its code, its own notes, then (only while that hunk
 is being composed) its compose box — a blank row between one file's section and the next, no
@@ -47,7 +47,7 @@ this diff" title, an orphan path's own row, and the blank row between files are 
 note is a card of as many rows as its text wraps to at the stream's width (1 to 6, see
 [review](review.md#status)); a note chip draws idle on the heading or a hunk's toolbar row
 rather than as a row of its own, and opens a compose box in its place — two rows (Input plus
-the `⏎ add`/`[ ✕ cancel ]` hint row), three when a hunk's line picker draws above the Input — only
+the `⏎ add`/` ✕ cancel ` hint row), three when a hunk's line picker draws above the Input — only
 while that anchor is being composed. A multi-row fixed block's rail runs its full height. A card the scroll position cuts through stays
 placed and is clipped at the top (`windowOf` places it from its first visible row), so the rows
 below never shift; the compose box is `pinned` and always placed whole. A hunk with line notes is several `hunk`
@@ -190,9 +190,9 @@ checked.
 No control carries a letter hotkey; every action is reachable by click and by Tab+Enter. The file
 list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
 the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
-file's note chip, right-aligned on its heading row, reads `[ ✎ note ]`; a hunk's, on its toolbar
+file's note chip, right-aligned on its heading row, is the ` ✎ note ` pill; a hunk's, on its toolbar
 row alongside the stage and revert pills, is the ` ✎ note ` pill — the heading's shrinks to its bare
-icon (`[ ✎ ]`) under `chipsFit`/`chipsLayout` when the row is too narrow for every chip's words, the
+icon (` ✎ `) under `chipsFit`/`chipsLayout` when the row is too narrow for every chip's words, the
 heading's path giving way first; the toolbar's pills shrink to bare icons the same way. Submitting or cancelling a comment returns the
 keyboard to that anchor's note chip, so Esc/Enter flow stays inside the pane rather than jumping
 to the composer.
