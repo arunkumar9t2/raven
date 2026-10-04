@@ -74,7 +74,7 @@ just with no typed, picking, or imaging controls.
 A view checks a capability before drawing the element that needs it, and degrades rather than
 crashing or drawing nothing useful:
 
-- Without `canType`, neither the diff pane nor the Doc view draws a `[ ✎ note ]` chip anywhere —
+- Without `canType`, neither the diff pane nor the Doc view draws a ` ✎ note ` chip anywhere —
   not on a diff file's heading, a hunk's toolbar row, or a doc section's own row — and no compose
   box opens anywhere; a hunk's stage and revert pills still draw and work, since
   staging and reverting need no typing. An anchor's existing notes still render normally either

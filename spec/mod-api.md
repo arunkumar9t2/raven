@@ -256,7 +256,7 @@ A press travels `surface.post` → the plugin's `ui.message` hook (`register.ts`
 ids) → `raven.press(requestId, id)` → the **press registry** (`core/presses.ts`). Every render of a
 pane clears that pane's entries and re-registers the handler of each pill it draws through `kit.press`,
 so an id a later render no longer draws is dead and a stale post is ignored. `e.data` came from code
-and is validated (`{ press: string }`); the hook answers `{}`. Surfaces without a `Client` (`canClient`
+and is validated (`{ press: string }`); the hook answers `{}`. Every chip row (`pillRow` in `ui/strip.tsx`) draws as one such strip sized to its pills (an explicit `width`: an unsized `Client` collapses in a flex row); a chip carrying an engine `action` is the exception and stays a `plain` Button. Surfaces without a `Client` (`canClient`
 false: vscode, mobile) get a fallback of `plain` Buttons keyed by the same ids, whose `onPress` runs the
 same handler.
 
