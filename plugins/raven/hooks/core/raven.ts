@@ -475,7 +475,15 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       diff.turnEnded()
       if (turn.reason === 'answer') await resolveSent()
     },
-    press: (paneId, id) => presses.dispatch(paneId, id),
+    // A throwing handler is logged, never rejected into the `ui.message` hook (which would fail the post).
+    press: (paneId, id) => {
+      try {
+        return presses.dispatch(paneId, id)
+      } catch (error) {
+        host.debug(`raven: press handler "${id}" threw: ${String(error)}`)
+        return true
+      }
+    },
     registerPress: (paneId, id, onPress) => presses.add(paneId, id, onPress),
     render: (paneId, kit) => {
       const view = views.find(each => each.pane.id === paneId)
@@ -496,10 +504,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       host.redraw()
     },
     noteViewport: columns => bandState.noteViewport(columns),
-    band: (kit, hasSurvey, requestId) => {
-      presses.begin(requestId)
-      return bandState.band(kit, hasSurvey)
-    },
+    // `begin` runs right before the band's synchronous registrations, after the band's awaits: a
+    // render that draws nothing, or a newer one landing meanwhile, never wipes handlers it still needs.
+    band: (kit, hasSurvey, requestId) =>
+      bandState.band(kit, hasSurvey, () => presses.begin(requestId)),
     resultKindOf: text => resultKindByText.get(text) ?? 'info',
   }
 }

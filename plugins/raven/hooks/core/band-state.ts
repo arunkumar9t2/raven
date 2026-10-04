@@ -20,7 +20,12 @@ export type BandState = {
    * The `AbovePrompt` band: null while a survey holds it, `rows` is too small, nothing is pending,
    * or a Raven pane is already visible (not just open behind another tab).
    */
-  band: (kit: Kit, hasSurvey: boolean) => Promise<RenderElement | null>
+  band: (
+    kit: Kit,
+    hasSurvey: boolean,
+    /** Runs right before the band draws, after every await: starts the band's press registrations. */
+    beforeRender?: () => void,
+  ) => Promise<RenderElement | null>
   /**
    * Loads the review once without opening any pane, so a caller that needs the pending comments
    * before any pane ever loaded them (the band, or a prompt about to carry them) sees a past
@@ -99,12 +104,13 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
   }
 
   return {
-    band: async (kit, hasSurvey) => {
+    band: async (kit, hasSurvey, beforeRender) => {
       if (hasSurvey || kit.rows < 1) return null
       await ensureReviewLoaded()
       const pendingCount = review.pending().length
       if (pendingCount === 0 && !isDocUpdated) return null
       if (await isAnyPaneShown()) return null
+      beforeRender?.()
       return renderBand(
         kit,
         { pendingCount, isDocUpdated },

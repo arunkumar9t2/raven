@@ -43,7 +43,7 @@ export function createTasksView(host: Host): TasksView {
    * done) coloured by `TASK_STATE_COLORS`, the task text, and its state word dim at the right.
    */
   function render(kit: Kit): RenderElement {
-    const { Box } = kit.ui
+    const { Box, Text } = kit.ui
     if (tasks.length === 0)
       return emptyState(
         kit,
@@ -53,7 +53,15 @@ export function createTasksView(host: Host): TasksView {
 
     const done = tasks.filter(task => task.status === 'completed').length
 
-    const rows: KitRow[] = tasks.map(task => ({
+    // The header takes a row; the list is windowed to what is left so the strip's props stay bounded,
+    // the first in-progress task kept in view, and a dim "… N more" row says what is cut.
+    const room = Math.max(1, kit.rows - 1)
+    const shownCount = tasks.length > room ? Math.max(1, room - 1) : tasks.length
+    const active = tasks.findIndex(task => task.status === 'in_progress')
+    const start = Math.max(0, Math.min(tasks.length - shownCount, active >= 0 ? active - 1 : 0))
+    const windowed = tasks.slice(start, start + shownCount)
+    const hidden = tasks.length - windowed.length
+    const rows: KitRow[] = windowed.map(task => ({
       key: `task:${task.id}`,
       left: [
         { t: TASK_STATE_GLYPHS[task.status], c: TASK_STATE_COLORS[task.status] },
@@ -75,6 +83,11 @@ export function createTasksView(host: Host): TasksView {
           right: progressBar(kit, done, tasks.length),
         })}
         {strip(kit, rows, { key: 'tasks', grow: 'stretch' })}
+        {hidden > 0 ? (
+          <Text key="tasks:more" dimColor>
+            {`… ${hidden} more`}
+          </Text>
+        ) : null}
       </Box>
     )
   }
