@@ -3,17 +3,15 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import { COLORS, NOTE_STATE_COLORS, type PillKind } from '../../core/colors'
+import { COLORS, NOTE_STATE_COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import { type Hunk, parseHeader } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../../review/comments'
 import { ageOf } from '../../ui/age'
-import { card } from '../../ui/card'
-import type { Chip } from '../../ui/chips'
+import { boxedCard, ruleRow } from '../../ui/card'
+import { type Chip, chipsFit } from '../../ui/chips'
 import { meta } from '../../ui/meta'
-import { row } from '../../ui/row'
-import { type KitSeg, pill, pillRow, strip } from '../../ui/strip'
-import { widthOf } from '../../ui/wrap'
+import { pillRow } from '../../ui/strip'
 import {
   type Anchor,
   addressedKeyOf,
@@ -26,7 +24,7 @@ import {
   selectKeyOf,
   stageKeyOf,
 } from './anchor'
-import { composeRowsOf, noteChipsOf, STATUS_WORDS } from './note-layout'
+import { composeInnerRowsOf, noteChipsOf, STATUS_WORDS } from './note-layout'
 
 const WHOLE_HUNK = 'whole'
 
@@ -102,9 +100,14 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     </Box>
   )
 
-  return card(kit, {
-    color: COLORS.suggestion,
-    rows: composeRowsOf(props.hasPicker),
+  return boxedCard(kit, {
+    color: COLORS.accent,
+    title: (
+      <Text color={COLORS.accent} bold wrap="truncate-end">
+        ✎ comment for Claude
+      </Text>
+    ),
+    rows: composeInnerRowsOf(props.hasPicker),
     children: (
       <Box flexDirection="column">
         {props.hasPicker ? (
@@ -129,10 +132,11 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
 }
 
 /**
- * A note is a card: a heavy `┃` in its status colour down every row, row 1 the comment's first
- * line with — right-aligned — the status word, a dim `L<line> · <age>` and the chips; `lines`
- * (from `noteLinesOf`, wrapped once by whoever sized the card) fill rows 1..n. `now` (ms) comes
- * from the view's own clock, never `Date.now()` here.
+ * A note is a boxed card: `╭─ ● pending · L5 · now ─────── ✕ ─╮` — the status word in its colour,
+ * a dim `L<line> · <age>`, and the pills embedded in the top border — then `│ text │` rows (`lines`,
+ * from `noteLinesOf`, wrapped once by whoever sized the card) and `╰──╯`. The border is the
+ * status colour, the inside the user-message tint. `now` (ms) comes from the view's own clock,
+ * never `Date.now()` here.
  */
 export function note(
   kit: Kit,
@@ -146,20 +150,24 @@ export function note(
   const lineLabel = comment.line ? `L${comment.line.number}` : ''
   const color = NOTE_STATE_COLORS[comment.status]
   const scope = noteKeyOf(comment.id)
-  const right = (
-    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-      <Text color={color}>{STATUS_WORDS[comment.status]}</Text>
+  const word =
+    comment.status === 'addressed' ? STATUS_WORDS.addressed : `● ${STATUS_WORDS[comment.status]}`
+  const title = (
+    <Box key={scope} flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+      <Text color={color} wrap="truncate-end">
+        {word}
+      </Text>
       {meta(kit, [lineLabel, ageOf(comment.createdAt, now)])}
-      {pillRow(kit, noteChipsOf(comment, onRemove, onResend), 'words', scope)}
     </Box>
   )
-  return card(kit, {
+  return boxedCard(kit, {
     color,
+    title,
+    right: pillRow(kit, noteChipsOf(comment, onRemove, onResend), 'words', scope),
     rows: lines.length,
     children: (
       <Box flexDirection="column">
-        {row(kit, { left: <Text wrap="truncate-end">{lines[0] ?? ''}</Text>, right, key: scope })}
-        {lines.slice(1).map((line, index) => (
+        {lines.map((line, index) => (
           <Box key={`${scope}:${index}`}>
             <Text wrap="truncate-end">{line}</Text>
           </Box>
@@ -192,8 +200,10 @@ export type HunkToolbarProps = {
   isReadOnly: boolean
   isStaged: boolean
   confirmingRevert: boolean
-  /** The toolbar's own room, after the rail and its indent — what `chipsFit` sizes against. */
+  /** The toolbar's own room, after the rail — what `chipsFit` sizes against. */
   columns: number
+  /** The file card's border colour: status, or the accent while Claude edits the file. */
+  color: string
   onStartNote: (anchor: Anchor) => void
   onStage: () => void
   onRevert: () => void
@@ -227,70 +237,58 @@ function hunkLabelOf(hunk: Hunk): string {
 }
 
 /**
- * A hunk's toolbar row, a one-row strip: its header label on the left, then — unless read-only —
- * the note (when it can draw), stage and revert pills, right-aligned. Staging is a no-op once
- * staged (the pill reads "staged", kind on); revert confirms on a second press, keeping its words
- * (`↺ sure?`, kind armed) even when the pills shrink to bare icons to fit. D12 §2.
+ * A hunk's toolbar row, `├─ ƒ name  L1–7 ─────── pills`: the border in the file card's `color`,
+ * the header label, a fill, then — unless read-only — the note (when it can draw), stage and
+ * revert pills at the right. Staging is a no-op once staged (the pill reads "staged", kind on);
+ * revert confirms on a second press, keeping its words (`↺ sure?`, kind armed) even when the pills
+ * shrink to bare icons to fit. D12 §2–3.
  */
 export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
-  const { anchor } = props
+  const { Text } = kit.ui
+  const { anchor, color } = props
   const label = hunkLabelOf(props.hunk)
   const key = hunkHeaderKeyOf(anchor)
+  const left = (
+    <Text wrap="truncate-end" key={key}>
+      {label}
+    </Text>
+  )
 
-  if (props.isReadOnly) return row(kit, { left: label, key })
+  if (props.isReadOnly) return ruleRow(kit, { color, start: '├─ ', left })
 
-  const specs: {
-    id: string
-    icon: string
-    label: string
-    kind: PillKind
-    keepWords: boolean
-    onPress: () => void
-  }[] = []
+  const chips: Chip[] = []
   if (props.canNote) {
-    specs.push({
-      id: commentButtonKeyOf(anchor),
+    chips.push({
+      key: commentButtonKeyOf(anchor),
       icon: '✎',
       label: 'note',
-      kind: 'normal',
-      keepWords: false,
       onPress: () => props.onStartNote(anchor),
     })
   }
-  specs.push({
-    id: stageKeyOf(anchor),
+  chips.push({
+    key: stageKeyOf(anchor),
     icon: '✓',
     label: props.isStaged ? 'staged' : 'stage',
     kind: props.isStaged ? 'on' : 'normal',
-    keepWords: false,
     onPress: props.isStaged ? () => {} : props.onStage,
   })
-  specs.push({
-    id: revertKeyOf(anchor),
+  chips.push({
+    key: revertKeyOf(anchor),
     icon: '↺',
     label: props.confirmingRevert ? 'sure?' : 'revert',
     kind: props.confirmingRevert ? 'armed' : 'danger',
-    keepWords: props.confirmingRevert,
+    forceWords: props.confirmingRevert,
     onPress: props.onRevert,
   })
 
-  const pillsOf = (words: boolean): KitSeg[] =>
-    specs.flatMap((spec, i) => {
-      const seg = pill(
-        spec.id,
-        spec.icon,
-        words || spec.keepWords ? spec.label : '',
-        spec.kind,
-        spec.onPress,
-      )
-      return i === 0 ? [seg] : [{ t: ' ' }, seg]
-    })
-  const room = Math.max(0, props.columns - HEADER_MIN)
-  const withWords = pillsOf(true)
-  const right =
-    withWords.reduce((sum, seg) => sum + widthOf(seg.t), 0) <= room ? withWords : pillsOf(false)
-
-  return strip(kit, [{ left: [{ t: label }], right }], { key })
+  // `├─ ` before and a space after the fill, then the label's own minimum.
+  const room = Math.max(0, props.columns - HEADER_MIN - 5)
+  return ruleRow(kit, {
+    color,
+    start: '├─ ',
+    left,
+    right: pillRow(kit, chips, chipsFit(chips, room), key),
+  })
 }
 
 /** The collapsed row for an anchor's addressed comments: "✓ N addressed". */

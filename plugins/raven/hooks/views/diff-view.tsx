@@ -20,8 +20,8 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
+import { fill, ruleRow } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { row } from '../ui/row'
 import { pillRow } from '../ui/strip'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import {
@@ -29,7 +29,6 @@ import {
   contentWidthOf,
   fileAtRow,
   fixedRowsOf,
-  indentedWidthOf,
   type Stream,
   streamOf,
 } from './diff/blocks'
@@ -536,30 +535,28 @@ export function createDiffView(
     item: BodyItem,
     file: ChangedFile,
     contentWidth: number,
+    color: string,
   ): RenderElement {
     const { Box, Text } = kit.ui
     switch (item.kind) {
+      case 'close':
+        return (
+          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
+            <Text color={color}>╰</Text>
+            {fill(kit, color)}
+          </Box>
+        )
       case 'title': {
         const mark = statusMarkOf(item.file.status)
         const icon = iconOf(item.file.path)
         const left = (
-          <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-            <Text color={mark.color} wrap="truncate-end">
-              {mark.glyph}
-            </Text>
-            <Text color={icon.color} wrap="truncate-end">
-              {icon.glyph}
-            </Text>
-            <Text bold wrap="truncate-end">
-              {item.file.path}
-            </Text>
-            <Text color={COLORS.added} wrap="truncate-end">
-              +{item.file.adds}
-            </Text>
-            <Text color={COLORS.removed} wrap="truncate-end">
-              −{item.file.dels}
-            </Text>
-          </Box>
+          <Text wrap="truncate-end">
+            <Text color={icon.color}>{icon.glyph}</Text>
+            <Text bold>{` ${item.file.path}`}</Text>
+            <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
+            <Text color={COLORS.added}>{` +${item.file.adds}`}</Text>
+            <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text>
+          </Text>
         )
         const anchor: Anchor = { path: item.file.path }
         const titleKey = `title-row:${item.file.path}`
@@ -567,12 +564,12 @@ export function createDiffView(
         if (item.canNote) {
           const chip = noteChip(anchor, startComposing)
           // The same HEADER_MIN the hunk toolbar reserves for its own label, so the heading's
-          // single note chip shrinks to its bare icon under the same pressure, the path (which
-          // already truncates on its own via `wrap="truncate-end"`) giving way first.
-          const mode = chipsFit([chip], Math.max(0, contentWidth - HEADER_MIN))
+          // single note pill shrinks to its bare icon under the same pressure, the path (which
+          // already truncates on its own) giving way first.
+          const mode = chipsFit([chip], Math.max(0, kit.columns - HEADER_MIN - 5))
           right = pillRow(kit, [chip], mode, titleKey)
         }
-        return row(kit, { left, right, key: titleKey })
+        return <Box key={titleKey}>{ruleRow(kit, { color, start: '╭─ ', left, right })}</Box>
       }
       case 'status':
         return <Text dimColor>{item.text}</Text>
@@ -604,7 +601,6 @@ export function createDiffView(
       case 'hunk-header':
         return (
           <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-            <Text> </Text>
             <Box flexGrow={1} overflow="hidden">
               {hunkToolbar(kit, {
                 anchor: item.anchor,
@@ -613,9 +609,8 @@ export function createDiffView(
                 isReadOnly: item.isReadOnly,
                 isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
                 confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
-                // The row's own indent before the toolbar's `Box` is the one-column `<Text> </Text>`
-                // just above, not two — the toolbar's room matches what is actually drawn.
-                columns: indentedWidthOf(contentWidth),
+                columns: contentWidth,
+                color,
                 onStartNote: startComposing,
                 onStage: () => void applyHunk(file, item.hunk, 'stage'),
                 onRevert: () => pressRevert(file, item.hunk, item.anchor),
@@ -735,8 +730,15 @@ export function createDiffView(
     }
 
     const { item } = block
-    if (item.kind === 'gap') {
-      return <Box key={block.key}>{bodyRowOf(kit, item, file, contentWidth)}</Box>
+    // The gap between cards has no border, and a card's own top and bottom rows (`╭─`, `╰`) span
+    // the whole width: none of them draws behind the `│ ` left border.
+    if (item.kind === 'gap' || item.kind === 'title' || item.kind === 'close') {
+      return clippedOf(
+        kit,
+        block.key,
+        <Box key={block.key}>{bodyRowOf(kit, item, file, kit.columns, railColor)}</Box>,
+        placed,
+      )
     }
 
     return clippedOf(
@@ -745,7 +747,7 @@ export function createDiffView(
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
         {railOf(kit, block.rows, railColor)}
         <Box flexGrow={1} overflow="hidden">
-          {bodyRowOf(kit, item, file, contentWidth)}
+          {bodyRowOf(kit, item, file, contentWidth, railColor)}
         </Box>
       </Box>,
       placed,

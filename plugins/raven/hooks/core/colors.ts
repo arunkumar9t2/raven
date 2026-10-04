@@ -35,6 +35,10 @@ export const COLORS = {
   userMessageHover: 'userMessageBackgroundHover',
   /** A hovered pill's background and an active list row's background (R41). */
   selection: 'selectionBg',
+  /** A card's border and fill glyphs when nothing else colours them (an orphaned group's rail). */
+  subtle: 'subtle',
+  /** The git mark leading the header: a branch-orange accent. */
+  git: 'rainbow_orange',
   /** Text on a filled accent or error background: a primary or armed pill's label. */
   inverseText: 'inverseText',
 } as const
@@ -80,3 +84,17 @@ export const PILL_COLORS: Record<
   armed: { c: COLORS.inverseText, bg: COLORS.error, hoverBg: COLORS.error },
   on: { c: COLORS.done, bg: COLORS.userMessage, hoverBg: COLORS.selection },
 }
+
+/**
+ * The rainbow theme keys, one per hue, for file-type icons (`views/icons.ts`) and any other
+ * category colour: the theme owns the actual shade, light or dark.
+ */
+export const RAINBOW = {
+  red: 'rainbow_red',
+  orange: 'rainbow_orange',
+  yellow: 'rainbow_yellow',
+  green: 'rainbow_green',
+  blue: 'rainbow_blue',
+  indigo: 'rainbow_indigo',
+  violet: 'rainbow_violet',
+} as const

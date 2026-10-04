@@ -1,58 +1,58 @@
-import { COLORS } from '../core/colors'
+import { COLORS, RAINBOW } from '../core/colors'
 import type { ChangeStatus } from '../git/changes'
 
 type Glyph = { glyph: string; color: string }
 
 const EXT_ICONS: Record<string, Glyph> = {
-  ts: { glyph: '\u{e628}', color: '#3178c6' }, // nf-seti-typescript
-  tsx: { glyph: '\u{e7ba}', color: '#3178c6' }, // nf-dev-react
-  js: { glyph: '\u{e74e}', color: '#f7df1e' }, // nf-dev-javascript
-  jsx: { glyph: '\u{e7ba}', color: '#61dafb' }, // nf-dev-react
-  mjs: { glyph: '\u{e74e}', color: '#f7df1e' }, // nf-dev-javascript
-  cjs: { glyph: '\u{e74e}', color: '#f7df1e' }, // nf-dev-javascript
-  json: { glyph: '\u{e60b}', color: '#cbcb41' }, // nf-seti-json
-  md: { glyph: '\u{e73e}', color: '#519aba' }, // nf-dev-markdown
-  mdx: { glyph: '\u{e73e}', color: '#519aba' }, // nf-dev-markdown
-  kt: { glyph: '\u{e634}', color: '#7f52ff' }, // nf-seti-kotlin
-  kts: { glyph: '\u{e634}', color: '#7f52ff' }, // nf-seti-kotlin
-  java: { glyph: '\u{e738}', color: '#ea2d2e' }, // nf-dev-java
-  gradle: { glyph: '\u{e660}', color: '#02303a' }, // nf-seti-gradle
-  py: { glyph: '\u{e73c}', color: '#3572a5' }, // nf-dev-python
-  rs: { glyph: '\u{e7a8}', color: '#dea584' }, // nf-dev-rust
-  go: { glyph: '\u{e627}', color: '#00add8' }, // nf-seti-go
-  sh: { glyph: '\u{f489}', color: '#89e051' }, // nf-md-console
-  bash: { glyph: '\u{f489}', color: '#89e051' }, // nf-md-console
-  zsh: { glyph: '\u{f489}', color: '#89e051' }, // nf-md-console
-  yml: { glyph: '\u{e615}', color: '#cb171e' }, // nf-seti-yml
-  yaml: { glyph: '\u{e615}', color: '#cb171e' }, // nf-seti-yml
-  toml: { glyph: '\u{e615}', color: '#9c4221' }, // nf-seti-yml (toml shares yml family glyph)
-  html: { glyph: '\u{e736}', color: '#e34c26' }, // nf-dev-html5
-  css: { glyph: '\u{e749}', color: '#563d7c' }, // nf-dev-css3
-  scss: { glyph: '\u{e749}', color: '#c6538c' }, // nf-dev-css3
-  swift: { glyph: '\u{e755}', color: '#f05138' }, // nf-dev-swift
-  c: { glyph: '\u{e61e}', color: '#555555' }, // nf-seti-c
-  h: { glyph: '\u{e61e}', color: '#555555' }, // nf-seti-c
-  cpp: { glyph: '\u{e61d}', color: '#f34b7d' }, // nf-seti-cpp
-  lua: { glyph: '\u{e620}', color: '#000080' }, // nf-seti-lua
-  sql: { glyph: '\u{e706}', color: '#dad8d8' }, // nf-dev-database
-  xml: { glyph: '\u{e619}', color: '#e37933' }, // nf-seti-xml
-  svg: { glyph: '\u{f1c5}', color: '#ffb13b' }, // nf-fa-file_image
-  png: { glyph: '\u{f1c5}', color: '#ffb13b' }, // nf-fa-file_image
-  jpg: { glyph: '\u{f1c5}', color: '#ffb13b' }, // nf-fa-file_image
-  jpeg: { glyph: '\u{f1c5}', color: '#ffb13b' }, // nf-fa-file_image
-  gif: { glyph: '\u{f1c5}', color: '#ffb13b' }, // nf-fa-file_image
-  lock: { glyph: '\u{f023}', color: '#bbbbbb' }, // nf-fa-lock
+  ts: { glyph: '\u{e628}', color: RAINBOW.blue }, // nf-seti-typescript
+  tsx: { glyph: '\u{e7ba}', color: RAINBOW.blue }, // nf-dev-react
+  js: { glyph: '\u{e74e}', color: RAINBOW.yellow }, // nf-dev-javascript
+  jsx: { glyph: '\u{e7ba}', color: RAINBOW.blue }, // nf-dev-react
+  mjs: { glyph: '\u{e74e}', color: RAINBOW.yellow }, // nf-dev-javascript
+  cjs: { glyph: '\u{e74e}', color: RAINBOW.yellow }, // nf-dev-javascript
+  json: { glyph: '\u{e60b}', color: RAINBOW.yellow }, // nf-seti-json
+  md: { glyph: '\u{e73e}', color: RAINBOW.indigo }, // nf-dev-markdown
+  mdx: { glyph: '\u{e73e}', color: RAINBOW.indigo }, // nf-dev-markdown
+  kt: { glyph: '\u{e634}', color: RAINBOW.violet }, // nf-seti-kotlin
+  kts: { glyph: '\u{e634}', color: RAINBOW.violet }, // nf-seti-kotlin
+  java: { glyph: '\u{e738}', color: RAINBOW.red }, // nf-dev-java
+  gradle: { glyph: '\u{e660}', color: RAINBOW.green }, // nf-seti-gradle
+  py: { glyph: '\u{e73c}', color: RAINBOW.green }, // nf-dev-python
+  rs: { glyph: '\u{e7a8}', color: RAINBOW.orange }, // nf-dev-rust
+  go: { glyph: '\u{e627}', color: RAINBOW.blue }, // nf-seti-go
+  sh: { glyph: '\u{f489}', color: RAINBOW.green }, // nf-md-console
+  bash: { glyph: '\u{f489}', color: RAINBOW.green }, // nf-md-console
+  zsh: { glyph: '\u{f489}', color: RAINBOW.green }, // nf-md-console
+  yml: { glyph: '\u{e615}', color: RAINBOW.red }, // nf-seti-yml
+  yaml: { glyph: '\u{e615}', color: RAINBOW.red }, // nf-seti-yml
+  toml: { glyph: '\u{e615}', color: RAINBOW.orange }, // nf-seti-yml (toml shares yml family glyph)
+  html: { glyph: '\u{e736}', color: RAINBOW.orange }, // nf-dev-html5
+  css: { glyph: '\u{e749}', color: RAINBOW.violet }, // nf-dev-css3
+  scss: { glyph: '\u{e749}', color: RAINBOW.violet }, // nf-dev-css3
+  swift: { glyph: '\u{e755}', color: RAINBOW.orange }, // nf-dev-swift
+  c: { glyph: '\u{e61e}', color: RAINBOW.blue }, // nf-seti-c
+  h: { glyph: '\u{e61e}', color: RAINBOW.blue }, // nf-seti-c
+  cpp: { glyph: '\u{e61d}', color: RAINBOW.indigo }, // nf-seti-cpp
+  lua: { glyph: '\u{e620}', color: RAINBOW.blue }, // nf-seti-lua
+  sql: { glyph: '\u{e706}', color: RAINBOW.yellow }, // nf-dev-database
+  xml: { glyph: '\u{e619}', color: RAINBOW.orange }, // nf-seti-xml
+  svg: { glyph: '\u{f1c5}', color: RAINBOW.violet }, // nf-fa-file_image
+  png: { glyph: '\u{f1c5}', color: RAINBOW.violet }, // nf-fa-file_image
+  jpg: { glyph: '\u{f1c5}', color: RAINBOW.violet }, // nf-fa-file_image
+  jpeg: { glyph: '\u{f1c5}', color: RAINBOW.violet }, // nf-fa-file_image
+  gif: { glyph: '\u{f1c5}', color: RAINBOW.violet }, // nf-fa-file_image
+  lock: { glyph: '\u{f023}', color: COLORS.subtle }, // nf-fa-lock
 }
 
 const NAME_ICONS: Record<string, Glyph> = {
-  dockerfile: { glyph: '\u{f308}', color: '#458ee6' }, // nf-md-docker
-  makefile: { glyph: '\u{e779}', color: '#e37933' }, // nf-seti-makefile
-  '.gitignore': { glyph: '\u{e702}', color: '#f14e32' }, // nf-dev-git
-  license: { glyph: '\u{f0219}', color: '#cbcb41' }, // nf-md-certificate
-  readme: { glyph: '\u{e73e}', color: '#519aba' }, // nf-dev-markdown
+  dockerfile: { glyph: '\u{f308}', color: RAINBOW.blue }, // nf-md-docker
+  makefile: { glyph: '\u{e779}', color: RAINBOW.orange }, // nf-seti-makefile
+  '.gitignore': { glyph: '\u{e702}', color: RAINBOW.red }, // nf-dev-git
+  license: { glyph: '\u{f0219}', color: RAINBOW.yellow }, // nf-md-certificate
+  readme: { glyph: '\u{e73e}', color: RAINBOW.indigo }, // nf-dev-markdown
 }
 
-const GENERIC_ICON: Glyph = { glyph: '\u{f0214}', color: '#6d8086' } // nf-md-file_outline
+const GENERIC_ICON: Glyph = { glyph: '\u{f0214}', color: COLORS.subtle } // nf-md-file_outline
 
 const LOCK_SUFFIXES = ['.lock', '-lock.json', '.lockb']
 

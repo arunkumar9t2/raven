@@ -566,7 +566,11 @@ const mainLoopTurn = (answer: string): TurnCompleteInput => ({
   reason: 'answer',
 })
 
-type StripRowOf = { id?: string; left: { t: string }[]; right?: { t: string; id?: string }[] }
+type StripRowOf = {
+  id?: string
+  left: { t: string; id?: string }[]
+  right?: { t: string; id?: string }[]
+}
 
 const mountDiff = ($: Engine) =>
   $.ui.mount({
@@ -783,7 +787,7 @@ describe('review stream', () => {
     expect(fillCountOf(small)).toBeLessThan(fillCountOf(big))
   })
 
-  test("the file being edited this turn draws its section's rail in the accent, not its status colour", async ($, on) => {
+  test("the file being edited this turn draws its card's border in the accent, not its status colour", async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
     await $.session.start(SESSION)
@@ -791,34 +795,44 @@ describe('review stream', () => {
     await $.tool.call({ tool: 'Edit', file_path: '/work/b.ts', old_string: 'a', new_string: 'b' })
 
     const ui = await mountDiff($)
-    const railColorOf = async (titleKey: string) => {
-      const found = await ui.find({ key: titleKey })
-      const rail = found?.children[0] as { props?: { color?: string } } | undefined
-      return rail?.props?.color
+    /** The colour of the first `Text` under `el` whose text starts with `glyph`. */
+    const colorOf = (el: unknown, glyph: string): string | undefined => {
+      const node = el as { type?: string; props?: { color?: string }; children?: unknown[] }
+      if (node.type === 'Text' && typeof node.children?.[0] === 'string') {
+        if (node.children[0].startsWith(glyph)) return node.props?.color
+      }
+      for (const child of node.children ?? []) {
+        const found = typeof child === 'object' ? colorOf(child, glyph) : undefined
+        if (found !== undefined) return found
+      }
+      return undefined
     }
-    expect(await railColorOf('b.ts#title')).toBe('claude')
-    expect(await railColorOf('a.ts#title')).not.toBe('claude')
+    expect(colorOf(await ui.find({ key: 'b.ts#title' }), '╭')).toBe('claude')
+    expect(colorOf(await ui.find({ key: 'a.ts#title' }), '╭')).not.toBe('claude')
+    expect(colorOf(await ui.find({ key: 'b.ts#close' }), '╰')).toBe('claude')
   })
 
-  test("each file's section carries a left rail; a blank gap row (no rail) separates two files", async ($, on) => {
+  test('each file is a card: ╭─ title, │ on every body row, ╰ close, and a blank gap row (no border) between two files', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
 
-    expect((await ui.find({ key: 'a.ts#title' }))?.text.startsWith('▌')).toBe(true)
-    expect((await ui.find({ key: 'a.ts#status' }))?.text.startsWith('▌')).toBe(true)
-    expect((await ui.find({ key: 'b.ts#sep' }))?.text.startsWith('▌')).toBe(false)
+    expect((await ui.find({ key: 'a.ts#title' }))?.text.startsWith('╭─')).toBe(true)
+    expect((await ui.find({ key: 'a.ts#status' }))?.text.startsWith('│')).toBe(true)
+    expect((await ui.find({ key: 'a.ts#close' }))?.text.startsWith('╰')).toBe(true)
+    expect((await ui.find({ key: 'b.ts#sep' }))?.text.trim()).toBe('')
+    expect((await ui.find({ key: 'b.ts#title' }))?.text.startsWith('╭─')).toBe(true)
   })
 
-  test("a file's section keeps its left rail deep into a scroll, past its own title and most of its hunk", async ($, on) => {
+  test("a file's card keeps its left border deep into a scroll, past its own title and most of its hunk", async ($, on) => {
     hunkWorld(on, () => {})
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
-    // kit.rows = 6; minus 2 header + 1 list + 1 rule leaves 2 body rows: fewer than a.ts's 5-row
-    // section (title, hunk-header, HUNK_TEXT's 3 code lines), so scrolling clamps to a top that
-    // scrolls the title and most of the hunk's code out of view.
+    // kit.rows = 6; minus 2 header + 1 list + 1 rule leaves 2 body rows: fewer than a.ts's 7-row
+    // card (title, hunk-header, HUNK_TEXT's 3 code lines, close), so scrolling clamps to a top
+    // that scrolls the title and most of the hunk's code out of view.
     const ui = await $.ui.mount({
       plugin: NAME,
       surface: 'terminal',
@@ -832,15 +846,16 @@ describe('review stream', () => {
       offset: 0,
       by: 4,
       bodyRows: 2,
-      contentRows: 5,
+      contentRows: 6,
       origin: { kind: 'person' },
     })
 
     expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
-    // The header row (row 1) scrolls out of view too; what's left is the hunk's own (partially
-    // sliced) code block, still carrying the rail.
+    // The header row scrolls out of view too; what's left is the hunk's own (partially sliced)
+    // code block, still carrying the border, then the card's closing row.
     const hunkCode = await ui.find({ key: `a.ts#hunk:0:${HUNK_HEADER}` })
-    expect(hunkCode?.text.startsWith('▌')).toBe(true)
+    expect(hunkCode?.text.startsWith('│')).toBe(true)
+    expect((await ui.find({ key: 'a.ts#close' }))?.text.startsWith('╰')).toBe(true)
   })
 
   test('pressing a file row scrolls its heading to the top of the stream', async ($, on) => {
@@ -1379,6 +1394,24 @@ describe('diff header', () => {
     expect(await ui.find({ text: / \]/ })).toBeUndefined()
   })
 
+  test('the file title row leads with a Nerd Font icon coloured by the file type, then the path', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'readme.md'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const iconColorOf = async (path: string) => {
+      const title = await ui.find({ key: `${path}#title` })
+      const text = JSON.stringify(title?.children)
+      return /"color":"(rainbow_[a-z]+|subtle)"[^}]*\},"children":\["[^"]*"\]\},\{"type":"Text","props":\{"bold":true/.exec(
+        text,
+      )?.[1]
+    }
+    expect(await iconColorOf('a.ts')).toBe('rainbow_blue')
+    expect(await iconColorOf('readme.md')).toBe('rainbow_indigo')
+  })
+
   test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {
     gitWorld(on, {}, null)
 
@@ -1476,6 +1509,8 @@ describe('turn.complete resets the live feed on every reason', () => {
 
 const HUNK_HEADER = '@@ -1,2 +1,2 @@'
 const TOOLBAR_KEY = hunkHeaderKeyOf({ path: 'a.ts', hunk: HUNK_HEADER })
+/** The toolbar's pill strip: `pillRow` names its Client after the row's key. */
+const PILLS_KEY = `${TOOLBAR_KEY}:pills`
 const HUNK_TEXT = `${HUNK_HEADER}\n a\n-b\n+c\n`
 
 /** A world inside a git repo with one file carrying one hunk, so stage/revert have something to act on. */
@@ -1520,7 +1555,7 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: TOOLBAR_KEY })
+    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: PILLS_KEY })
 
     expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
     expect(applied.stdin).toContain(HUNK_TEXT)
@@ -1550,7 +1585,7 @@ describe('stage and revert a hunk', () => {
     // The working tree changes between the render above and the stage press below.
     diffText = '@@ -1,2 +1,2 @@\n a\n-b\n+d\n'
 
-    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: TOOLBAR_KEY })
+    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: PILLS_KEY })
 
     expect(applyRan).toBe(false)
     expect(toasts).toContain('The hunk changed — refreshed, try again')
@@ -1563,17 +1598,17 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const client = await ui.find({ key: TOOLBAR_KEY })
+    const client = await ui.find({ key: PILLS_KEY })
     expect(client?.type).toBe('Client')
     const props = client?.props.props as { rows: StripRowOf[] }
-    const right = props.rows[0]?.right ?? []
+    const right = props.rows[0]?.left ?? []
     expect(right.filter(seg => seg.id).map(seg => seg.id)).toEqual([
       commentButtonKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }),
       stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }),
       revertKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }),
     ])
     // What the surface module drew: no square brackets, the labels in words.
-    const text = (await ui.find({ in: TOOLBAR_KEY, type: 'Box' }))?.text ?? ''
+    const text = (await ui.find({ in: PILLS_KEY, type: 'Box' }))?.text ?? ''
     expect(text).toContain('✎ note')
     expect(text).toContain('✓ stage')
     expect(text).toContain('↺ revert')
@@ -1596,7 +1631,7 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const key = hunkHeaderKeyOf({ path, hunk: header })
+    const key = `${hunkHeaderKeyOf({ path, hunk: header })}:pills`
     expect((await ui.find({ in: key, text: '✓ stage' }))?.text).toContain('✓ stage')
   })
 
@@ -1607,9 +1642,9 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: TOOLBAR_KEY })
+    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: PILLS_KEY })
 
-    expect(await ui.find({ in: TOOLBAR_KEY, text: '✓ staged' })).toBeDefined()
+    expect(await ui.find({ in: PILLS_KEY, text: '✓ staged' })).toBeDefined()
   })
 
   test('the pointer lights the pill under it and a left click on it stages the hunk', async ($, on) => {
@@ -1622,19 +1657,19 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    await ui.resize({ columns: 60, rows: 1, in: TOOLBAR_KEY })
+    await ui.resize({ columns: 60, rows: 1, in: PILLS_KEY })
     const bgOf = async () =>
-      (await ui.find({ in: TOOLBAR_KEY, type: 'Text', text: '✓ stage' }))?.props.backgroundColor
+      (await ui.find({ in: PILLS_KEY, type: 'Text', text: '✓ stage' }))?.props.backgroundColor
     expect(await bgOf()).toBe('userMessageBackground')
 
-    // Right-aligned pills: ` ✎ note ` (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert ` (10) end at column 60,
-    // so stage spans columns 40..48.
-    await ui.pointer({ type: 'move', x: 44, y: 0, in: TOOLBAR_KEY })
+    // The pills run from the strip's left edge: ` ✎ note ` (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert `,
+    // so stage spans columns 9..17.
+    await ui.pointer({ type: 'move', x: 12, y: 0, in: PILLS_KEY })
     expect(await bgOf()).toBe('selectionBg')
-    await ui.pointer({ type: 'move', x: 10, y: 0, in: TOOLBAR_KEY })
+    await ui.pointer({ type: 'move', x: 2, y: 0, in: PILLS_KEY })
     expect(await bgOf()).toBe('userMessageBackground')
 
-    await ui.pointer({ type: 'down', x: 44, y: 0, button: 'left', in: TOOLBAR_KEY })
+    await ui.pointer({ type: 'down', x: 12, y: 0, button: 'left', in: PILLS_KEY })
     expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
   })
 
@@ -1645,10 +1680,10 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    await ui.post({ press: 'stage:gone.ts|@@' }, { in: TOOLBAR_KEY })
-    await ui.post({ nonsense: 1 }, { in: TOOLBAR_KEY })
+    await ui.post({ press: 'stage:gone.ts|@@' }, { in: PILLS_KEY })
+    await ui.post({ nonsense: 1 }, { in: PILLS_KEY })
 
-    expect(await ui.find({ in: TOOLBAR_KEY, text: '✓ stage' })).toBeDefined()
+    expect(await ui.find({ in: PILLS_KEY, text: '✓ stage' })).toBeDefined()
   })
 
   test('revert is armed by one press and confirmed by the second, the armed pill keeping its words', async ($, on) => {
@@ -1662,11 +1697,11 @@ describe('stage and revert a hunk', () => {
 
     const ui = await mountDiff($)
     const revert = revertKeyOf({ path: 'a.ts', hunk: HUNK_HEADER })
-    await ui.post({ press: revert }, { in: TOOLBAR_KEY })
-    expect(await ui.find({ in: TOOLBAR_KEY, text: '↺ sure?' })).toBeDefined()
+    await ui.post({ press: revert }, { in: PILLS_KEY })
+    expect(await ui.find({ in: PILLS_KEY, text: '↺ sure?' })).toBeDefined()
     expect(applied).toHaveLength(0)
 
-    await ui.post({ press: revert }, { in: TOOLBAR_KEY })
+    await ui.post({ press: revert }, { in: PILLS_KEY })
     expect(applied.map(argv => argv.join(' '))).toContain('git apply -R --recount -')
   })
 
@@ -1684,16 +1719,16 @@ describe('stage and revert a hunk', () => {
       requestId: DIFF_PANE.id,
     })
     const anchor = { path: 'a.ts', hunk: HUNK_HEADER }
-    await ui.post({ press: revertKeyOf(anchor) }, { in: TOOLBAR_KEY })
+    await ui.post({ press: revertKeyOf(anchor) }, { in: PILLS_KEY })
 
-    const props = (await ui.find({ key: TOOLBAR_KEY }))?.props.props as { rows: StripRowOf[] }
-    const segs = props.rows[0]?.right ?? []
+    const props = (await ui.find({ key: PILLS_KEY }))?.props.props as { rows: StripRowOf[] }
+    const segs = props.rows[0]?.left ?? []
     const right = segs.map(seg => seg.t).join('')
     expect(right).toContain('↺ sure?')
     expect(right).not.toContain('note')
-    // 38 minus the card's three edge columns (the 2-column rail and the toolbar's own 1-column
-    // indent) leaves 35 for the toolbar: its label and pills share it.
-    expect(right.length).toBeLessThanOrEqual(35)
+    // 38 minus the card's 2-column left border leaves 36 for the toolbar: `├─ `, the 4-cell label
+    // `L1–2`, a space each side of the fill, then the pills.
+    expect(right.length).toBeLessThanOrEqual(36 - 3 - 4 - 2)
   })
 
   for (const surface of ['vscode', 'mobile'] as const) {
@@ -1713,7 +1748,7 @@ describe('stage and revert a hunk', () => {
         props: PANE_PROPS,
         requestId: DIFF_PANE.id,
       })
-      const row = await ui.find({ key: TOOLBAR_KEY })
+      const row = await ui.find({ key: PILLS_KEY })
       expect(row?.type).toBe('Box')
       expect(row?.text).toContain('stage')
       expect(row?.text).toContain('revert')
@@ -2141,29 +2176,47 @@ describe('a note is a card (R38)', () => {
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
 
-    const first = await ui.find({ key: noteKeyOf('c1') })
-    expect(first?.text).toContain('word0')
-    expect(first?.text).toContain('pending')
-    const rest: string[] = []
-    for (let i = 0; i < 5; i += 1) {
+    const title = await ui.find({ key: noteKeyOf('c1') })
+    expect(title?.text).toContain('pending')
+    const lines: string[] = []
+    for (let i = 0; i < 6; i += 1) {
       const line = await ui.find({ key: `${noteKeyOf('c1')}:${i}` })
-      if (line) rest.push(line.text)
+      if (line) lines.push(line.text)
     }
-    expect(rest.length).toBeGreaterThan(0)
-    expect(rest.every(line => line.length <= PANE_PROPS.bodyColumns - 3)).toBe(true)
-    const drawn = `${first?.text} ${rest.join(' ')}`
-    // The whole comment fits in six rows here, so every word is drawn.
+    expect(lines.length).toBeGreaterThan(1)
+    // the pane's 100 columns less the 2-column card border, the 1-cell indent and the note's own
+    // `│ ` and ` │` side borders
+    expect(lines.every(line => line.length <= PANE_PROPS.bodyColumns - 3 - 4)).toBe(true)
+    const drawn = lines.join(' ')
+    // The whole comment fits in six lines here, so every word is drawn.
     for (let i = 0; i < 30; i += 1) expect(drawn).toContain(`word${i}`)
   })
 
-  test('an overlong comment is cut at six rows with an ellipsis', async ($, on) => {
+  test('a note is a boxed card: a ╭─ top border carrying status, line, age and the ✕ pill, │ text rows, a ╰ ╯ bottom', async ($, on) => {
+    gitWorld(on, { [commentsStoreKeyOf(REPO)]: [card({ text: 'short remark' })] }, null)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    const title = await ui.find({ key: noteKeyOf('c1') })
+    expect(title?.text).toMatch(/^● pending/)
+    expect((await pillOf(ui, dropKeyOf('c1')))?.t).toContain('✕')
+    // the top border opens the card and closes with a corner after the pill
+    expect((await ui.find({ text: /╭─ / }))?.text).toBeDefined()
+    expect(await ui.find({ text: '╮' })).toBeDefined()
+    expect((await ui.find({ key: `${noteKeyOf('c1')}:0` }))?.text).toBe('short remark')
+    expect(await ui.find({ text: '╯' })).toBeDefined()
+    expect(await ui.find({ text: '╰' })).toBeDefined()
+  })
+
+  test('an overlong comment is cut at six lines with an ellipsis', async ($, on) => {
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: [card({ text: 'lorem '.repeat(300) })] }, null)
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
-    const last = await ui.find({ key: `${noteKeyOf('c1')}:4` })
+    const last = await ui.find({ key: `${noteKeyOf('c1')}:5` })
     expect(last?.text.endsWith('…')).toBe(true)
-    expect(await ui.find({ key: `${noteKeyOf('c1')}:5` })).toBeUndefined()
+    expect(await ui.find({ key: `${noteKeyOf('c1')}:6` })).toBeUndefined()
   })
 
   test('the status shows as a word: pending on a fresh note, open once it has opened', async ($, on) => {
@@ -2180,6 +2233,22 @@ describe('a note is a card (R38)', () => {
     await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
     await ui.input({ key: inputKeyOf({ path: 'a.ts' }), text: 'fresh one' })
     expect(await ui.find({ text: /pending/ })).toBeDefined()
+  })
+
+  test('the compose box is the same card in the accent: ╭─ ✎ comment for Claude, the Input, ⏎ add and cancel, ╰ ╯', async ($, on) => {
+    gitWorld(on, {}, null)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
+    const titleText = await ui.find({ type: 'Text', text: '✎ comment for Claude' })
+    expect(titleText?.props.color).toBe('claude')
+    expect(await ui.find({ type: 'Input', key: inputKeyOf({ path: 'a.ts' }) })).toBeDefined()
+    expect(await ui.find({ text: /⏎ add/ })).toBeDefined()
+    expect((await pillOf(ui, cancelKeyOf({ path: 'a.ts' })))?.t).toContain('cancel')
+    expect(await ui.find({ text: '╮' })).toBeDefined()
+    expect(await ui.find({ text: '╯' })).toBeDefined()
   })
 
   test('composing shows a real cancel chip; pressing it closes the box', async ($, on) => {
@@ -2241,7 +2310,7 @@ describe('inline line threads (R39)', () => {
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
 
-    const drawn = (await ui.find({ key: noteKeyOf('c1') }))?.text
+    const drawn = (await ui.find({ key: `${noteKeyOf('c1')}:0` }))?.text
     expect(drawn).toContain('inline remark')
     const all = (await ui.find({ text: /new6/ }))?.text ?? ''
     expect(all.indexOf('new6')).toBeGreaterThan(-1)
