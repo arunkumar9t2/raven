@@ -194,7 +194,7 @@ checked.
 
 ## Keys
 
-No control carries a letter hotkey; every action is reachable by click and by Tab+Enter. The file
+No control carries a letter hotkey. Pills on a `Client` surface are mouse-first (R42): every action is reachable by click; the keyboard reaches a strip after a click inside it (←/→ move a focus ring between its pills, ↑/↓ between its rows, Enter or space presses the focused one); and with the `keyboardControls` setting every control is a plain Button in the Tab ring again, as on a surface without a `Client`. The file
 list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
 the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
 file's note chip, right-aligned on its heading row, is the ` ✎ note ` pill; a hunk's, on its toolbar

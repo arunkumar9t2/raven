@@ -7,7 +7,7 @@ them.
 
 ## Settings
 
-`.claude-plugin/plugin.json` declares three `userConfig` fields, which `/config` lists for this
+`.claude-plugin/plugin.json` declares four `userConfig` fields, which `/config` lists for this
 plugin and which `register`'s `options` argument carries at `session.start`:
 
 | Field | Type | Default | Does |
@@ -15,9 +15,10 @@ plugin and which `register`'s `options` argument carries at `session.start`:
 | `watchedPaths` | string | `''` | Comma-separated path fragments; a landed edit under one opens its `.md` in the Doc view. |
 | `autoOpen` | boolean | `true` | Opens the diff on the main loop's first edit of the session. |
 | `autoOpenColumns` | number | `144` | Skips that auto-open below this terminal width, in columns. |
+| `keyboardControls` | boolean | `false` | Draws plain Tab-reachable buttons instead of interactive pills: `canClient` is forced false on every surface, so the bracket-free `Button` fallback draws and every control is in the Tab ring again (R42). |
 
 `plugins/raven/hooks/core/settings.ts` parses `options` defensively into a `RavenSettings`: a field
-of the wrong type — a non-string `watchedPaths`, a non-boolean `autoOpen`, a non-numeric or
+of the wrong type — a non-string `watchedPaths`, a non-boolean `autoOpen` or `keyboardControls`, a non-numeric or
 non-positive `autoOpenColumns` — falls back to its default rather than raising. `watchedPaths` splits
 on commas, trims each fragment, and drops empty ones; an all-empty result also falls back to the
 default (no extra watched fragments). `register.ts` builds this parsed settings object once and
