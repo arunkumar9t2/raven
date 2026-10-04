@@ -37,7 +37,7 @@ const KIT = {
   ui: { Box, Text, Button, Code, Markdown },
   columns: 100,
   rows: 7,
-  capabilities: { canType: true, canPick: true, canShowImage: true },
+  capabilities: { canType: true, canPick: true, canShowImage: true, canClient: true },
 } as unknown as Kit
 
 function flatten(children: unknown): unknown[] {

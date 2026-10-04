@@ -9,6 +9,7 @@ describe('capabilitiesOf', () => {
       canType: false,
       canPick: false,
       canShowImage: false,
+      canClient: false,
     })
   })
 })

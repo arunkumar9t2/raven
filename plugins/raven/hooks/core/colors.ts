@@ -27,8 +27,16 @@ export const COLORS = {
    * and the compose box are the person's message to Claude, so they sit on it.
    */
   userMessage: 'userMessageBackground',
-  /** `progressBar`'s filled cells. */
+  /** `progressBar`'s filled cells, and a pill that is on (a staged hunk). */
   done: 'success',
+  /** Body text at full strength: a pill's label at rest. */
+  text: 'text',
+  /** The same tint under the pointer: a resting pill's hover background, a hovered row. */
+  userMessageHover: 'userMessageBackgroundHover',
+  /** A selected or active list row's background. */
+  selection: 'selectionBg',
+  /** Text on a filled accent or error background: a primary or armed pill's label. */
+  inverseText: 'inverseText',
 } as const
 
 /** A note's `CommentStatus` (`hooks/review/comments.ts`) to its card's `┃` bar and status-word colour. */
@@ -52,3 +60,23 @@ export const TASK_STATE_GLYPHS: Record<TaskStatus, string> = {
   in_progress: '◐',
   completed: '●',
 } as const
+
+/** A pill's visual kind (`ui/strip.tsx`): the colours it draws at rest and under the pointer. */
+export type PillKind = 'normal' | 'primary' | 'danger' | 'armed' | 'on'
+
+/**
+ * Each pill kind's text colour, background and hover pair, by theme key only. Normal rests on the
+ * user-message tint and lights to its hover tint; primary is the accent fill; danger is error-
+ * coloured text; armed (a confirm waiting for its second press) is a filled error pill; on is a
+ * succeeded state (staged).
+ */
+export const PILL_COLORS: Record<
+  PillKind,
+  { c: string; bg: string; hoverC?: string; hoverBg: string }
+> = {
+  normal: { c: COLORS.text, bg: COLORS.userMessage, hoverBg: COLORS.userMessageHover },
+  primary: { c: COLORS.inverseText, bg: COLORS.accent, hoverBg: 'claudeShimmer' },
+  danger: { c: COLORS.error, bg: COLORS.userMessage, hoverBg: COLORS.userMessageHover },
+  armed: { c: COLORS.inverseText, bg: COLORS.error, hoverBg: 'rainbow_red' },
+  on: { c: COLORS.done, bg: COLORS.userMessage, hoverBg: COLORS.userMessageHover },
+}

@@ -29,6 +29,7 @@ function world(on: On) {
       columns: 40,
       rows: 20,
       capabilities: FULL_CAPABILITIES,
+      press: () => {},
     }
 
     return {
@@ -91,6 +92,7 @@ function elementSlotWorld(on: On) {
       columns: 40,
       rows: 20,
       capabilities: FULL_CAPABILITIES,
+      press: () => {},
     }
     const chips = chipRow(
       kit,
@@ -124,6 +126,7 @@ function chipHoverWorld(on: On) {
       columns: 40,
       rows: 20,
       capabilities: FULL_CAPABILITIES,
+      press: () => {},
     }
     return row(kit, {
       key: 'toolbar-row',
@@ -150,6 +153,7 @@ function scopedChipWorld(on: On) {
       columns: 40,
       rows: 20,
       capabilities: FULL_CAPABILITIES,
+      press: () => {},
     }
     return row(kit, {
       key: 'toolbar-row-2',

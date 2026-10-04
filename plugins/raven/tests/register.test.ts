@@ -555,6 +555,8 @@ const mainLoopTurn = (answer: string): TurnCompleteInput => ({
   reason: 'answer',
 })
 
+type StripRowOf = { id?: string; left: { t: string }[]; right?: { t: string; id?: string }[] }
+
 const mountDiff = ($: Engine) =>
   $.ui.mount({
     plugin: NAME,
@@ -1439,6 +1441,7 @@ describe('turn.complete resets the live feed on every reason', () => {
 })
 
 const HUNK_HEADER = '@@ -1,2 +1,2 @@'
+const TOOLBAR_KEY = hunkHeaderKeyOf({ path: 'a.ts', hunk: HUNK_HEADER })
 const HUNK_TEXT = `${HUNK_HEADER}\n a\n-b\n+c\n`
 
 /** A world inside a git repo with one file carrying one hunk, so stage/revert have something to act on. */
@@ -1483,7 +1486,7 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    await ui.press({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: TOOLBAR_KEY })
 
     expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
     expect(applied.stdin).toContain(HUNK_TEXT)
@@ -1513,28 +1516,38 @@ describe('stage and revert a hunk', () => {
     // The working tree changes between the render above and the stage press below.
     diffText = '@@ -1,2 +1,2 @@\n a\n-b\n+d\n'
 
-    await ui.press({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: TOOLBAR_KEY })
 
     expect(applyRan).toBe(false)
     expect(toasts).toContain('The hunk changed — refreshed, try again')
   })
 
-  test('a hunk toolbar carries its header label and three chips: note, stage, revert, in words at the default 100-column pane', async ($, on) => {
+  test('a hunk toolbar draws a Client whose props carry the note, stage and revert pills, in words at the default 100-column pane', async ($, on) => {
     hunkWorld(on, () => {})
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const row = await ui.find({ key: hunkHeaderKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
-    expect(row?.text).toContain('✎ note')
-    expect(row?.text).toContain('✓ stage')
-    expect(row?.text).toContain('↺ revert')
+    const client = await ui.find({ key: TOOLBAR_KEY })
+    expect(client?.type).toBe('Client')
+    const props = client?.props.props as { rows: StripRowOf[] }
+    const right = props.rows[0]?.right ?? []
+    expect(right.filter(seg => seg.id).map(seg => seg.id)).toEqual([
+      commentButtonKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }),
+      stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }),
+      revertKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }),
+    ])
+    // What the surface module drew: no square brackets, the labels in words.
+    const text = (await ui.find({ in: TOOLBAR_KEY, type: 'Box' }))?.text ?? ''
+    expect(text).toContain('✎ note')
+    expect(text).toContain('✓ stage')
+    expect(text).toContain('↺ revert')
+    expect(text).not.toMatch(/[[\]]/)
   })
 
-  test('a hunk toolbar still draws its stage chip (no hover-scope refusal) when the path and header push the scope past 64 characters', async ($, on) => {
-    // path (81 chars) + '|' + header (77 chars), prefixed by 'hunk-header:', is 171 chars — a
-    // real repo's path plus a git header carrying a function-context suffix routinely does this.
+  test('a hunk toolbar still draws its pills when the path and header push the key past 64 characters', async ($, on) => {
+    // A real repo's path plus a git header carrying a function-context suffix routinely does this.
     const path = `src/${'nested/'.repeat(10)}File.kt`
     const header = `@@ -1,2 +1,2 @@ ${'x'.repeat(60)}`
     const diffText = `${header}\n a\n-b\n+c\n`
@@ -1549,21 +1562,78 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const row = await ui.find({ key: hunkHeaderKeyOf({ path, hunk: header }) })
-    expect(row?.text).toContain('✓ stage')
+    const key = hunkHeaderKeyOf({ path, hunk: header })
+    expect((await ui.find({ in: key, text: '✓ stage' }))?.text).toContain('✓ stage')
   })
 
-  test('after staging, the stage chip reads "✓ staged"', async ($, on) => {
+  test('after staging, the stage pill reads "✓ staged"', async ($, on) => {
     hunkWorld(on, () => {})
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    await ui.press({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+    await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: TOOLBAR_KEY })
 
-    const row = await ui.find({ key: hunkHeaderKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
-    expect(row?.text).toContain('✓ staged')
+    expect(await ui.find({ in: TOOLBAR_KEY, text: '✓ staged' })).toBeDefined()
+  })
+
+  test('the pointer lights the pill under it and a left click on it stages the hunk', async ($, on) => {
+    const applied: { argv?: readonly string[] } = {}
+    hunkWorld(on, argv => {
+      applied.argv = argv
+    })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    await ui.resize({ columns: 60, rows: 1, in: TOOLBAR_KEY })
+    const bgOf = async () =>
+      (await ui.find({ in: TOOLBAR_KEY, type: 'Text', text: '✓ stage' }))?.props.backgroundColor
+    expect(await bgOf()).toBe('userMessageBackground')
+
+    // Right-aligned pills: ` ✎ note ` (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert ` (10) end at column 60,
+    // so stage spans columns 40..48.
+    await ui.pointer({ type: 'move', x: 44, y: 0, in: TOOLBAR_KEY })
+    expect(await bgOf()).toBe('userMessageBackgroundHover')
+    await ui.pointer({ type: 'move', x: 10, y: 0, in: TOOLBAR_KEY })
+    expect(await bgOf()).toBe('userMessageBackground')
+
+    await ui.pointer({ type: 'down', x: 44, y: 0, button: 'left', in: TOOLBAR_KEY })
+    expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
+  })
+
+  test('a press the last render no longer draws is ignored', async ($, on) => {
+    hunkWorld(on, () => {})
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    await ui.post({ press: 'stage:gone.ts|@@' }, { in: TOOLBAR_KEY })
+    await ui.post({ nonsense: 1 }, { in: TOOLBAR_KEY })
+
+    expect(await ui.find({ in: TOOLBAR_KEY, text: '✓ stage' })).toBeDefined()
+  })
+
+  test('revert is armed by one press and confirmed by the second, the armed pill keeping its words', async ($, on) => {
+    const applied: (readonly string[])[] = []
+    hunkWorld(on, argv => {
+      applied.push(argv)
+    })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const revert = revertKeyOf({ path: 'a.ts', hunk: HUNK_HEADER })
+    await ui.post({ press: revert }, { in: TOOLBAR_KEY })
+    expect(await ui.find({ in: TOOLBAR_KEY, text: '↺ sure?' })).toBeDefined()
+    expect(applied).toHaveLength(0)
+
+    await ui.post({ press: revert }, { in: TOOLBAR_KEY })
+    expect(applied.map(argv => argv.join(' '))).toContain('git apply -R --recount -')
   })
 
   test('the armed revert confirm fits the narrowest docked pane, shrinking the toolbar to icons', async ($, on) => {
@@ -1580,16 +1650,49 @@ describe('stage and revert a hunk', () => {
       requestId: DIFF_PANE.id,
     })
     const anchor = { path: 'a.ts', hunk: HUNK_HEADER }
-    await ui.press({ key: revertKeyOf(anchor) })
+    await ui.post({ press: revertKeyOf(anchor) }, { in: TOOLBAR_KEY })
 
-    const row = await ui.find({ key: hunkHeaderKeyOf(anchor) })
-    expect(row?.text).toContain('↺ sure?')
-    expect(row?.text).toContain('✓')
+    const props = (await ui.find({ key: TOOLBAR_KEY }))?.props.props as { rows: StripRowOf[] }
+    const segs = props.rows[0]?.right ?? []
+    const right = segs.map(seg => seg.t).join('')
+    expect(right).toContain('↺ sure?')
+    expect(right).not.toContain('note')
     // 38 minus the card's three edge columns (the 2-column rail and the toolbar's own 1-column
-    // indent — `bodyRowOf`'s hunk-header case draws one `<Text> </Text>` before the toolbar, not
-    // two) leaves 35 for the toolbar's own text.
-    expect(row?.text?.length).toBeLessThanOrEqual(35)
+    // indent) leaves 35 for the toolbar: its label and pills share it.
+    expect(right.length).toBeLessThanOrEqual(35)
   })
+
+  for (const surface of ['vscode', 'mobile'] as const) {
+    test(`on ${surface} the toolbar falls back to plain Buttons with no brackets, and pressing them works`, async ($, on) => {
+      const applied: { argv?: readonly string[] } = {}
+      hunkWorld(on, argv => {
+        applied.argv = argv
+      })
+
+      await $.session.start(SESSION)
+      await $.command.run(ravenCommand('diff'))
+
+      const ui = await $.ui.mount({
+        plugin: NAME,
+        surface,
+        component: 'Pane',
+        props: PANE_PROPS,
+        requestId: DIFF_PANE.id,
+      })
+      const row = await ui.find({ key: TOOLBAR_KEY })
+      expect(row?.type).toBe('Box')
+      expect(row?.text).toContain('stage')
+      expect(row?.text).toContain('revert')
+      expect(row?.text).not.toMatch(/[[\]]/)
+      expect(await ui.findAll({ type: 'Client' })).toHaveLength(0)
+
+      const stage = await ui.find({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+      expect(stage?.type).toBe('Button')
+      await ui.press({ key: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) })
+      expect(applied.argv).toEqual(['git', 'apply', '--cached', '--recount', '-'])
+      expect(await ui.find({ text: '✓ staged' })).toBeDefined()
+    })
+  }
 
   const SECOND_HUNK_HEADER = '@@ -10,2 +10,2 @@'
   const TWO_HUNK_TEXT = `${HUNK_TEXT}${SECOND_HUNK_HEADER}\n x\n-y\n+z\n`

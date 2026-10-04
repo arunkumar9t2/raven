@@ -12,25 +12,36 @@ import type { PaneSubcommand } from '../names'
  */
 export type Ui = Pick<
   Elements['terminal'],
-  'Box' | 'Text' | 'Button' | 'Code' | 'Markdown' | 'Image' | 'Input' | 'Select'
+  'Box' | 'Text' | 'Button' | 'Code' | 'Markdown' | 'Image' | 'Input' | 'Select' | 'Client'
 >
 
 /** What a surface's element table lets a view draw: typed text, a picker, an inline image. */
-export type Capabilities = { canType: boolean; canPick: boolean; canShowImage: boolean }
+export type Capabilities = {
+  canType: boolean
+  canPick: boolean
+  canShowImage: boolean
+  /** Whether the surface draws a `Client` (a surface module with pointer hover); see `ui/strip.tsx`. */
+  canClient: boolean
+}
 
 /**
  * The fixed, per-surface element table (`Elements` in `claude-code`): every surface carries
  * `Input` and `Select` but `mobile`; only `terminal` carries `Image`.
  */
 const CAPABILITIES_BY_SURFACE: Record<RenderSurface, Capabilities> = {
-  terminal: { canType: true, canPick: true, canShowImage: true },
-  desktop: { canType: true, canPick: true, canShowImage: false },
-  vscode: { canType: true, canPick: true, canShowImage: false },
-  mobile: { canType: false, canPick: false, canShowImage: false },
+  terminal: { canType: true, canPick: true, canShowImage: true, canClient: true },
+  desktop: { canType: true, canPick: true, canShowImage: false, canClient: true },
+  vscode: { canType: true, canPick: true, canShowImage: false, canClient: false },
+  mobile: { canType: false, canPick: false, canShowImage: false, canClient: false },
 }
 
 /** A surface not among the table's known rows draws no typed, picking or imaging controls. */
-const NO_CAPABILITIES: Capabilities = { canType: false, canPick: false, canShowImage: false }
+const NO_CAPABILITIES: Capabilities = {
+  canType: false,
+  canPick: false,
+  canShowImage: false,
+  canClient: false,
+}
 
 /**
  * A surface's capabilities, read off the fixed table above — never off element presence. An
@@ -53,7 +64,17 @@ export const ELEMENT_TEXT_LIMIT = 10_000
  * capabilities its surface carries — computed once in `register.ts`'s `kitOf`, so a view never
  * calls `capabilitiesOf` or checks an element's presence itself.
  */
-export type Kit = { ui: Ui; columns: number; rows: number; capabilities: Capabilities }
+export type Kit = {
+  ui: Ui
+  columns: number
+  rows: number
+  capabilities: Capabilities
+  /**
+   * Registers the handler a pill's `{ press: id }` post runs, for the pane this render draws; the
+   * controller clears the pane's registrations before each of its renders (`core/presses.ts`).
+   */
+  press: (id: string, onPress: () => void) => void
+}
 
 /**
  * What a kit function that draws off `kit.ui` alone needs — the `hooks/ui/` kit's own

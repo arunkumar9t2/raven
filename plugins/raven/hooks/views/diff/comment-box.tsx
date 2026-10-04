@@ -3,15 +3,17 @@
 /* @jsxFrag Fragment */
 import type { RenderElement } from 'claude-code'
 
-import { COLORS, NOTE_STATE_COLORS } from '../../core/colors'
+import { COLORS, NOTE_STATE_COLORS, type PillKind } from '../../core/colors'
 import type { Kit } from '../../core/view'
 import { type Hunk, parseHeader } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../../review/comments'
 import { ageOf } from '../../ui/age'
 import { card } from '../../ui/card'
-import { type Chip, chipRow, chipsFit } from '../../ui/chips'
+import { type Chip, chipRow } from '../../ui/chips'
 import { meta } from '../../ui/meta'
 import { row } from '../../ui/row'
+import { type KitSeg, pill, strip } from '../../ui/strip'
+import { widthOf } from '../../ui/wrap'
 import {
   type Anchor,
   addressedKeyOf,
@@ -227,9 +229,10 @@ function hunkLabelOf(hunk: Hunk): string {
 }
 
 /**
- * A hunk's toolbar row: its header label, then — unless read-only — the note (when it can draw),
- * stage and revert chips, right-aligned. Staging is a no-op once staged; revert confirms on a
- * second press, keeping its words (`↺ sure?`) even in icons mode. D10 points 3 and 5.
+ * A hunk's toolbar row, a one-row strip: its header label on the left, then — unless read-only —
+ * the note (when it can draw), stage and revert pills, right-aligned. Staging is a no-op once
+ * staged (the pill reads "staged", kind on); revert confirms on a second press, keeping its words
+ * (`↺ sure?`, kind armed) even when the pills shrink to bare icons to fit. D12 §2.
  */
 export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
   const { anchor } = props
@@ -238,28 +241,58 @@ export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
 
   if (props.isReadOnly) return row(kit, { left: label, key })
 
-  const chips: Chip[] = []
-  if (props.canNote) chips.push(noteChip(anchor, props.onStartNote))
-  chips.push({
-    key: stageKeyOf(anchor),
+  const specs: {
+    id: string
+    icon: string
+    label: string
+    kind: PillKind
+    keepWords: boolean
+    onPress: () => void
+  }[] = []
+  if (props.canNote) {
+    specs.push({
+      id: commentButtonKeyOf(anchor),
+      icon: '✎',
+      label: 'note',
+      kind: 'normal',
+      keepWords: false,
+      onPress: () => props.onStartNote(anchor),
+    })
+  }
+  specs.push({
+    id: stageKeyOf(anchor),
     icon: '✓',
     label: props.isStaged ? 'staged' : 'stage',
-    isDim: !props.isStaged,
+    kind: props.isStaged ? 'on' : 'normal',
+    keepWords: false,
     onPress: props.isStaged ? () => {} : props.onStage,
   })
-  chips.push({
-    key: revertKeyOf(anchor),
+  specs.push({
+    id: revertKeyOf(anchor),
     icon: '↺',
     label: props.confirmingRevert ? 'sure?' : 'revert',
-    isDim: !props.confirmingRevert,
-    forceWords: props.confirmingRevert,
+    kind: props.confirmingRevert ? 'armed' : 'danger',
+    keepWords: props.confirmingRevert,
     onPress: props.onRevert,
   })
 
+  const pillsOf = (words: boolean): KitSeg[] =>
+    specs.flatMap((spec, i) => {
+      const seg = pill(
+        spec.id,
+        spec.icon,
+        words || spec.keepWords ? spec.label : '',
+        spec.kind,
+        spec.onPress,
+      )
+      return i === 0 ? [seg] : [{ t: ' ' }, seg]
+    })
   const room = Math.max(0, props.columns - HEADER_MIN)
-  const mode = chipsFit(chips, room)
+  const withWords = pillsOf(true)
+  const right =
+    withWords.reduce((sum, seg) => sum + widthOf(seg.t), 0) <= room ? withWords : pillsOf(false)
 
-  return row(kit, { left: label, right: chipRow(kit, chips, mode, key), key })
+  return strip(kit, [{ left: [{ t: label }], right }], { key })
 }
 
 /** The collapsed row for an anchor's addressed comments: "✓ N addressed". */
