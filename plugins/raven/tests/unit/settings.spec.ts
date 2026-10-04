@@ -2,6 +2,12 @@ import { describe, expect, test } from 'bun:test'
 import { DEFAULT_SETTINGS, settingsOf } from '../../hooks/core/settings'
 
 describe('settingsOf', () => {
+  test('keyboardControls is off by default and parses a boolean', () => {
+    expect(settingsOf({}).keyboardControls).toBe(false)
+    expect(settingsOf({ keyboardControls: true }).keyboardControls).toBe(true)
+    expect(settingsOf({ keyboardControls: 'yes' }).keyboardControls).toBe(false)
+  })
+
   test('every field defaults when options is empty', () => {
     expect(settingsOf({})).toEqual(DEFAULT_SETTINGS)
   })
@@ -13,6 +19,7 @@ describe('settingsOf', () => {
       watchedPaths: ['notes/', 'docs/adr'],
       autoOpen: false,
       autoOpenColumns: 80,
+      keyboardControls: false,
     })
   })
 

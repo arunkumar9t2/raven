@@ -8,12 +8,15 @@ export type RavenSettings = {
   autoOpen: boolean
   /** Skips that auto-open below this terminal width, in columns. */
   autoOpenColumns: number
+  /** Draws plain Tab-reachable Buttons instead of interactive pills on every surface (R42). */
+  keyboardControls: boolean
 }
 
 export const DEFAULT_SETTINGS: RavenSettings = {
   watchedPaths: [],
   autoOpen: true,
   autoOpenColumns: 144,
+  keyboardControls: false,
 }
 
 const watchedPathsOf = (value: unknown): readonly string[] => {
@@ -39,5 +42,9 @@ export function settingsOf(options: PluginOptions): RavenSettings {
     watchedPaths: watchedPathsOf(options.watchedPaths),
     autoOpen: autoOpenOf(options.autoOpen),
     autoOpenColumns: autoOpenColumnsOf(options.autoOpenColumns),
+    keyboardControls:
+      typeof options.keyboardControls === 'boolean'
+        ? options.keyboardControls
+        : DEFAULT_SETTINGS.keyboardControls,
   }
 }

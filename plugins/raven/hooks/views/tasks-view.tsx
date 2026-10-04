@@ -61,6 +61,7 @@ export function createTasksView(host: Host): TasksView {
         {
           t: task.status === 'in_progress' ? (task.activeForm ?? task.subject) : task.subject,
           dim: task.status === 'completed',
+          shrink: true,
         },
       ],
       right: [{ t: STATE_WORDS[task.status], dim: true }],

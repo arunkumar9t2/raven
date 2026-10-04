@@ -49,8 +49,10 @@ const NO_CAPABILITIES: Capabilities = {
  * rather than throwing, so a view still renders, just without controls the surface may not
  * actually support.
  */
-export function capabilitiesOf(surface: RenderSurface): Capabilities {
-  return CAPABILITIES_BY_SURFACE[surface] ?? NO_CAPABILITIES
+export function capabilitiesOf(surface: RenderSurface, keyboardControls = false): Capabilities {
+  const capabilities = CAPABILITIES_BY_SURFACE[surface] ?? NO_CAPABILITIES
+  // R42: with `keyboardControls` every surface draws the plain-Button fallback, which is in the Tab ring.
+  return keyboardControls ? { ...capabilities, canClient: false } : capabilities
 }
 
 /** `terminal`'s row, every capability on, so a caller outside a real render can skip the surface. */

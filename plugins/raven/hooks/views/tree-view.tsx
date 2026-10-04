@@ -195,7 +195,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
           { t: ' ' },
           { t: folder.glyph, c: folder.color },
           { t: ' ' },
-          { t: row.node.name, id, onPress: press },
+          { t: row.node.name, id, shrink: true, onPress: press },
         ],
         right: row.node.changed > 0 ? [{ t: `(${row.node.changed})`, dim: true }] : [],
       }
@@ -215,7 +215,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
         { t: '  ' },
         { t: icon.glyph, c: icon.color },
         { t: ' ' },
-        { t: row.node.name, id, onPress: press },
+        { t: row.node.name, id, shrink: true, onPress: press },
       ],
       right: mark ? [{ t: '●', c: mark.color }, { t: ' ' }, { t: mark.glyph, c: mark.color }] : [],
     }
