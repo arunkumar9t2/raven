@@ -32,7 +32,16 @@ export type Doc =
   | { kind: 'file'; path: string; title?: string }
   | { kind: 'note'; markdown: string; title?: string }
 
-type Shown = { key: string; title: string; doc: Doc; text: string | null; error?: string }
+/** `label` is what the title row prints for a file: its path relative to the session's directory when
+ * inside it, else the path as given. */
+type Shown = {
+  key: string
+  title: string
+  label: string
+  doc: Doc
+  text: string | null
+  error?: string
+}
 
 type Chunk = { blocks: readonly DocBlock[]; links?: ReturnType<typeof docLinksOf> }
 
@@ -77,6 +86,10 @@ const isPng = (path: string) => /\.png$/i.test(path)
 
 const keyOf = (doc: Doc) => (doc.kind === 'file' ? `file:${doc.path}` : `note:${doc.title ?? ''}`)
 const titleOf = (doc: Doc) => doc.title ?? (doc.kind === 'file' ? baseName(doc.path) : 'Note')
+
+/** `path` relative to `cwd` when it lies inside it; otherwise unchanged. */
+export const labelOf = (path: string, cwd: string) =>
+  path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path
 
 /** The anchor for a doc section's controls, keyed by the section's INDEX, not its heading — two
  * sections sharing a heading never share controls. `hunk` only keys the controls; the comment
@@ -197,9 +210,19 @@ export function createDocView(
     }
   }
 
+  /** The title row's path: relative to the session's directory, or the path itself when that is unknown. */
+  async function fileLabelOf(path: string): Promise<string> {
+    try {
+      return labelOf(path, await host.cwd())
+    } catch {
+      return path
+    }
+  }
+
   async function show(doc: Doc) {
     const key = keyOf(doc)
-    const shown: Shown = { key, title: titleOf(doc), doc, ...(await read(doc)) }
+    const label = doc.kind === 'file' ? await fileLabelOf(doc.path) : titleOf(doc)
+    const shown: Shown = { key, title: titleOf(doc), label, doc, ...(await read(doc)) }
     history = [shown, ...history.filter(each => each.key !== key)].slice(0, HISTORY_LIMIT)
     current = key
     composing = null
@@ -556,10 +579,10 @@ export function createDocView(
         {shown.doc.kind === 'file' && shown.doc.title ? (
           <Text>
             <Text bold>{` ${shown.doc.title}`}</Text>
-            <Text dimColor>{`  ${shown.doc.path}`}</Text>
+            <Text dimColor>{`  ${shown.label}`}</Text>
           </Text>
         ) : (
-          <Text bold>{` ${shown.doc.kind === 'file' ? shown.doc.path : shown.title}`}</Text>
+          <Text bold>{` ${shown.label}`}</Text>
         )}
       </Text>
     )
