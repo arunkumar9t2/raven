@@ -14,6 +14,9 @@ import { statBar } from '../../ui/stat-bar'
 import { pillRow } from '../../ui/strip'
 import { selectButtons } from '../select-buttons'
 
+/** The Nerd Font git mark (nf-md-git) leading row 1, in `COLORS.git`. */
+const GIT_ICON = '\u{f02a2}'
+
 /** The source Select's element key, for a test or a focus target. */
 export const SOURCE_SELECT_KEY = 'source'
 
@@ -54,7 +57,7 @@ function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
 }
 
 /**
- * Row 1: counts, the change bar, a dim `·`, then the source picker — `6 files  +15 −12  ■■■□□
+ * Row 1: a git mark, counts, the change bar, a dim `·`, then the source picker — `6 files  +15 −12  ■■■□□
  * · source HEAD ▾` — all packed on the left with nothing at the row's far right. `justifyContent:
  * "space-between"` would stretch the picker flush against the pane's right edge, where it reads
  * as one control fused with the engine's own pane chrome in that corner; this keeps every
@@ -71,6 +74,7 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
 
   return (
     <Box key={SUMMARY_ROW_KEY} flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
+      <Text color={COLORS.git}>{GIT_ICON}</Text>
       <Text bold wrap="truncate-end">
         {countOf(files.length, 'file')}
       </Text>

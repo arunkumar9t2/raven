@@ -19,16 +19,26 @@ import {
 } from './anchor'
 import type { Block } from './layout'
 import { rowsOf, sliceHunk } from './layout'
-import { composeRowsOf, noteLinesOf } from './note-layout'
+import { composeRowsOf, noteLinesOf, noteRowsOf } from './note-layout'
 
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
+/** The block key of a file card's closing `╰────` row. */
+export const CLOSE_KEY = 'close'
 export const OUTDATED_TITLE_KEY = 'outdated-title'
 export const ORPHANS_TITLE_KEY = 'orphans-title'
 /** The block key of an orphaned path's own heading row, inside the `orphans#` group. */
 export const orphanPathKeyOf = (path: string) => `orphan-path:${path}`
 
 const EMPTY_GONE: ReadonlySet<string> = new Set()
+
+/** The card's closing row: one `╰────` line ending every file's section. */
+const closeBlock: Block<BodyItem> = {
+  kind: 'fixed',
+  key: CLOSE_KEY,
+  rows: 1,
+  item: { kind: 'close' },
+}
 
 /**
  * Whether `comment` is this file's own: a diff comment (never a doc comment — `section` is the
@@ -49,12 +59,12 @@ export function fixedRowsOf(fileCount: number, maxListRows: number): number {
   return HEADER_ROWS + Math.min(fileCount, maxListRows) + RULE_ROWS
 }
 
-/** The 2-column left rail (`▌ `) every row of a file's section draws behind. */
+/** The 2-column left border (`│ `) every body row of a file's card draws behind. */
 const RAIL_CELLS = 2
-/** The one-cell indent a note and a hunk toolbar draw after the rail. */
+/** The one-cell indent a note card draws after the border. */
 const NOTE_INDENT = 1
 
-/** A row's room beside the file rail, for a pane `columns` wide. */
+/** A row's room beside the file card's left border, for a pane `columns` wide. */
 export const contentWidthOf = (columns: number): number => Math.max(1, columns - RAIL_CELLS)
 
 /** A note card's (or hunk toolbar's) room: the content width less the indent after the rail. */
@@ -70,6 +80,7 @@ export type BodyItem =
   | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean }
   | { kind: 'hunk-header'; anchor: Anchor; hunk: Hunk; canNote: boolean; isReadOnly: boolean }
   | { kind: 'gap' }
+  | { kind: 'close' }
   | { kind: 'status'; text: string }
   | { kind: 'orphans-title' }
   | { kind: 'orphan-path'; path: string; isGone: boolean }
@@ -160,7 +171,7 @@ function notesBlocksOf(notes: Comments, anchor: Anchor, width: number): Block<Bo
       return {
         kind: 'fixed',
         key: noteKeyOf(comment.id),
-        rows: lines.length,
+        rows: noteRowsOf(lines.length),
         item: { kind: 'note', comment, lines },
       }
     }),
@@ -274,12 +285,12 @@ export type BlocksOptions = {
 }
 
 /**
- * The selected file's body as fixed-height and hunk blocks, top to bottom: the title row (carrying
- * the file's own note chip), the file-level notes and comment box, then each hunk preceded by its
- * toolbar row (its header label and, unless read-only, the note/stage/revert chips) and followed
- * by its own notes and comment box (no row after a hunk), then an "Outdated" group for comments
- * whose hunk no longer exists. A file with no hunks (loading, binary, or no textual changes) ends
- * with one status row instead.
+ * A file card's body as fixed-height and hunk blocks, top to bottom: the title row (`╭─`, carrying
+ * the file's own note pill), the file-level notes and comment box, then each hunk preceded by its
+ * toolbar row (`├─`, its header label and, unless read-only, the note/stage/revert pills) and
+ * followed by its own notes and comment box, then an "Outdated" group for comments whose hunk no
+ * longer exists, and the closing `╰` row. A file with no hunks (loading, binary, or no textual
+ * changes) has one status row instead of hunks, inside the card.
  */
 export function blocksOf(
   file: ChangedFile,
@@ -314,6 +325,7 @@ export function blocksOf(
           ? 'Binary file'
           : 'No textual changes'
     blocks.push({ kind: 'fixed', key: STATUS_KEY, rows: 1, item: { kind: 'status', text } })
+    blocks.push(closeBlock)
     return blocks
   }
 
@@ -341,6 +353,7 @@ export function blocksOf(
   })
 
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated, width))
+  blocks.push(closeBlock)
 
   return blocks
 }
@@ -353,7 +366,7 @@ export type Stream = {
 }
 
 /**
- * The files' `blocksOf` one after another, a blank gap row between files; each block's key is
+ * The files' `blocksOf` (each a card, `╭` to `╰`) one after another, a blank gap row between cards; each block's key is
  * prefixed with its file's path so keys stay unique across the stream.
  */
 export function streamOf(

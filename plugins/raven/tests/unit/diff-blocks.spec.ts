@@ -12,6 +12,7 @@ import {
 import {
   type BlocksOptions,
   blocksOf as blocksOfAt,
+  CLOSE_KEY,
   fileAtRow,
   hunkKeyOf,
   ORPHANS_TITLE_KEY,
@@ -22,7 +23,7 @@ import {
   TITLE_KEY,
 } from '../../hooks/views/diff/blocks'
 import { contentRowsOf } from '../../hooks/views/diff/layout'
-import { NOTE_MAX_ROWS, noteLinesOf } from '../../hooks/views/diff/note-layout'
+import { NOTE_MAX_LINES, noteLinesOf, noteRowsOf } from '../../hooks/views/diff/note-layout'
 
 /** The stream's width is a required option; most specs do not care, so 100 unless they say. */
 const blocksOf = (
@@ -76,8 +77,8 @@ describe("a note block's rows", () => {
       block => block.key === noteKeyOf('n1'),
     )
 
-  test('a short note is one row', () => {
-    expect(noteRows(100, 'looks off')).toMatchObject({ rows: 1 })
+  test('a short note is one text line between its top and bottom border: three rows', () => {
+    expect(noteRows(100, 'looks off')).toMatchObject({ rows: 3 })
   })
 
   test("a long note's rows are its wrapped line count at the width, and change with it", () => {
@@ -85,14 +86,14 @@ describe("a note block's rows", () => {
     const narrow = noteRows(50)
     const wideLines = noteLinesOf(commentOf({ id: 'n1', text: long }), 99)
     const narrowLines = noteLinesOf(commentOf({ id: 'n1', text: long }), 49)
-    expect(wide).toMatchObject({ rows: wideLines.length })
-    expect(narrow).toMatchObject({ rows: narrowLines.length })
+    expect(wide).toMatchObject({ rows: noteRowsOf(wideLines.length) })
+    expect(narrow).toMatchObject({ rows: noteRowsOf(narrowLines.length) })
     expect(wideLines.length).toBeGreaterThan(1)
     expect(narrowLines.length).toBeGreaterThan(wideLines.length - 1)
-    expect(narrowLines.length).toBeLessThanOrEqual(NOTE_MAX_ROWS)
+    expect(narrowLines.length).toBeLessThanOrEqual(NOTE_MAX_LINES)
   })
 
-  test('when the right side leaves row 1 under 8 cells, row 1 holds no text and the text starts on row 2', () => {
+  test('the status, line and age live on the top border, so the text starts on the first body row', () => {
     const open = commentOf({
       id: 'n1',
       status: 'open',
@@ -100,18 +101,21 @@ describe("a note block's rows", () => {
       text: 'please look at this again',
     })
     const lines = noteLinesOf(open, 36)
-    expect(lines[0]).toBe('')
-    expect(lines.slice(1).join(' ')).toContain('please look')
-    expect(noteRows(36, open.text)).toBeDefined()
+    expect(lines[0]).toContain('please look')
     const block = blocksOf(file, [hunkA], [open], null, { width: 37 }).find(
       b => b.key === noteKeyOf('n1'),
     )
-    expect(block).toMatchObject({ rows: lines.length })
+    expect(block).toMatchObject({ rows: noteRowsOf(lines.length) })
+  })
+
+  test('a note is wrapped to the room between its side borders, four cells narrower than the card', () => {
+    const lines = noteLinesOf(commentOf({ id: 'n1', text: 'word '.repeat(30).trim() }), 40)
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(36)
   })
 
   test('a very long note stops at six rows and ends with an ellipsis', () => {
     const lines = noteLinesOf(commentOf({ id: 'n1', text: 'x'.repeat(2000) }), 60)
-    expect(lines).toHaveLength(NOTE_MAX_ROWS)
+    expect(lines).toHaveLength(NOTE_MAX_LINES)
     expect(lines.at(-1)?.endsWith('…')).toBe(true)
   })
 
@@ -188,7 +192,7 @@ describe('inline line threads (R39)', () => {
   test('a line that cannot be found falls back to after the hunk', () => {
     const keys = keysOf([onLine('n1', 99)])
     expect(segmentsOf([onLine('n1', 99)])).toHaveLength(1)
-    expect(keys.at(-1)).toBe(noteKeyOf('n1'))
+    expect(keys.at(-2)).toBe(noteKeyOf('n1'))
   })
 
   test('a line whose text changed since the note was made stays after the hunk', () => {
@@ -198,7 +202,7 @@ describe('inline line threads (R39)', () => {
       line: { number: 2, side: 'new', text: 'something else' },
     })
     expect(segmentsOf([stale])).toHaveLength(1)
-    expect(keysOf([stale]).at(-1)).toBe(noteKeyOf('n1'))
+    expect(keysOf([stale]).at(-2)).toBe(noteKeyOf('n1'))
   })
 
   test('a note on the last line before a "No newline" marker keeps the marker in its segment', () => {
@@ -215,28 +219,29 @@ describe('inline line threads (R39)', () => {
 
   test('hunk-wide notes stay after the hunk', () => {
     const keys = keysOf([commentOf({ id: 'w', hunk: hunkL.header }), onLine('n1', 2)])
-    expect(keys.at(-1)).toBe(noteKeyOf('w'))
+    expect(keys.at(-2)).toBe(noteKeyOf('w'))
   })
 
   test('rows total the unsplit hunk plus the note rows', () => {
     const plain = contentRowsOf(blocksOf(file, [hunkL], [], null))
     const split = contentRowsOf(blocksOf(file, [hunkL], [onLine('n1', 2), onLine('n2', 1)], null))
-    expect(split).toBe(plain + 2)
+    // each short note is one text line plus its two border rows
+    expect(split).toBe(plain + 2 * noteRowsOf(1))
   })
 
   test('the compose box stays after the hunk', () => {
     const anchor = { path: file.path, hunk: hunkL.header }
     const keys = blocksOf(file, [hunkL], [onLine('n1', 2)], anchor).map(b => b.key)
-    expect(keys.at(-1)).toBe(commentBoxKeyOf(anchor))
+    expect(keys.at(-2)).toBe(commentBoxKeyOf(anchor))
   })
 })
 
 describe('blocksOf', () => {
   test('a file with no hunks yet is title, status row; idle draws no comment box', () => {
     const blocks = blocksOf(file, undefined, [], null)
-    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY])
+    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY, CLOSE_KEY])
     expect(blocks[0]).toMatchObject({ item: { kind: 'title', file, canNote: true } })
-    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Loading…' } })
+    expect(blocks.at(-2)).toMatchObject({ item: { kind: 'status', text: 'Loading…' } })
   })
 
   test('an idle file draws no comment-box block; the heading carries the note control', () => {
@@ -276,6 +281,7 @@ describe('blocksOf', () => {
       'hunk:0:@@ -1,2 +1,2 @@',
       hunkHeaderKeyOf({ path: file.path, hunk: hunkB.header }),
       'hunk:1:@@ -10,1 +10,1 @@',
+      CLOSE_KEY,
     ])
   })
 
@@ -287,7 +293,17 @@ describe('blocksOf', () => {
       'hunk',
       'hunk-header',
       'hunk',
+      'close',
     ])
+  })
+
+  test('a file card opens with its title row and closes with one close row, whatever it holds', () => {
+    for (const hunks of [undefined, [], [hunkA], [hunkA, hunkB]]) {
+      const blocks = blocksOf(file, hunks, [], null)
+      expect(blocks[0]?.key).toBe(TITLE_KEY)
+      expect(blocks.at(-1)).toMatchObject({ rows: 1, item: { kind: 'close' } })
+      expect(blocks.filter(b => b.key === CLOSE_KEY)).toHaveLength(1)
+    }
   })
 
   test('a note per comment adds one fixed row each, at the right anchor', () => {
@@ -302,55 +318,58 @@ describe('blocksOf', () => {
       hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header }),
       'hunk:0:@@ -1,2 +1,2 @@',
       noteKeyOf('hunk-note'),
+      CLOSE_KEY,
     ])
   })
 
-  test('composing on a hunk is 4 rows (line-picker Select + Input at most two rows + hint row); the file box stays absent', () => {
+  test('composing on a hunk is 6 rows (top border, line-picker Select, Input at most two rows, hint row, bottom border); the file box stays absent', () => {
     const blocks = blocksOf(file, [hunkA], [], { path: file.path, hunk: hunkA.header })
     const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
     const hunkBox = blocks.find(
       b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
     )
     expect(fileBox).toBeUndefined()
-    expect(hunkBox).toMatchObject({ rows: 4 })
+    expect(hunkBox).toMatchObject({ rows: 6 })
   })
 
-  test('composing on the file (no hunk) is 3 rows (Input at most two rows + hint row): no line-picker to draw', () => {
+  test('composing on the file (no hunk) is 5 rows (two borders, Input at most two rows, hint row): no line-picker to draw', () => {
     const blocks = blocksOf(file, [hunkA], [], { path: file.path })
     const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
-    expect(fileBox).toMatchObject({ rows: 3 })
+    expect(fileBox).toMatchObject({ rows: 5 })
   })
 
-  test('the compose box is a constant: the Input draws at most two rows, plus the hint row', () => {
+  test('the compose box is a constant: the Input draws at most two rows, plus the hint row and two borders', () => {
     const rowsOf = (composing: { path: string; hunk?: string }, hunks = [hunkA]) =>
       blocksOf(file, hunks, [], composing).find(b => b.key.startsWith('comment-box:'))
-    expect(rowsOf({ path: file.path })).toMatchObject({ rows: 3 })
-    expect(rowsOf({ path: file.path, hunk: hunkA.header })).toMatchObject({ rows: 4 })
+    expect(rowsOf({ path: file.path })).toMatchObject({ rows: 5 })
+    expect(rowsOf({ path: file.path, hunk: hunkA.header })).toMatchObject({ rows: 6 })
   })
 
   test('row total matches title + notes + toolbar + hunk lines', () => {
     const comments: Comments = [commentOf({ id: 'n1' })]
     const blocks = blocksOf(file, [hunkA, hunkB], comments, null)
-    // title(1) + note(1) + hunkAheader(1) + hunkA(3 lines) + hunkBheader(1) + hunkB(2 lines)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + 1 + 2)
+    // title(1) + note(3: text between borders) + hunkAheader(1) + hunkA(3 lines) + hunkBheader(1)
+    // + hunkB(2 lines) + close(1)
+    expect(contentRowsOf(blocks)).toBe(1 + 3 + 1 + 3 + 1 + 2 + 1)
   })
 
   test('row total with a note and an active compose box together', () => {
     const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
     const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
-    // title(1) + hunkAheader(1) + hunkA(3 lines) + note(1) + composebox(4, with the line picker)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 1 + 4)
+    // title(1) + hunkAheader(1) + hunkA(3 lines) + note(3) + composebox(6, with the line picker)
+    // + close(1)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 3 + 6 + 1)
   })
 
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
     const blocks = blocksOf(file, [], [], null)
-    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY])
-    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'No textual changes' } })
+    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY, CLOSE_KEY])
+    expect(blocks.at(-2)).toMatchObject({ item: { kind: 'status', text: 'No textual changes' } })
   })
 
   test('a binary file with no hunks gets a "Binary file" status row', () => {
     const blocks = blocksOf({ ...file, isBinary: true }, [], [], null)
-    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Binary file' } })
+    expect(blocks.at(-2)).toMatchObject({ item: { kind: 'status', text: 'Binary file' } })
   })
 
   test('a comment anchored to a hunk no longer present renders in an outdated group after the hunks', () => {
@@ -465,7 +484,7 @@ describe('blocksOf with degraded capabilities', () => {
     ).toBe(false)
   })
 
-  test('no Select composing on a hunk is 2 rows: the picker row is dropped', () => {
+  test('no Select composing on a hunk is 5 rows: the picker row is dropped', () => {
     const blocks = blocksOf(
       file,
       [hunkA],
@@ -478,7 +497,7 @@ describe('blocksOf with degraded capabilities', () => {
     const hunkBox = blocks.find(
       b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
     )
-    expect(hunkBox).toMatchObject({ rows: 3 })
+    expect(hunkBox).toMatchObject({ rows: 5 })
   })
 })
 
@@ -494,7 +513,7 @@ describe('blocksOf for a turn source', () => {
     expect(headerA).toMatchObject({
       item: { kind: 'hunk-header', canNote: false, isReadOnly: true },
     })
-    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'fixed', 'hunk', 'fixed', 'hunk'])
+    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'fixed', 'hunk', 'fixed', 'hunk', 'fixed'])
   })
 
   test('drops outdated comments too, since a turn has none of its own', () => {
@@ -533,6 +552,27 @@ describe('streamOf', () => {
     expect(stream.contentRows).toBeGreaterThan(bRow)
   })
 
+  test('each card is its rows, a close row, then one blank gap row before the next card', () => {
+    const stream = streamOf([file, b], () => [hunkA], [], null)
+    const ownRows = contentRowsOf(blocksOf(file, [hunkA], [], null))
+    // a's rows (title ... close), then the gap, then b's title.
+    expect(stream.titleRows.get('b.ts')).toBe(ownRows + 1)
+    const kinds = stream.blocks.map(block => (block.kind === 'hunk' ? 'hunk' : block.item.kind))
+    const closeAt = kinds.indexOf('close')
+    expect(kinds[closeAt + 1]).toBe('gap')
+    expect(kinds[closeAt + 2]).toBe('title')
+    // no gap after the last card
+    expect(kinds.at(-1)).toBe('close')
+  })
+
+  test('the close and gap rows still belong to the card above, the title row to the next', () => {
+    const stream = streamOf([file, b], () => [hunkA], [], null)
+    const bRow = stream.titleRows.get('b.ts') ?? 0
+    expect(fileAtRow(stream.titleRows, bRow - 1)).toBe(file.path) // the gap
+    expect(fileAtRow(stream.titleRows, bRow - 2)).toBe(file.path) // the close row
+    expect(fileAtRow(stream.titleRows, bRow)).toBe('b.ts')
+  })
+
   test('fileAtRow names the file whose section holds the row', () => {
     const stream = streamOf([file, b], () => [hunkA], [], null)
     const bRow = stream.titleRows.get('b.ts') ?? 0
@@ -546,7 +586,7 @@ describe('streamOf', () => {
     const stream = streamOf([file], () => undefined, [], null, {
       unreadText: 'Not read: too many new files',
     })
-    expect(stream.blocks.at(-1)).toMatchObject({
+    expect(stream.blocks.at(-2)).toMatchObject({
       item: { kind: 'status', text: 'Not read: too many new files' },
     })
   })
@@ -613,7 +653,7 @@ describe('streamOf orphan group', () => {
     const comment = commentOf({ path: 'gone.ts' })
     const withOrphan = streamOf([file], () => [hunkA], [comment], null)
     const without = streamOf([file], () => [hunkA], [], null)
-    // heading row + path row + 1 note row = 3 extra rows.
-    expect(withOrphan.contentRows).toBe(without.contentRows + 3)
+    // heading row + path row + a note card (1 text line + 2 borders) = 5 extra rows.
+    expect(withOrphan.contentRows).toBe(without.contentRows + 5)
   })
 })
