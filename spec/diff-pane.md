@@ -25,7 +25,11 @@ the overflow `…`); and the notes summary compacts from `✎ N pending` to a ba
 own `➤ N` still carries the count). Beneath it sits the file list
 (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
 file gets a row, and beyond it the list shows a window centered on the selected file plus a
-trailing "… N more" row. A one-row rule follows, then the body: **one review stream**, holding
+trailing "… N more" row. The rows are one `strip` (`Client`): each draws `❯` on the selected file,
+the status dot and letter, the coloured file-type icon, the path, and right-aligned `+a −d` and the stat
+bar; a row lights on `userMessageBackgroundHover` under the pointer, the selected file's row holds
+`selectionBg`, and a click anywhere on a row jumps to that file (without a `Client`, the path is a plain
+Button). A one-row rule follows, then the body: **one review stream**, holding
 every changed file as a **card** at once. The card opens with a title row,
 `╭─ <icon> <path>  <status> +adds −dels ──── pills`: a Nerd Font file-type icon coloured by type
 (`views/icons.ts`, rainbow theme keys), the bold path, the status mark, the counts, a `─` fill in the
@@ -50,7 +54,7 @@ this diff" title, an orphan path's own row, and the blank row between files are 
 note is a boxed card of its wrapped text lines plus a top and a bottom border (1 to 6 lines, so
 3 to 8 rows, see [review](review.md#status)); a note chip draws idle on the heading or a hunk's toolbar row
 rather than as a row of its own, and opens a compose box in its place — five rows (two borders,
-the Input's two rows, the `⏎ add`/` ✕ cancel ` hint row), six when a hunk's line picker draws above
+the Input's two rows, the ` ✕ cancel ` hint row), six when a hunk's line picker draws above
 the Input — only while that anchor is being composed. A multi-row fixed block's border runs its full height. A card the scroll position cuts through stays
 placed and is clipped at the top (`windowOf` places it from its first visible row), so the rows
 below never shift; the compose box is `pinned` and always placed whole. A hunk with line notes is several `hunk`

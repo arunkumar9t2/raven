@@ -63,7 +63,7 @@ the Doc pane), its border in the status colour (`NOTE_STATE_COLORS`):
 ╰─────────────────────────────────────╯
 ```
 
-The top border carries the status word in the status colour, a dim `Lnn · age`, a `─` fill, and the
+The top border carries the status word in the status colour, then a dim ` · Lnn · age` (a ` · ` between every part, e.g. `● pending · L5 · now`), a `─` fill, and the
 card's pills (` resend ` when open, ` ✕ `) embedded before the closing `─╮`. The body rows are the text
 between `│ ` and ` │`, on the theme's `userMessageBackground` (`COLORS.userMessage`) — the tint
 Claude Code puts behind the person's own messages, since a note is theirs; the file card's border and
@@ -90,7 +90,7 @@ under a line reads as attached to it.
 
 The compose box (`commentBox`, same file) is the same card in the accent (`COLORS.accent`):
 `╭─ ✎ comment for Claude ───╮`, then the line picker (hunks only), the Input with its placeholder and one
-hint row — dim `⏎ add` and a ` ✕ cancel ` pill that closes the box — then `╰───╯`. The Input soft-wraps
+hint row — the ` ✕ cancel ` pill that closes the box (the Input's own `⏎ add` label is the only submit hint) — then `╰───╯`. The Input soft-wraps
 and draws at most two rows (longer text scrolls inside them), so the box's rows are constant
 (`composeRowsOf`): 5, or 6 with the line picker; a short comment leaves one spare tinted row. The
 box is never clipped at the top of a scrolled window, so its Input stays mounted.
