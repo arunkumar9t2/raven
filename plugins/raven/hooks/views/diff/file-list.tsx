@@ -87,6 +87,7 @@ function fileRow(file: ChangedFile, props: FileListProps, maxChange: number): Ki
     {
       t: file.oldPath ? `${file.oldPath} → ${file.path}` : file.path,
       id,
+      shrink: true,
       onPress: select,
     },
   ]

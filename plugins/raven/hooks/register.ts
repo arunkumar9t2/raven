@@ -84,7 +84,7 @@ export function register(on: On, options: PluginOptions) {
       },
       columns,
       rows,
-      capabilities: capabilitiesOf(surface),
+      capabilities: capabilitiesOf(surface, settings.keyboardControls),
       press: (id, onPress) => raven?.registerPress(requestId, id, onPress),
     }
   }

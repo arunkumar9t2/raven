@@ -1,6 +1,6 @@
 import { describe, expect, test } from 'bun:test'
 import { createPresses } from '../../hooks/core/presses'
-import { cellsOf, pillAt, type StripRow } from '../../hooks/surface/strip'
+import { cellsOf, focusAfter, pillAt, type StripRow, targetsOf } from '../../hooks/surface/strip'
 import { pill } from '../../hooks/ui/strip'
 import { widthOf } from '../../hooks/ui/wrap'
 
@@ -16,6 +16,64 @@ describe('cellsOf', () => {
     for (const text of ['plain', '✓ stage', '日本語', '🚀✅ ok', 'éx', '↺ sure?', '']) {
       expect(cellsOf(text)).toBe(widthOf(text))
     }
+  })
+})
+
+describe('cellsOf parity', () => {
+  test('agrees with the plugin-side measure for every code point it could differ on', () => {
+    for (let cp = 0; cp <= 0x40000; cp += 1) {
+      if (cp >= 0xd800 && cp <= 0xdfff) continue
+      const char = String.fromCodePoint(cp)
+      if (cellsOf(char) !== widthOf(char)) throw new Error(`cellsOf drifts at U+${cp.toString(16)}`)
+    }
+    for (const sample of [
+      '\u{f0214}',
+      '\u{e628}',
+      '↺',
+      '✎',
+      '➤',
+      '■',
+      '█',
+      '●',
+      '\u{1f680}',
+      '日',
+    ]) {
+      expect(cellsOf(sample)).toBe(widthOf(sample))
+    }
+  })
+})
+
+describe('keyboard focus', () => {
+  const rows: StripRow[] = [
+    { left: [{ t: 'a', id: 'a1' }, { t: ' ' }, { t: 'b', id: 'a2' }] },
+    { id: 'r2', left: [{ t: 'plain' }] },
+    { left: [{ t: 'x' }] },
+    {
+      left: [
+        { t: 'c', id: 'c1' },
+        { t: 'd', id: 'c2' },
+        { t: 'e', id: 'c3' },
+      ],
+    },
+  ]
+
+  test('targets are the row pills, else the row id, else none', () => {
+    expect(rows.map(targetsOf)).toEqual([['a1', 'a2'], ['r2'], [], ['c1', 'c2', 'c3']])
+  })
+
+  test('left and right walk a row and stop at its ends', () => {
+    expect(focusAfter(rows, 'a1', 'right')).toBe('a2')
+    expect(focusAfter(rows, 'a2', 'right')).toBe('a2')
+    expect(focusAfter(rows, 'a1', 'left')).toBe('a1')
+  })
+
+  test('up and down skip rows with no targets, keeping the column (clamped)', () => {
+    expect(focusAfter(rows, 'a2', 'down')).toBe('r2')
+    expect(focusAfter(rows, 'r2', 'down')).toBe('c1')
+    expect(focusAfter(rows, 'c3', 'up')).toBe('r2')
+    expect(focusAfter(rows, 'c1', 'down')).toBe('c1')
+    expect(focusAfter(rows, 'a1', 'up')).toBe('a1')
+    expect(focusAfter(rows, 'a1', 'tab')).toBe('a1')
   })
 })
 

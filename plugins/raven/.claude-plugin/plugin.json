@@ -23,6 +23,13 @@
       "required": false,
       "default": true
     },
+    "keyboardControls": {
+      "type": "boolean",
+      "title": "Keyboard controls",
+      "description": "Draw plain Tab-reachable buttons instead of interactive pills.",
+      "required": false,
+      "default": false
+    },
     "autoOpenColumns": {
       "type": "number",
       "title": "Auto-open minimum width",

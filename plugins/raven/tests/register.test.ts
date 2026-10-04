@@ -803,6 +803,54 @@ describe('diff view keyboard control', () => {
     expect(await rowText(ui, 'file:a.ts')).not.toContain('❯')
   })
 
+  test('after a click a strip takes keys: arrows move a focus ring, Enter presses what it is on', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts', 'b.ts', 'c.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    await ui.resize({ columns: 80, rows: 3, in: 'file-list' })
+    const focusOf = async () => {
+      const found = (await ui.findAll({ in: 'file-list', type: 'Text' })).find(
+        each => each.props.inverse === true,
+      )
+      return found?.text
+    }
+    expect(await focusOf()).toBeUndefined()
+    // A click on b's row gives the strip the keyboard (and selects b).
+    await ui.pointer({ type: 'down', x: 40, y: 1, button: 'left', in: 'file-list' })
+    expect(await focusOf()).toBe('b.ts')
+    await ui.key({ key: 'down', in: 'file-list' })
+    expect(await focusOf()).toBe('c.ts')
+    await ui.key({ key: 'up', in: 'file-list' })
+    await ui.key({ key: 'up', in: 'file-list' })
+    expect(await focusOf()).toBe('a.ts')
+    await ui.key({ key: 'return', in: 'file-list' })
+    expect(await rowText(ui, 'file:a.ts')).toContain('❯')
+    expect(await rowText(ui, 'file:b.ts')).not.toContain('❯')
+  })
+
+  test('only the path segment of a list row shrinks; icons, marks and counts keep their cells', async ($, on) => {
+    gitWorld(on, {}, null, ['a.ts'])
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    await ui.resize({ columns: 14, rows: 1, in: 'file-list' })
+    const boxes = await ui.findAll({ in: 'file-list', type: 'Box' })
+    const shrinking = boxes.filter(box => box.props.flexShrink === 1 && box.text.includes('a.ts'))
+    expect(shrinking.length).toBeGreaterThan(0)
+    const fixed = boxes.filter(box => box.props.flexShrink === 0)
+    expect(fixed.length).toBeGreaterThan(3)
+    expect(fixed.some(box => box.text.includes('a.ts'))).toBe(false)
+    const path = (await ui.findAll({ in: 'file-list', type: 'Text' })).find(
+      each => each.text === 'a.ts',
+    )
+    expect(path?.props.wrap).toBe('truncate-end')
+  })
+
   test('no control carries a letter hotkey; the list arrows ride the engine list actions', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
 
