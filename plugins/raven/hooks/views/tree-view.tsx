@@ -9,9 +9,9 @@ import type { Kit, View } from '../core/view'
 import { loadChanges, toplevelOf } from '../git/load'
 import { TREE_PANE } from '../names'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
-import { type KitRow, type KitSeg, strip } from '../ui/strip'
+import { gap, type KitRow, type KitSeg, strip } from '../ui/strip'
 import { clampTop } from './diff/layout'
-import { folderIconOf, iconOf, statusMarkOf } from './icons'
+import { folderIconOf, iconOf, statusMarkOf, statusSegs } from './icons'
 import {
   changedDirsOf,
   listingKeyOf,
@@ -187,14 +187,13 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
       const press = () => toggle(path)
       return {
         id,
-        key: id,
         onPress: press,
         left: [
           ...guides,
           { t: row.isExpanded ? CHEVRON_OPEN : CHEVRON_CLOSED, dim: true },
-          { t: ' ' },
+          gap(),
           { t: folder.glyph, c: folder.color },
-          { t: ' ' },
+          gap(),
           { t: row.node.name, id, shrink: true, onPress: press },
         ],
         right: row.node.changed > 0 ? [{ t: `(${row.node.changed})`, dim: true }] : [],
@@ -208,16 +207,15 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
     const press = () => open(path)
     return {
       id,
-      key: id,
       onPress: press,
       left: [
         ...guides,
         { t: '  ' },
         { t: icon.glyph, c: icon.color },
-        { t: ' ' },
+        gap(),
         { t: row.node.name, id, shrink: true, onPress: press },
       ],
-      right: mark ? [{ t: '●', c: mark.color }, { t: ' ' }, { t: mark.glyph, c: mark.color }] : [],
+      right: mark ? statusSegs(mark) : [],
     }
   }
 

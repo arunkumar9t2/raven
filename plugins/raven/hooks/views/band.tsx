@@ -5,6 +5,7 @@ import type { RenderElement } from 'claude-code'
 import { COLORS } from '../core/colors'
 import type { Kit } from '../core/view'
 import { type Chip, chipsLayout } from '../ui/chips'
+import { BAND_GUTTER, BAND_LABEL_CELLS } from '../ui/chrome'
 import { pillRow } from '../ui/strip'
 
 /** What the `AbovePrompt` band has to say: pending review comments, an unseen doc, or both. */
@@ -18,9 +19,6 @@ export type BandActions = {
   open: () => void
   send: () => void
 }
-
-/** Columns the engine keeps at the band's right edge (it draws its own marker there): the row stays clear of them. */
-const BAND_GUTTER = 3
 
 /** The band's mark: a bird (nf-md-bird) in the accent. */
 export const BAND_MARK = '\u{f15c6}'
@@ -47,7 +45,7 @@ export function band(kit: Kit, state: BandProps, actions: BandActions) {
       onPress: actions.send,
     })
   }
-  const modes = chipsLayout(chips, Math.max(0, kit.columns - 24))
+  const modes = chipsLayout(chips, Math.max(0, kit.columns - BAND_LABEL_CELLS))
 
   return (
     <Box

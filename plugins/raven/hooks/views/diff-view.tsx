@@ -22,6 +22,7 @@ import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { closeRow, ruleRow } from '../ui/card'
 import { chipsFit } from '../ui/chips'
+import { RULE_START, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { pillRow } from '../ui/strip'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
@@ -565,10 +566,12 @@ export function createDiffView(
           // The same HEADER_MIN the hunk toolbar reserves for its own label, so the heading's
           // single note pill shrinks to its bare icon under the same pressure, the path (which
           // already truncates on its own) giving way first.
-          const mode = chipsFit([chip], Math.max(0, kit.columns - HEADER_MIN - 5))
+          const mode = chipsFit([chip], ruleRoomFor(kit.columns, HEADER_MIN))
           right = pillRow(kit, [chip], mode, titleKey)
         }
-        return <Box key={titleKey}>{ruleRow(kit, { color, start: '╭─ ', left, right })}</Box>
+        return (
+          <Box key={titleKey}>{ruleRow(kit, { color, start: RULE_START.open, left, right })}</Box>
+        )
       }
       case 'status':
         return <Text dimColor>{item.text}</Text>
