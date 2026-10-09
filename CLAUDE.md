@@ -1,10 +1,10 @@
 # CLAUDE.md
 
 Raven (working title) is a Claude Code plugin: a **mod** (function-hooks module) that docks a live
-preview pane beside the transcript — the session's diff with review comments, rendered plans and docs
-— plus a Bun **CLI** and a **skill** that let Claude drive the pane on purpose.
+preview pane beside the transcript (the session's diff with review comments, rendered plans and docs),
+plus a Bun **CLI** and a **skill** that let Claude drive the pane on purpose.
 
-`spec/` is the source of truth for behaviour and the mod/CLI boundary — start at `spec/README.md`.
+`spec/` is the source of truth for behaviour and the mod/CLI boundary; start at `spec/README.md`.
 `docs/progress.md` is the running decision log and milestone list. `spec/mod-api.md` distils the
 (undocumented, early access) mod API; `types/claude-code.d.ts` is the authority when they disagree.
 
