@@ -87,8 +87,9 @@ file under a watched path: the built-in plan and spec directories
 segment named in the `watchedPaths` setting. Plan mode's own plan file is not guessed from a
 directory: the engine names it on plan mode's notes (`prompt.attachment` of type `plan_mode`,
 `plan_mode_exit`, `plan_mode_reentry`, main loop only), Raven watches that exact path from then on,
-and leaving plan mode with a plan, or re-entering it, opens the plan.
-[`settings-and-surfaces.md`](./settings-and-surfaces.md) owns that setting's exact matching rule.
+and leaving plan mode with a plan, or re-entering it, opens the plan. These opens, like Tasks
+opening on the first task list, pass the `autoOpen` and `autoOpenColumns` gate;
+[`settings-and-surfaces.md`](./settings-and-surfaces.md) owns that gate and `watchedPaths`' exact matching rule.
 Configurable extras aside, these watched paths are the view's own built-in behavior, not something
 another doc owns.
 

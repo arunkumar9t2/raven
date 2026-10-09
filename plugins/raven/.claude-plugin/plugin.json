@@ -18,8 +18,8 @@
     },
     "autoOpen": {
       "type": "boolean",
-      "title": "Open panes on its own",
-      "description": "Open the diff on the main loop's first edit, a plan or watched doc as it is written, and the tasks pane on the first task list. Off: Raven opens only when you (or Claude, on request) ask.",
+      "title": "Open panes automatically",
+      "description": "Open the diff on the first edit, plans as they are written and the task list as it starts. Off: panes open only when asked.",
       "required": false,
       "default": true
     },

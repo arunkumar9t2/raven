@@ -4,12 +4,9 @@ import type { PluginOptions } from 'claude-code'
 export type RavenSettings = {
   /** Extra path fragments (trimmed, non-empty) whose `.md` files open in the Doc view. */
   watchedPaths: readonly string[]
-  /**
-   * Lets Raven open panes on its own: the diff on the main loop's first edit, a watched or plan doc
-   * as it is written, the tasks pane on the first task list. Off, only an ask opens a pane.
-   */
+  /** Lets Raven open panes nobody asked for; `shouldAutoOpen` is the one gate. */
   autoOpen: boolean
-  /** Skips that auto-open below this terminal width, in columns. */
+  /** Skips those opens below this terminal width, in columns. */
   autoOpenColumns: number
   /** Draws plain Tab-reachable Buttons instead of interactive pills on every surface (R42). */
   keyboardControls: boolean

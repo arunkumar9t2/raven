@@ -1,9 +1,9 @@
 import type { RavenSettings } from './settings'
 
 /**
- * Whether the main loop's first edit of the session should auto-open the diff: `autoOpen` is on,
- * and the last width any `ui.render` reported is at least `autoOpenColumns` — or unmeasured, which
- * opens rather than staying silent by default.
+ * Whether Raven may open a pane nobody asked for (the diff on the first edit, a plan or watched doc,
+ * the first task list): `autoOpen` is on, and the last width any `ui.render` reported is at least
+ * `autoOpenColumns` — or unmeasured, which opens rather than staying silent by default.
  */
 export function shouldAutoOpen(
   settings: RavenSettings,

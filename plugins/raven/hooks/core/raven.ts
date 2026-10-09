@@ -339,6 +339,9 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     return { ...directive, path: `${await host.cwd()}/${path}` }
   }
 
+  /** Every pane Raven opens unasked goes through this one gate. */
+  const mayAutoOpen = () => shouldAutoOpen(settings, bandState.viewportColumns())
+
   async function runAction(action: Action): Promise<string | undefined> {
     switch (action.kind) {
       case 'refresh-diff':
@@ -349,14 +352,11 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         void warnDiffPanelOnce()
         if (!hasAutoOpened) {
           hasAutoOpened = true
-          if (shouldAutoOpen(settings, bandState.viewportColumns())) await showDiff()
+          if (mayAutoOpen()) await showDiff()
         }
         return undefined
       case 'show-doc':
-        // With autoOpen off a watched doc only takes a doc pane the person already has open.
-        if (settings.autoOpen || open.has(doc.pane.id)) {
-          await showDoc({ kind: 'file', path: action.path })
-        }
+        if (mayAutoOpen()) await showDoc({ kind: 'file', path: action.path })
         return undefined
       case 'reload-doc':
         await doc.reload(action.path)
@@ -368,7 +368,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         const changed = tasksView.apply(action.tool, action.input, action.result)
         if (changed && !hasOpenedTasks && tasksView.hasTasks()) {
           hasOpenedTasks = true
-          if (settings.autoOpen && open.size === 0) await show(tasksView)
+          if (open.size === 0 && mayAutoOpen()) await show(tasksView)
         }
         return undefined
       }
