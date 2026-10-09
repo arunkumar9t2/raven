@@ -353,7 +353,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         }
         return undefined
       case 'show-doc':
-        await showDoc({ kind: 'file', path: action.path })
+        // With autoOpen off a watched doc only takes a doc pane the person already has open.
+        if (settings.autoOpen || open.has(doc.pane.id)) {
+          await showDoc({ kind: 'file', path: action.path })
+        }
         return undefined
       case 'reload-doc':
         await doc.reload(action.path)
@@ -365,7 +368,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         const changed = tasksView.apply(action.tool, action.input, action.result)
         if (changed && !hasOpenedTasks && tasksView.hasTasks()) {
           hasOpenedTasks = true
-          if (open.size === 0) await show(tasksView)
+          if (settings.autoOpen && open.size === 0) await show(tasksView)
         }
         return undefined
       }

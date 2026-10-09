@@ -91,13 +91,14 @@ raven comments                    print pending review comments
 
 ## Settings
 
-`/config` lists three fields for this plugin:
+`/config` lists four fields for this plugin:
 
 | Field | Type | Default | Does |
 | --- | --- | --- | --- |
 | `watchedPaths` | string | `''` | Comma-separated path fragments; a landed edit under one (plus the built-in plan paths) opens its `.md` in the Doc view. |
-| `autoOpen` | boolean | `true` | Opens the diff on the main loop's first edit of the session. |
+| `autoOpen` | boolean | `true` | Lets Raven open panes on its own: the diff on the main loop's first edit, a plan or watched doc as it is written (while no doc pane is open), the tasks pane on the first task list. Off, a pane opens only when asked (`/raven`, the Files view, Claude's `raven` CLI). |
 | `autoOpenColumns` | number | `144` | Skips that auto-open below this terminal width, in columns. |
+| `keyboardControls` | boolean | `false` | Draws plain Tab-reachable buttons instead of clickable pills, so every control works from the keyboard. |
 
 ## Develop
 
