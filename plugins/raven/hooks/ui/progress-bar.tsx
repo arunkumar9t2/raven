@@ -13,7 +13,7 @@ export function progressCells(done: number, total: number, cells: number): numbe
   return Math.min(safeCells, Math.max(0, Math.round((done / total) * safeCells)))
 }
 
-/** `███░░ 3/5` — the session's todo progress, as the official diff mod's `todoBar`. */
+/** `███░░ 3/5`: the session's todo progress, as the official diff mod's `todoBar`. */
 export function progressBar(kit: UiKit, done: number, total: number, cells = 5): RenderElement {
   const { Box, Text } = kit.ui
   const filled = progressCells(done, total, cells)

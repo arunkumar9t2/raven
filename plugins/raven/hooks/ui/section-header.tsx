@@ -15,13 +15,13 @@ export type SectionHeaderProps = {
   color: string
   count?: number
   /**
-   * Right-aligned metadata — `source HEAD`, a ref, a scope — dim when a plain string; an
+   * Right-aligned metadata (`source HEAD`, a ref, a scope), dim when a plain string; an
    * element (a chip row, a source picker) draws bare, never wrapped in `Text`.
    */
   right?: RenderElement | string
 }
 
-/** A coloured title, an optional count, dim right-aligned metadata — one row, nowrap. */
+/** A coloured title, an optional count, dim right-aligned metadata; one row, nowrap. */
 export function sectionHeader(kit: UiKit, props: SectionHeaderProps): RenderElement {
   const { Box, Text } = kit.ui
   const { dot: dotColor, title, color, count, right } = props

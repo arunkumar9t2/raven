@@ -18,7 +18,7 @@ export const STATUS_WORDS: Record<Comment['status'], string> = {
 }
 
 /**
- * A note's chips — `resend` when open, then `✕` — the one list the card draws and the reserved
+ * A note's chips (`resend` when open, then `✕`), the one list the card draws and the reserved
  * width counts. The handlers default to nothing for the width math.
  */
 export function noteChipsOf(
@@ -53,8 +53,8 @@ export function noteLinesOf(comment: Comment, width: number): string[] {
 }
 
 /**
- * The compose box's interior rows: the Input — which draws at most two rows, longer text scrolling
- * inside them (measured live) — the hint row, and a line picker above on a hunk. A short comment
+ * The compose box's interior rows: the Input (which draws at most two rows, longer text scrolling
+ * inside them, measured live), the hint row, and a line picker above on a hunk. A short comment
  * leaves one spare tinted row.
  */
 export const composeInnerRowsOf = (hasPicker: boolean): number => (hasPicker ? 4 : 3)

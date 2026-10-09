@@ -20,7 +20,7 @@ export type Host = {
   /** Resolves false when the engine left the pane waiting undrawn (too narrow to dock). */
   openPane: (pane: PaneOpenArgs) => Promise<boolean>
   closePane: (id: string) => Promise<void>
-  /** Every pane id the surface currently shows, off one call — for a check over several ids. */
+  /** Every pane id the surface currently shows, off one call, for a check over several ids. */
   shownPaneIds: () => Promise<ReadonlySet<string>>
   /** Moves keyboard focus to the element drawn under `key` in pane `paneId`. */
   focus: (paneId: string, key: string) => Promise<void>

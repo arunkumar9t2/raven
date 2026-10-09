@@ -9,7 +9,7 @@ import type { UiKit } from '../core/view'
 export type StatBarCells = { added: number; removed: number; rest: number }
 
 /**
- * `cells` split proportionally between `added` and `removed`, GitHub-bar style — the rounding
+ * `cells` split proportionally between `added` and `removed`, GitHub-bar style; the rounding
  * rule this kit pins:
  *
  * 1. Zero/zero gets no added or removed cells at all; `rest` takes every cell.
@@ -18,14 +18,14 @@ export type StatBarCells = { added: number; removed: number; rest: number }
  *    (`added / total * cells`, likewise `removed`), which leaves at most one cell unplaced (the
  *    two raw shares sum to exactly `cells`, so their floors sum to `cells` or `cells - 1`).
  * 3. With a `max` given (a file-list row, scaled against the list's biggest change, mirroring
- *    `changeMapOf`), only `filled` cells draw at all — `round(total / max * cells)`, clamped to
- *    `[1, cells]` so a real change never floors to nothing — then split the same way, over
+ *    `changeMapOf`), only `filled` cells draw at all: `round(total / max * cells)`, clamped to
+ *    `[1, cells]` so a real change never floors to nothing, then split the same way, over
  *    `filled` cells instead of all of them; the rest draws inactive. A `max` that is zero or
  *    negative is nonsensical (nothing to scale against) and is treated as no `max` at all,
  *    rather than dividing by it.
  * 4. Either way, the one leftover cell from the floor/sum gap, if any, goes first to a side
- *    that is non-zero but floored to nothing — so a real change is never invisible once there
- *    are at least 2 filled cells — else to the side with the larger fractional remainder, ties
+ *    that is non-zero but floored to nothing (so a real change is never invisible once there
+ *    are at least 2 filled cells), else to the side with the larger fractional remainder, ties
  *    favouring `added`.
  */
 export function statBarCells(
@@ -69,7 +69,7 @@ export function statBarCells(
   }
 }
 
-/** `■■■□□` — added cells in the added colour, removed in the removed colour, the rest inactive. */
+/** `■■■□□`: added cells in the added colour, removed in the removed colour, the rest inactive. */
 export function statBar(
   kit: UiKit,
   added: number,

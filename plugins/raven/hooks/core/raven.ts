@@ -136,7 +136,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
 
   // Kicked off at session start rather than waiting for the first `AbovePrompt` render or prompt
   // submit to need it: by the time either happens, the common case already has it loaded.
-  // `ensureReviewLoaded` is idempotent, so the `await` each still does is then a no-op — this
+  // `ensureReviewLoaded` is idempotent, so the `await` each still does is then a no-op; this
   // only spares the *first* one from paying for the git read itself.
   void bandState.ensureReviewLoaded()
 
@@ -162,12 +162,12 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
 
   /**
    * A pending comment is live when it has a `section` (a doc comment, always live); `known` (the
-   * diff's `knownPaths` at call time) is null (no live git list to check against — a turn source,
+   * diff's `knownPaths` at call time) is null (no live git list to check against: a turn source,
    * or nothing loaded yet); its path is among those known paths (which include a renamed file's
-   * `oldPath`); or `existing` says the file is still there — checked only for comments `known`
+   * `oldPath`); or `existing` says the file is still there: checked only for comments `known`
    * doesn't already cover (R32: it's the diff moving past a file, not the file being gone, that
    * stops meaning "stale"). `existing` null (the check never ran, or failed) never counts against
-   * a comment — fail open, same as `known` null. Only a comment whose file is truly gone moves to
+   * a comment: fail open, same as `known` null. Only a comment whose file is truly gone moves to
    * 'open' by `review.take`, rather than riding the prompt silently.
    */
   const isLiveComment =
@@ -449,7 +449,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       const toplevel = diff.toplevel()
       let existing: ReadonlySet<string> | null = null
       if (known !== null && toplevel !== null) {
-        // Only the comments `known` doesn't already resolve need the existence check —
+        // Only the comments `known` doesn't already resolve need the existence check:
         // `existingPathsOf` batches all of them together (chunked, never one call per comment),
         // and this is skipped entirely when `known` is null (everything is already live) or
         // there is nothing left to check.

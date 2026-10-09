@@ -61,10 +61,10 @@ export function fileList(kit: Kit, props: FileListProps): RenderElement {
 }
 
 /**
- * A row: `❯ ● M <icon> path   +a −d ■■□  ◉` — the selection mark, a status dot and letter beside
+ * A row: `❯ ● M <icon> path   +a −d ■■□  ◉`: the selection mark, a status dot and letter beside
  * the icon and path, the add/del count and stat bar right-aligned, and a trailing `◉` in the
  * accent when this file was edited this turn. Spelled out as its own glyph rather than reusing
- * the status dot's `●` — a status dot draws on every row regardless of status, so the two must
+ * the status dot's `●`: a status dot draws on every row regardless of status, so the two must
  * read as different marks for a glance to tell "what kind of change" from "is this happening right
  * now" apart.
  */

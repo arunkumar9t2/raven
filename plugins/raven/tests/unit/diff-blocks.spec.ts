@@ -265,8 +265,8 @@ describe('blocksOf', () => {
   })
 
   test('a doc-section comment never draws in a diff file whose path it happens to share', () => {
-    // The Files tree opens a markdown file in the Doc pane by its git-relative path — the same
-    // string `file.path` already is — so a section comment made there can collide with this file's
+    // The Files tree opens a markdown file in the Doc pane by its git-relative path (the same
+    // string `file.path` already is), so a section comment made there can collide with this file's
     // own path exactly, with no hunk to tell them apart; only `comment.section` does.
     const sectionComment = commentOf({ id: 's1', section: 'Notes', sectionIndex: 0 })
     const blocks = blocksOf(file, [hunkA], [sectionComment], null)
@@ -642,7 +642,7 @@ describe('streamOf orphan group', () => {
     expect(hereRow).toMatchObject({ item: { kind: 'orphan-path', isGone: false } })
   })
 
-  test('a path never checked (omitted gonePaths) never marks a path gone — fail open', () => {
+  test('a path never checked (omitted gonePaths) never marks a path gone: fail open', () => {
     const comment = commentOf({ path: 'gone.ts' })
     const stream = streamOf([file], () => [hunkA], [comment], null)
     const row = stream.blocks.find(block => block.key === `orphans#${orphanPathKeyOf('gone.ts')}`)

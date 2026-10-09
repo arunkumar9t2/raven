@@ -45,7 +45,7 @@ export type CommentBoxProps = {
   /** The anchor's hunk; present only for a hunk anchor, drives the line-picker Select. */
   hunk?: Hunk
   /**
-   * Whether the line-picker Select draws, above the Input — the same value `blocksOf` used to
+   * Whether the line-picker Select draws, above the Input. The same value `blocksOf` used to
    * size this block's rows, so the row count and the drawing never disagree.
    */
   hasPicker: boolean
@@ -131,8 +131,8 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
 }
 
 /**
- * A note is a boxed card: `╭─ ● pending · L5 · now ─────── ✕ ─╮` — the status word in its colour,
- * a dim `L<line> · <age>`, and the pills embedded in the top border — then `│ text │` rows (`lines`,
+ * A note is a boxed card: `╭─ ● pending · L5 · now ─────── ✕ ─╮` (the status word in its colour,
+ * a dim `L<line> · <age>`, and the pills embedded in the top border), then `│ text │` rows (`lines`,
  * from `noteLinesOf`, wrapped once by whoever sized the card) and `╰──╯`. The border is the
  * status colour, the inside the user-message tint. `now` (ms) comes from the view's own clock,
  * never `Date.now()` here.
@@ -180,7 +180,7 @@ export function note(
 
 /**
  * The "✎ note" chip descriptor: the one place that builds it and its key, used by a file's
- * heading and a hunk's toolbar alike. Never drawn for an anchor already being composed — its
+ * heading and a hunk's toolbar alike. Never drawn for an anchor already being composed; its
  * caller omits this in that case, leaving room for the compose box below.
  */
 export function noteChip(anchor: Anchor, onStart: (anchor: Anchor) => void): Chip {
@@ -201,7 +201,7 @@ export type HunkToolbarProps = {
   isReadOnly: boolean
   isStaged: boolean
   confirmingRevert: boolean
-  /** The toolbar's own room, after the rail — what `chipsFit` sizes against. */
+  /** The toolbar's own room, after the rail: what `chipsFit` sizes against. */
   columns: number
   /** The file card's border colour: status, or the accent while Claude edits the file. */
   color: string
@@ -211,19 +211,19 @@ export type HunkToolbarProps = {
 }
 
 /**
- * Room `chipsFit` leaves for the header label before shrinking its chips to icons — shared by
+ * Room `chipsFit` leaves for the header label before shrinking its chips to icons, shared by
  * the hunk toolbar and (via `diff-view.tsx`'s title row) the file heading, so both shrink their
  * chips the same way under the same pressure.
  */
 export const HEADER_MIN = 12
 
 /**
- * A hunk's function context and its new-side line range — `ƒ handleRequest  L2–8`, or the bare
+ * A hunk's function context and its new-side line range: `ƒ handleRequest  L2–8`, or the bare
  * range when git gives no context (a trailing `{`/`(` off a long suffix is dropped). D10 point 3.
  *
  * The strip is unconditional, not gated on the suffix's length: git only ever puts one context
  * line there, so a trailing brace/paren is always the same kind of artefact (an opening brace a
- * function/block signature got cut on) regardless of how long that line happens to be — there is
+ * function/block signature got cut on) regardless of how long that line happens to be; there is
  * no length past which it stops being one.
  */
 function hunkLabelOf(hunk: Hunk): string {
@@ -239,7 +239,7 @@ function hunkLabelOf(hunk: Hunk): string {
 
 /**
  * A hunk's toolbar row, `├─ ƒ name  L1–7 ─────── pills`: the border in the file card's `color`,
- * the header label, a fill, then — unless read-only — the note (when it can draw), stage and
+ * the header label, a fill, then (unless read-only) the note (when it can draw), stage and
  * revert pills at the right. Staging is a no-op once staged (the pill reads "staged", kind on);
  * revert confirms on a second press, keeping its words (`↺ sure?`, kind armed) even when the pills
  * shrink to bare icons to fit. D12 §2–3.

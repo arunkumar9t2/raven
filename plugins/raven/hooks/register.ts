@@ -62,10 +62,10 @@ export function register(on: On, options: PluginOptions) {
 
   /**
    * Notes the viewport off any `ui.render` event and builds its `Kit` around `resolve` (always
-   * `() => $.ui.resolve(e)` at the call site — the sandbox forbids passing `$` itself), whose `ui`
+   * `() => $.ui.resolve(e)` at the call site: the sandbox forbids passing `$` itself), whose `ui`
    * resolves lazily so a handler whose guard declines to draw (a hidden pane, a band a survey
    * suppresses) never pays for `$.ui.resolve`. `capabilities` is computed once here, off
-   * `surface`, not off which elements `resolve()` happens to hand back — see `core/view.ts`.
+   * `surface`, not off which elements `resolve()` happens to hand back. See `core/view.ts`.
    */
   function kitOf(
     viewport: { columns?: number } | undefined,

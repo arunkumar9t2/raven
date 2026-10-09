@@ -129,7 +129,7 @@ export async function pressPill(ui: PillUi, id: string): Promise<void> {
   await ui.post({ press: id }, { in: client.key })
 }
 
-/** What every strip in the drawing shows, joined — for "this label is on screen" checks. */
+/** What every strip in the drawing shows, joined, for "this label is on screen" checks. */
 export async function pillsText(ui: PillUi): Promise<string> {
   const parts: string[] = []
   for (const strip of await stripsOf(ui)) {

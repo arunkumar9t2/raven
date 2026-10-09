@@ -91,7 +91,7 @@ export function hunksOf(diff: string): Hunk[] {
   return starts.map((from, index) => {
     const to = index + 1 < starts.length ? (starts[index + 1] as number) : lines.length
     const body = lines.slice(from, to)
-    // split('\n') on a diff ending with '\n' leaves one trailing '' — drop it, not a real line
+    // split('\n') on a diff ending with '\n' leaves one trailing '': drop it, not a real line
     if (to === lines.length && body.length > 0 && body[body.length - 1] === '') body.pop()
     return { header: lines[from] as string, text: `${body.join('\n')}\n` }
   })

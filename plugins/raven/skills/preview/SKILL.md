@@ -1,6 +1,6 @@
 ---
 name: preview
-description: Show things to the user in the Raven preview pane beside the transcript — a rendered markdown document, a file, an inline summary, or the diff — and read the review comments they left on the diff or on a shown doc's sections. Use when the user asks to see, preview, open or render a plan, spec, doc or file; when you finish a plan or design they should read; when a visual explanation (a table, a checklist, a summary of changes) reads better rendered than in chat; or when the user mentions comments or review feedback on the diff or a doc.
+description: Show things to the user in the Raven preview pane beside the transcript (a rendered markdown document, a file, an inline summary, or the diff) and read the review comments they left on the diff or on a shown doc's sections. Use when the user asks to see, preview, open or render a plan, spec, doc or file; when you finish a plan or design they should read; when a visual explanation (a table, a checklist, a summary of changes) reads better rendered than in chat; or when the user mentions comments or review feedback on the diff or a doc.
 ---
 
 # Raven preview pane
@@ -49,7 +49,7 @@ The user can comment on files and hunks in the diff pane, and on sections of a m
 in the pane. Pending comments ride their next prompt as hidden context headed as a review; treat
 each as a requested change, address it, and say which ones you addressed. A doc comment groups by
 path under `§ heading`; if the same heading appears more than once in the doc, a later group is
-labelled `(2nd)`, `(3rd)`, and so on — address each the same way you address a diff comment.
+labelled `(2nd)`, `(3rd)`, and so on: address each the same way you address a diff comment.
 `{ op: "comments" }` (or `raven comments`) fetches them on demand (and marks them delivered).
 
 ## When the result says the pane is not active

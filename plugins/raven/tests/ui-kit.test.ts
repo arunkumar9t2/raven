@@ -17,7 +17,7 @@ tier('user')
 /**
  * No Raven pane draws these kit components directly, so each test gives itself a component no real
  * hook claims (`InfoNotice`, terminal-only) and draws them through it with the surface's real
- * elements (`$.ui.resolve(e)`) — `$.ui.mount` then validates the tree exactly as it would a pane's.
+ * elements (`$.ui.resolve(e)`); `$.ui.mount` then validates the tree exactly as it would a pane's.
  *
  * The capabilities are the terminal's with `keyboardControls` on (R42): the test's own hook is no
  * plugin module, so it cannot build a `Client`, and this is the plain-Button fallback the setting

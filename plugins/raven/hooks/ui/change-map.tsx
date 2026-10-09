@@ -15,7 +15,7 @@ export type ChangeMapCell = { glyph: string; color: string }
 /**
  * One glyph per file, in list order: height from `▁▂▃▄▅▆▇█` by the file's share of the
  * largest change in the set (a changed file never draws below `▁`, even a one-line tweak next
- * to a thousand-line file), coloured by status — the file being edited this turn in the accent,
+ * to a thousand-line file), coloured by status: the file being edited this turn in the accent,
  * so it reads from across the room. More files than `maxCells` keeps the first `maxCells - 1`
  * and ends with one dim `…` cell rather than shrinking every glyph to fit. D10 point 4.
  */

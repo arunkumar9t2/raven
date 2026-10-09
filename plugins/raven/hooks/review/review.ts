@@ -28,8 +28,8 @@ export type Review = {
   sent: () => Comments
   /**
    * Resolves one sent batch: the named `addressedIds` become 'addressed', every other id in
-   * `batchIds` becomes 'open'. Comments outside `batchIds` — a newer batch sent while this one's
-   * fork was in flight — are untouched, whatever their status.
+   * `batchIds` becomes 'open'. Comments outside `batchIds` (a newer batch sent while this one's
+   * fork was in flight) are untouched, whatever their status.
    */
   resolveBatch: (batchIds: readonly string[], addressedIds: readonly string[]) => void
   /** Returns every 'open' comment to 'pending' so it rides the next prompt. */

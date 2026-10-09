@@ -96,7 +96,7 @@ type Model = {
   /** False once the person scrolls the stream this turn; a further edit then leaves the view put. */
   isFollowing: boolean
   /**
-   * Which review-comment paths are confirmed gone from the working tree — a property of the
+   * Which review-comment paths are confirmed gone from the working tree: a property of the
    * repository, not of the selected source, so it is checked over every non-doc comment's path
    * regardless of which are currently orphaned. Empty until a check actually names one gone, so a
    * path never checked (or one a failed check couldn't confirm) never draws "file gone": fail
@@ -128,7 +128,7 @@ export type DiffView = View & {
   /**
    * The paths of the last loaded git-source file list (each file's current path, plus a renamed
    * file's `oldPath`); `null` before the first load, when the repository is unknown, or while a
-   * turn (read-only) source is selected — a turn's file list is not the live git diff.
+   * turn (read-only) source is selected: a turn's file list is not the live git diff.
    */
   knownPaths: () => ReadonlySet<string> | null
   /** The current repository's toplevel; null whenever no repository has loaded. */
@@ -321,7 +321,7 @@ export function createDiffView(
     if (started !== generation) return
 
     // Existence is a property of the repository, not of which source happens to be selected, so
-    // every non-doc comment's path is checked here — not just the ones currently orphaned —
+    // every non-doc comment's path is checked here (not just the ones currently orphaned)
     // sparing `selectSource` (a mere source switch) from ever needing its own check.
     const commentPaths = [
       ...new Set(
@@ -336,7 +336,7 @@ export function createDiffView(
       const existing = await existingPathsOf(host.run, repository.toplevel, commentPaths).catch(
         loggedAs(host, 'checking comment file existence', null),
       )
-      // `existing === null` is a failed check, not "nothing exists" — leave `gonePaths` empty
+      // `existing === null` is a failed check, not "nothing exists": leave `gonePaths` empty
       // (fail open) rather than mark every candidate gone.
       if (existing !== null) gonePaths = new Set(commentPaths.filter(path => !existing.has(path)))
     }
@@ -348,7 +348,7 @@ export function createDiffView(
 
   /**
    * Selects `path` and scrolls its heading to the top of the stream; no reload. Always jumps,
-   * even when `path` is already selected — pressing the row of the file the scroll bar's ❯
+   * even when `path` is already selected: pressing the row of the file the scroll bar's ❯
    * already tracks is exactly how the stream's top is recovered after scrolling away from it.
    * The person's own navigation (a file-list press, the ↓/↑ buttons): turns follow off for the
    * rest of the turn, same as a scroll. A programmatic jump (`reveal`) does its own update
@@ -432,7 +432,7 @@ export function createDiffView(
       candidate => candidate.header === hunk.header && candidate.text === hunk.text,
     )
     if (!stillPresent) {
-      host.toast('The hunk changed — refreshed, try again')
+      host.toast('The hunk changed. Refreshed, try again')
       update(withHunks(file.path, current))
       return
     }
@@ -532,7 +532,7 @@ export function createDiffView(
   /**
    * One fixed row's element, by its payload kind: a `gap` draws one blank row, between files.
    * `contentWidth` is the row's room beside the file's left rail (`kit.columns - 2`), for whatever
-   * here measures text instead of `kit.columns` — the rail itself is drawn by the caller,
+   * here measures text instead of `kit.columns`; the rail itself is drawn by the caller,
    * `placedRowOf`.
    */
   function bodyRowOf(
@@ -654,7 +654,7 @@ export function createDiffView(
   }
 
   /**
-   * One block of the trailing orphans group — no `ChangedFile` backs these rows, so they never go
+   * One block of the trailing orphans group: no `ChangedFile` backs these rows, so they never go
    * through `bodyRowOf`/`placedRowOf`'s file-rail logic; the rail is a flat `COLORS.inactive`
    * instead of a status colour. Only the item kinds `orphanBlocksOf` ever emits reach here.
    */
@@ -775,7 +775,7 @@ export function createDiffView(
       return emptyState(
         kit,
         EMPTY_ICONS.repo,
-        'Not a git repository — open Raven in a repo to review changes',
+        'Not a git repository. Open Raven in a repo to review changes',
       )
 
     const files = filesOf()
@@ -789,7 +789,7 @@ export function createDiffView(
         EMPTY_ICONS.changes,
         isReadOnly
           ? 'This turn edited no files'
-          : "No changes yet — Raven shows Claude's edits here as they land",
+          : "No changes yet. Raven shows Claude's edits here as they land",
       )
     }
 
@@ -894,7 +894,7 @@ export function createDiffView(
 
   /**
    * Applies `model.followPath`, once a refresh completes, as a `pendingReveal` rather than an
-   * immediate `select` — unlike `reveal`, so the jump always lands against the stream `render`
+   * immediate `select`, unlike `reveal`, so the jump always lands against the stream `render`
    * computes fresh this time, never a possibly-stale `lastTitleRows` from before this refresh.
    * Only while still following (no person scroll this turn dropped it already); a compose box
    * open keeps the target rather than applying or dropping it, so the jump still happens once the

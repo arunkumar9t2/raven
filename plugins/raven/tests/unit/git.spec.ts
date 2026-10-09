@@ -488,7 +488,7 @@ describe('existingPathsOf', () => {
   test('a gitignored file that still exists is reported as existing (no --exclude-standard)', async () => {
     // The pathspec (`-- ignored.txt a.ts`) already limits the listing to the candidates, so
     // `--exclude-standard` would only ever drop a candidate that is itself gitignored but still
-    // on disk — exactly the file this check must not call gone.
+    // on disk: exactly the file this check must not call gone.
     const run = runOf({
       'git --literal-pathspecs -C /repo ls-files --cached --others -z -- ignored.txt a.ts': {
         stdout: 'ignored.txt\0a.ts\0',
