@@ -41,7 +41,7 @@ const closeBlock: Block<BodyItem> = {
 }
 
 /**
- * Whether `comment` is this file's own: a diff comment (never a doc comment — `section` is the
+ * Whether `comment` is this file's own: a diff comment (never a doc comment: `section` is the
  * one discriminator, checked explicitly rather than leaned on paths staying distinct between the
  * two panes) whose path matches `file`'s current path or, a rename, its old one. The Files tree
  * opens a markdown file in the Doc pane by the same git-relative path this `file.path` already is,
@@ -113,8 +113,8 @@ function splitInline(hunk: Hunk, notes: Comments): { inline: InlineNotes[]; rest
 
 /**
  * A hunk as blocks: whole when nothing sits under one of its lines, else a segment per commented
- * line — the lines up to and including it (its rail cell marked with the first note's status),
- * then that line's cards — and a last segment for the rest. Row-exact: the segments' lines and
+ * line: the lines up to and including it (its rail cell marked with the first note's status),
+ * then that line's cards, and a last segment for the rest. Row-exact: the segments' lines and
  * the cards' rows add up to the hunk plus the notes.
  */
 function hunkSegmentsOf(
@@ -180,10 +180,10 @@ function notesBlocksOf(notes: Comments, anchor: Anchor, width: number): Block<Bo
 }
 
 /**
- * One anchor's notes followed by its comment box, drawn only while that anchor is being composed
- * — idle, the "＋ note" control lives on the heading or the hunk's actions row instead, so no
+ * One anchor's notes followed by its comment box, drawn only while that anchor is being composed;
+ * while idle, the "＋ note" control lives on the heading or the hunk's actions row instead, so no
  * block is emitted at all. A surface without `canType` drops the box entirely (no controls to
- * draw); `hasPicker` — whether the box draws its line-picker row — is carried on the block itself
+ * draw); `hasPicker` (whether the box draws its line-picker row) is carried on the block itself
  * so the row count here and `commentBox`'s own drawing never disagree.
  */
 function anchorBlocksOf(
@@ -234,11 +234,11 @@ function outdatedBlocksOf(outdated: Comments, width: number): Block<BodyItem>[] 
 
 /**
  * The trailing group for comments (any status) whose path matches no file in the current stream
- * — the diff source moved past it, or it is simply gone: a dim "Not in this diff" heading, then
+ * (the diff source moved past it, or it is simply gone): a dim "Not in this diff" heading, then
  * each such path's own row (its own `${path}#` prefixed later, in `streamOf`) carrying a dim
  * "file gone" when `gonePaths` names it, and that path's notes beneath it (same
  * addressed-collapse as `outdatedBlocksOf`, via `notesBlocksOf`). A path `gonePaths` doesn't
- * name — never checked, or the check failed — never draws "file gone": fail open. Empty
+ * name (never checked, or the check failed) never draws "file gone": fail open. Empty
  * `orphans` emits nothing, so the group is absent entirely rather than a bare heading.
  */
 function orphanBlocksOf(

@@ -9,7 +9,7 @@ import { fakeHost } from './fake-host'
 /**
  * `createDiffView`'s render functions compile to bare `h(...)` calls (the mod sandbox's classic
  * JSX runtime, see `types/claude-code.d.ts`); outside that sandbox nothing supplies `h`, so these
- * specs supply a minimal one themselves — a plain-data tree a test can walk — rather than run the
+ * specs supply a minimal one themselves (a plain-data tree a test can walk) rather than run the
  * view through the mod-kit sandbox, where a press can't be driven until *after* a render that
  * would already have resolved `pendingReveal`, hiding the race these tests target (confirmed: a
  * mod-kit press after the debounced refresh still passed with the bug reintroduced, because
@@ -98,7 +98,7 @@ describe('createDiffView', () => {
     const view = createDiffView(host, review, NO_ACTIONS, () => 0)
 
     await view.refresh()
-    // rows=7: fixedRowsOf(2 files, 8) = 5, leaving 2 body rows — exactly a.ts's title+status, so
+    // rows=7: fixedRowsOf(2 files, 8) = 5, leaving 2 body rows: exactly a.ts's title+status, so
     // only a stream jump to b.ts (3 rows down) changes which heading is in view.
     let tree = view.render(KIT)
     const pressA = () => {

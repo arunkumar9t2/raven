@@ -412,7 +412,7 @@ describe('options: watched doc paths, defaults', () => {
       props: { ...PANE_PROPS, title: 'Doc' },
       requestId: DOC_PANE.id,
     })
-    const empty = await ui.find({ type: 'Text', text: /Nothing shown yet — plans and docs/ })
+    const empty = await ui.find({ type: 'Text', text: /Nothing shown yet. Plans and docs/ })
     expect(empty?.text.startsWith('\u{f0219}')).toBe(true)
     expect(empty?.props.dimColor).toBe(true)
   })
@@ -725,7 +725,7 @@ const mountDiff = ($: Engine) =>
 
 /**
  * An element's own real drawn width, reconstructed from the raw tree the mod-kit harness returns
- * (`type`, `props`, `children`) rather than `.text` — which flattens a `Button` down to its bare
+ * (`type`, `props`, `children`) rather than `.text`, which flattens a `Button` down to its bare
  * label and drops every `Box`'s `gap`, so it cannot stand in for "does this actually fit" the way
  * the other narrowest-pane tests use it (see the R28 test above). A plain `Button` draws its label; a
  * `Client` strip the cells of its first row's left segments; a row
@@ -764,11 +764,11 @@ function drawnWidth(
 }
 
 /**
- * Whether any `Box` in the subtree draws `display: "none"` — the narrowest-pane R30 test's own
+ * Whether any `Box` in the subtree draws `display: "none"`: the narrowest-pane R30 test's own
  * guard, independent of `drawnWidth`'s arithmetic: a `display: "none"` wrapper around a nav
  * Button would still happen to measure `0` and so wouldn't fail the `<= 38` assertion on its own
  * (that was ruling R30's *first* fix, fix round 1, before a live Tab-focus probe found the
- * ring silently stopping on it with no visible mark — see the task report), so this walks the raw
+ * ring silently stopping on it with no visible mark; see the task report), so this walks the raw
  * tree directly rather than trusting a width proxy to notice a chip has gone invisible.
  */
 function anyDisplayNone(
@@ -1335,7 +1335,7 @@ describe('review stream', () => {
       requestId: DIFF_PANE.id,
     })
 
-    // A programmatic reveal of the file already selected and in view — unlike a person's press,
+    // A programmatic reveal of the file already selected and in view: unlike a person's press,
     // it must leave follow on.
     await $.tool.call({ tool: 'Bash', command: 'raven diff /work/a.ts' })
     expect(await ui.find({ key: 'a.ts#title' })).toBeDefined()
@@ -1499,14 +1499,14 @@ describe('diff header', () => {
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
     expect((await pillOf(ui, 'clear'))?.t).toContain('clear all?')
     // `.text` is the row's whole drawn content with no clipping applied by this harness, so its
-    // length is the real proxy for "does this actually fit" — same convention as the hunk
+    // length is the real proxy for "does this actually fit"; same convention as the hunk
     // toolbar's own narrowest-pane test.
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
   test('with nothing armed, the map and the notes summary degrade instead of vanishing at the narrowest docked pane (R28)', async ($, on) => {
     // `.text` flattens every Button down to its bare label, dropping the `[ ]` bracket padding
-    // and the row's own gaps — that is why the other narrowest-pane tests' ".text.length <= 38"
+    // and the row's own gaps; that is why the other narrowest-pane tests' ".text.length <= 38"
     // proxy cannot catch this bug: the change map and notes summary were being starved to
     // nothing *before* `.text` is ever computed, by the actual flex layout (the chips' box is
     // `flexShrink: 0`, so a too-wide chip row shrinks the map/summary box instead, down to 0 if
@@ -1535,18 +1535,18 @@ describe('diff header', () => {
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
     const mapGlyphs = (row?.text ?? '').match(/[▁▂▃▄▅▆▇█…]/g) ?? []
     // `MIN_MAP_CELLS` is `2`, not `3` (ruling R30: nav no longer gives way to make room, so one
-    // more cell has to) — 5 files over that cap draw one bar glyph plus the dim `…` overflow cell.
+    // more cell has to): 5 files over that cap draw one bar glyph plus the dim `…` overflow cell.
     expect(mapGlyphs.length).toBeGreaterThanOrEqual(2)
     // The compact summary is a bare `✎` here, not `✎2` (fix round 2): `send N` right next to it
     // already carries the count, and at 10+ pending `✎10` was the one character the arithmetic
-    // couldn't afford once nav stopped giving way (ruling R30) — see the test below.
+    // couldn't afford once nav stopped giving way (ruling R30); see the test below.
     expect(row?.text).toMatch(/✎|✎ 2 notes pending/)
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
   test('the compact notes summary stays a bare ✎ at 10+ pending, where a digit would overflow 38 columns', async ($, on) => {
     // Live-measured (fix round 2): with nav never giving way (R30) the row's own floor is tight
-    // enough that `✎10` (2 digits) pushed drawnWidth to 40 before this fix — `send N` already
+    // enough that `✎10` (2 digits) pushed drawnWidth to 40 before this fix: `send N` already
     // carries the exact count, so the summary doesn't need to repeat it.
     const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
     const pending = Array.from({ length: 10 }, (_, i) => ({
@@ -1577,8 +1577,8 @@ describe('diff header', () => {
 
   test('the list chords keep working at the narrowest docked pane: nav never gives way (R30)', async ($, on) => {
     // Same narrow-pane shape as the R28 test above. Ruling R30 (fix round 2): a live tmux probe
-    // showed a Tab ring walking onto a `display: "none"` Button with no visible focus mark — the
-    // engine's `ButtonProps` has no way to make a mounted chip unreachable by Tab — so nav instead
+    // showed a Tab ring walking onto a `display: "none"` Button with no visible focus mark (the
+    // engine's `ButtonProps` has no way to make a mounted chip unreachable by Tab), so nav instead
     // stays fully visible (not hidden, not dropped) at every width; `MIN_MAP_CELLS` above absorbs
     // the cost. Asserts both halves: the Buttons carry their chord actions, and they actually draw
     // (non-empty text, not a zero-width `display: "none"` stand-in), while the row still fits 38.
@@ -1825,7 +1825,7 @@ describe('stage and revert a hunk', () => {
     await ui.post({ press: stageKeyOf({ path: 'a.ts', hunk: HUNK_HEADER }) }, { in: PILLS_KEY })
 
     expect(applyRan).toBe(false)
-    expect(toasts).toContain('The hunk changed — refreshed, try again')
+    expect(toasts).toContain('The hunk changed. Refreshed, try again')
   })
 
   test('a hunk toolbar draws a Client whose props carry the note, stage and revert pills, in words at the default 100-column pane', async ($, on) => {
@@ -2221,7 +2221,7 @@ describe('empty states', () => {
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
-    const found = await emptyOf(ui, /No changes yet — Raven shows Claude's edits/)
+    const found = await emptyOf(ui, /No changes yet. Raven shows Claude's edits/)
     expect(found.icon).toBe('\u{f02a2}')
     expect(found.dim).toBe(true)
   })
@@ -2247,7 +2247,7 @@ describe('empty states', () => {
       props: PANE_PROPS,
       requestId: TASKS_PANE.id,
     })
-    const found = await ui.find({ type: 'Text', text: /No tasks yet — Claude's task list/ })
+    const found = await ui.find({ type: 'Text', text: /No tasks yet. Claude's task list/ })
     expect(found?.text.startsWith('\u{f0ae}')).toBe(true)
     expect(found?.props.dimColor).toBe(true)
   })
@@ -2380,7 +2380,7 @@ describe('prompt carries the review', () => {
     comments: readonly unknown[],
     respond: (text: string) => { text: string } | { drop: string } = text => ({ text }),
     // Which paths the batched existence check (R32) reports present; defaults to `['a.ts']`
-    // (gitWorld's own default `files`), so a path left out — like `gone.ts` — reads as gone.
+    // (gitWorld's own default `files`), so a path left out (like `gone.ts`) reads as gone.
     existing: readonly string[] = ['a.ts'],
   ) {
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: comments }, null, ['a.ts'], [], [], existing)

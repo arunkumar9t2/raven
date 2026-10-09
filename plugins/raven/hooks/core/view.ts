@@ -4,7 +4,7 @@ import type { PaneSubcommand } from '../names'
 /**
  * The elements a view draws with; Raven draws on the terminal surface, mobile among them. The
  * engine always completes every surface's table to a constructor for every element name, even one
- * that surface doesn't carry (it just draws a fragment there) — so `Image`, `Input` and `Select`
+ * that surface doesn't carry (it just draws a fragment there); so `Image`, `Input` and `Select`
  * are typed as present here too, never `| undefined`: presence can never tell a real control from
  * a completed fragment. A view never checks for one; it reads `kit.capabilities` instead, which
  * `capabilitiesOf` derives from the surface name, the one source of truth for what each surface
@@ -44,7 +44,7 @@ const NO_CAPABILITIES: Capabilities = {
 }
 
 /**
- * A surface's capabilities, read off the fixed table above — never off element presence. An
+ * A surface's capabilities, read off the fixed table above, never off element presence. An
  * unknown future surface (one the table hasn't been taught yet) degrades to `NO_CAPABILITIES`
  * rather than throwing, so a view still renders, just without controls the surface may not
  * actually support.
@@ -63,7 +63,7 @@ export const ELEMENT_TEXT_LIMIT = 10_000
 
 /**
  * What a view's render is handed: the elements, the pane body's width and rows in cells, and the
- * capabilities its surface carries — computed once in `register.ts`'s `kitOf`, so a view never
+ * capabilities its surface carries: computed once in `register.ts`'s `kitOf`, so a view never
  * calls `capabilitiesOf` or checks an element's presence itself.
  */
 export type Kit = {
@@ -79,7 +79,7 @@ export type Kit = {
 }
 
 /**
- * What a kit function that draws off `kit.ui` alone needs — the `hooks/ui/` kit's own
+ * What a kit function that draws off `kit.ui` alone needs: the `hooks/ui/` kit's own
  * components take this rather than the full `Kit`, so a caller holding only `{ ui, columns }`
  * (the `AbovePrompt` band) can still reach them without a cast.
  */

@@ -41,7 +41,7 @@ bun run lint:fix     # biome check --fix .
 bun run test         # bun test ./plugins/raven/cli ./plugins/raven/tests/unit ./scripts
 bun run test:mod     # CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1 claude plugin test plugins/raven
 bun run validate     # claude plugin validate --strict, both the marketplace and the plugin
-bun run check        # typecheck && lint && test && test:mod && validate — the full gate
+bun run check        # typecheck && lint && test && test:mod && validate (the full gate)
 bun run build        # compiles the CLI to plugins/raven/dist/raven (gitignored)
 bun run types:sync   # copies the engine's declarations into types/claude-code.d.ts
 bun run setup:local  # wires this checkout into every local Claude Code session (see below)
@@ -49,7 +49,7 @@ bun run cc           # drives a real Claude Code session in tmux with the mod lo
 ```
 
 `bun run check` is the gate: every one of its five steps must pass before a change is considered
-done. Plain `bun test` (with no path arguments) is wrong here — it walks the whole tree and picks up
+done. Plain `bun test` (with no path arguments) is wrong here; it walks the whole tree and picks up
 `tests/*.test.ts`, the mod-kit tests meant for `claude plugin test`'s own harness, and fails against
 `bun:test`'s runner. `bun run test` scopes to exactly the CLI and pure-module suites bun can run.
 
@@ -57,8 +57,8 @@ done. Plain `bun test` (with no path arguments) is wrong here — it walks the w
 
 Two test kinds live side by side and are told apart by extension, not by directory alone:
 
-- **Unit tests** (`*.spec.ts`, run by `bun test`) exercise pure functions and pure modules — parsing,
-  formatting, tree building, settings defaults — with no engine involved. `plugins/raven/cli/tests/`
+- **Unit tests** (`*.spec.ts`, run by `bun test`) exercise pure functions and pure modules (parsing,
+  formatting, tree building, settings defaults) with no engine involved. `plugins/raven/cli/tests/`
   and `plugins/raven/tests/unit/` hold these. Biome's own file-matching and bun's own test discovery
   both key off this suffix.
 - **Mod tests** (`*.test.ts`, run by `claude plugin test`) exercise the function-hooks module against
@@ -75,7 +75,7 @@ Two test kinds live side by side and are told apart by extension, not by directo
 pane captured without a person at the keyboard, and without spending model tokens on most checks.
 It is a strongly typed Bun script (its own `scripts/tsconfig.json`, unit-tested by
 `scripts/cc.spec.ts`), not a shell script, because `start` needs to scrub the caller's own
-`CLAUDE_CODE_*`/`CLAUDECODE*` environment before launching — running it from inside a Claude Code
+`CLAUDE_CODE_*`/`CLAUDECODE*` environment before launching; running it from inside a Claude Code
 session must never leak that session's `CLAUDE_CODE_PLUGIN_DIRS` or child markers into the session
 it starts:
 
@@ -93,15 +93,15 @@ scripts/cc.ts stop                        # kill the tmux session
 `start` launches `claude` with the no-flicker fullscreen layout on and file checkpointing off
 (`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1`) so the built-in diff panel does not auto-open over
 Raven's own dock, and `RAVEN_CLAUDE_ARGS` appended for extra flags such as `--allowedTools
-'Bash(raven:*)' Write`. It always runs with the default model — never `/model`, since that rewrites
+'Bash(raven:*)' Write`. It always runs with the default model, never `/model`, since that rewrites
 the person's own default persistently. Before launching, it scrubs every prefixed `CLAUDE_CODE_*/CLAUDECODE*/CLAUDE_PLUGIN_*` 
 name and these exact markers from the caller's env (and any already sitting in a live tmux server's 
 global env from an earlier, unscrubbed launch): `CLAUDE_PID`, `CLAUDE_EFFORT`, `CLAUDE_ENV_FILE`, 
-`CLAUDE_PROJECT_DIR`, `AI_AGENT` — but keeps `CLAUDE_CONFIG_DIR` (a user choice, not a session marker). 
+`CLAUDE_PROJECT_DIR`, `AI_AGENT`, but keeps `CLAUDE_CONFIG_DIR` (a user choice, not a session marker). 
 It then sets only its own three: `CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`,
 `CLAUDE_CODE_NO_FLICKER=1`, `CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1`. Plugin loading comes from
 `--settings <file>` (via `RAVEN_CLAUDE_ARGS`) or from `bun run setup:local`'s persistent
-`~/.claude/settings.json` entry — never from an inherited `CLAUDE_CODE_PLUGIN_DIRS` — so the scrub
+`~/.claude/settings.json` entry (never from an inherited `CLAUDE_CODE_PLUGIN_DIRS`), so the scrub
 never breaks loading the checkout under test. Checkpointing stays off for every run this harness
 drives, for the same reason `start` disables it.
 
@@ -112,13 +112,13 @@ identically whether or not the terminal emulator running tmux has mouse reportin
 
 Prefer zero-token checks over prompting the model: edit files from the shell and drive `/raven`
 through `cc.ts type`/`click` rather than asking Claude to do the edit or the toggle itself. Reserve
-an actual prompt for what only the model can produce — an edit whose content matters, or a turn
+an actual prompt for what only the model can produce: an edit whose content matters, or a turn
 whose reply needs judging.
 
 `cc.ts type "/raven"` on its own is refused (exit 2): the composer's own command typeahead can
 complete the bare command to `/raven:preview` (the skill, not the mod's `/raven` command) before
 Enter lands, which would start a real model turn instead of toggling the pane for free. Always type
-a full subcommand — `/raven diff` (or `doc`/`files`/`tasks`/`send`) — never the bare `/raven`, in
+a full subcommand, `/raven diff` (or `doc`/`files`/`tasks`/`send`), never the bare `/raven`, in
 any script that must not spend tokens.
 
 A pill's hover (`surface/strip.tsx`) can be probed from this harness too: `cc.ts hover <col> <row>`
@@ -135,7 +135,7 @@ compatibility with Claude Code older than 2.1.287; on 2.1.287 mods load by defau
 is a no-op), adds this repository's
 `plugins/raven` to `CLAUDE_CODE_PLUGIN_DIRS` (removing any stale entry for the same path first), and
 allows `Bash(raven:*)` so Claude can run the CLI without a permission prompt on every call. It is
-idempotent — a second run changes nothing — and additive: other entries already in
+idempotent (a second run changes nothing) and additive: other entries already in
 `CLAUDE_CODE_PLUGIN_DIRS` and the allow list are preserved. `--remove` undoes exactly these three
 edits (function hooks are left on, since other mods may depend on them); `--dry-run` prints the
 resulting file without writing it. A `CLAUDE_CODE_PLUGIN_DIRS` entry is read live from disk on each
@@ -163,7 +163,7 @@ the repository root.
 ## Rules for mod code
 
 `hooks/` runs inside Claude Code's own sandbox: no Node, no `require`, no npm packages, and no JSON
-imports — only relative, extensionless imports of `.ts`/`.tsx` files under `hooks/` itself. This is
+imports; only relative, extensionless imports of `.ts`/`.tsx` files under `hooks/` itself. This is
 why pure logic (git parsing, review comments, task folding) is split into `hooks/git/` and
 `hooks/review/`: those modules import nothing sandboxed and so are directly unit-testable with bun,
 while anything that touches the engine goes through the `Host` interface instead of the raw `$`
@@ -171,10 +171,10 @@ binding.
 
 `register.ts` stays thin: it binds `$` into a `Host` once at `session.start` and forwards every
 engine event to `core/raven.ts`'s controller, with no view-specific logic of its own. Views never
-receive `$` directly — they take a `Host`, so their pure logic can be exercised without the sandbox
+receive `$` directly; they take a `Host`, so their pure logic can be exercised without the sandbox
 at all. A new pane is a `View` in `hooks/views/` plus one entry in `core/raven.ts`; a new reaction to
 a tool call is one `Trigger` entry in `core/triggers.ts`; a new CLI op is one directive variant added
 to `hooks/core/directive.ts`, which the CLI imports rather than redeclaring. Every name derived from
-the product's working title — "raven" — comes from `hooks/names.ts`, which the CLI also imports at
+the product's working title ("raven") comes from `hooks/names.ts`, which the CLI also imports at
 build time, so a future rename is mechanical rather than a grep-and-replace across both halves of the
 plugin.

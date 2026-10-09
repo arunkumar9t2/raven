@@ -22,16 +22,16 @@ export const EXISTENCE_CHUNK_SIZE = 200
 
 /**
  * Which of `paths` (repository-toplevel-relative, the same frame every `ChangedFile.path` and
- * stored `Comment.path` is in) currently exist in the working tree — tracked or untracked —
+ * stored `Comment.path` is in) currently exist in the working tree (tracked or untracked)
  * batched `git ls-files` calls, `EXISTENCE_CHUNK_SIZE` paths per call rather than one per path
  * (or one unbounded call for every candidate at once). No `--exclude-standard`: the pathspec
  * already limits the listing to the candidates, so `--exclude-standard` would only ever drop a
- * candidate that is itself gitignored but still on disk — exactly the file this check must not
+ * candidate that is itself gitignored but still on disk: exactly the file this check must not
  * call gone. Run with `-C toplevel`, not the session's cwd: a pathspec is read relative to cwd,
  * and the session's cwd can sit below the toplevel, which would read every candidate as missing.
  * `--literal-pathspecs` also keeps a path containing `[`/`*`/`?` from being read as a glob.
- * `null` means the check itself failed (a non-zero exit, on any chunk) — fail open, as if no
- * check had run — not that nothing exists; callers treat that the same as "unknown" elsewhere in
+ * `null` means the check itself failed (a non-zero exit, on any chunk): fail open, as if no
+ * check had run, not that nothing exists; callers treat that the same as "unknown" elsewhere in
  * Raven, rather than risk calling a comment's file gone over an infra hiccup. `paths` empty needs
  * no call.
  */
@@ -113,7 +113,7 @@ async function untrackedLinesOf(
 
 /**
  * One file's hunks (all but a cut-off last one when the diff overran the output cap): tracked files diff against `base`, untracked files diff against /dev/null, and
- * a renamed file diffs with rename detection (`-M`) against both its old and new path — diffing
+ * a renamed file diffs with rename detection (`-M`) against both its old and new path: diffing
  * the new path alone would compare it against nothing at `base` and show the whole file as added.
  */
 export async function loadHunks(

@@ -3,7 +3,7 @@ import { widthOf as cellsOf } from './wrap'
 
 /**
  * A control a row offers, as data: `pillRow` (`ui/strip.tsx`) draws it as a pill, and the layout
- * functions below size a row of them — shrinking to icons when the row is narrow — before it draws.
+ * functions below size a row of them (shrinking to icons when the row is narrow) before it draws.
  */
 export type Chip = {
   key: string
@@ -12,7 +12,7 @@ export type Chip = {
   onPress: () => void
   /** The pill's colours: `primary` for a pane's main action, `armed` for a confirm; `normal` when omitted. */
   kind?: PillKind
-  /** Keeps this chip's full "icon label" wording even in icons mode — an armed confirm never clips to its bare icon. */
+  /** Keeps this chip's full "icon label" wording even in icons mode: an armed confirm never clips to its bare icon. */
   forceWords?: boolean
   /**
    * An engine keybinding action (e.g. `app:diffFileListUp`) the chord presses, same as
@@ -46,7 +46,7 @@ export function chipText(
     : (chip.short ?? chip.icon)
 }
 
-/** Drawn width of a pill: its text with one padding cell each side — the one pill-width rule. */
+/** Drawn width of a pill: its text with one padding cell each side; the one pill-width rule. */
 export const pillWidthOf = (text: string): number => cellsOf(text) + 2
 
 /**
@@ -84,7 +84,7 @@ export function chipsIconsWidthOf(chips: readonly Pick<Chip, 'icon' | 'short'>[]
  * Priority-aware shrinking: every chip starts in `'words'`; while the row's total drawn width
  * (each chip's width plus one gap between them) exceeds `room`, the lowest-`priority` chip
  * still in words shrinks to icons, one at a time, until it fits or there is nothing left to
- * shrink (a `forceWords` chip is never a candidate — it always draws its full words). Ties keep
+ * shrink (a `forceWords` chip is never a candidate: it always draws its full words). Ties keep
  * the chips' own order. Unlike `chipsFit`, this is per-chip, not all-or-nothing: the row's most
  * important chip (highest `priority`) keeps its words for as long as the room allows any chip
  * to, and only gives way itself once every lower-priority chip has already shrunk and the row

@@ -132,7 +132,7 @@ export function strip(kit: Kit, rows: readonly KitRow[], opts: StripOpts): Rende
 }
 
 /**
- * The plain `Button` every fallback draws — a pill, a list row's path, a chip carrying an engine
+ * The plain `Button` every fallback draws: a pill, a list row's path, a chip carrying an engine
  * `action`. `text` is the label verbatim, so one padding convention holds: a pill's text is already
  * padded by `pill` (`chipText` plus a cell each side), anything else draws as given.
  */
@@ -159,7 +159,7 @@ const sameStyle = (a: Seg, b: Seg): boolean =>
 
 /**
  * What crosses to the surface: plain data, no handler, no undefined fields, and adjacent segments
- * of one style (and neither a pill nor the shrinking one) merged into one — the same cells with
+ * of one style (and neither a pill nor the shrinking one) merged into one; the same cells with
  * fewer nodes.
  */
 function plainOf(segs: readonly KitSeg[]): Seg[] {
@@ -192,8 +192,8 @@ function plainOf(segs: readonly KitSeg[]): Seg[] {
 /**
  * A row of chips as pills, one left-to-right strip sized to its pills (so it sits wherever its
  * parent puts it: in a row's right slot, beside a label). `mode` is one for the row or one per chip
- * (`chipsLayout`). A chip carrying an engine `action` draws as a `plain` Button first — a Client
- * cannot bind a chord — sized like a pill so `chipsLayout`'s widths hold. `key` names the row; the
+ * (`chipsLayout`). A chip carrying an engine `action` draws as a `plain` Button first (a Client
+ * cannot bind a chord), sized like a pill so `chipsLayout`'s widths hold. `key` names the row; the
  * strip's Client is `${key}:pills`.
  */
 export function pillRow(

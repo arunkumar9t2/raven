@@ -48,7 +48,7 @@ export function createTasksView(host: Host): TasksView {
       return emptyState(
         kit,
         EMPTY_ICONS.tasks,
-        "No tasks yet — Claude's task list shows up here as it plans",
+        "No tasks yet. Claude's task list shows up here as it plans",
       )
 
     const done = tasks.filter(task => task.status === 'completed').length

@@ -41,7 +41,7 @@ export const HARNESS_ENV = {
 // Prefixes cover a whole family of names (CLAUDE_CODE_PLUGIN_DIRS, CLAUDECODE,
 // CLAUDE_PLUGIN_DATA/_ROOT, …); exact names catch markers that don't share either prefix but are
 // still a parent Claude session's own, not the caller's business to pass down (R34).
-// CLAUDE_CONFIG_DIR is a user choice, not a session marker, and is deliberately left out — it
+// CLAUDE_CONFIG_DIR is a user choice, not a session marker, and is deliberately left out; it
 // passes through untouched.
 const SCRUB_PREFIXES = ['CLAUDE_CODE_', 'CLAUDECODE', 'CLAUDE_PLUGIN_']
 const SCRUB_EXACT_NAMES = new Set([
@@ -71,7 +71,7 @@ export function scrubEnv(env: Record<string, string | undefined>): Record<string
 
 // What `env -u NAME` can take as a bare, unquoted shell word in buildPaneCommand's command
 // string. A name with a space or a shell metacharacter (e.g. `;`) would either break the `env`
-// invocation or inject another command, so any such name is dropped rather than passed through —
+// invocation or inject another command, so any such name is dropped rather than passed through:
 // it can't be a real POSIX environment variable name anyway.
 const IDENTIFIER_NAME = /^[A-Za-z_][A-Za-z0-9_]*$/
 
@@ -183,7 +183,7 @@ export function parse(argv: string[]): ParseResult {
       const text = rest.join(' ')
       if (text.trim() === '/raven') {
         return err(
-          'cc.ts type: refusing a bare "/raven" — the composer\'s typeahead can complete it to ' +
+          'cc.ts type: refusing a bare "/raven": the composer\'s typeahead can complete it to ' +
             'the /raven:preview skill and start a model turn. Type a full subcommand, e.g. ' +
             '"/raven diff".',
           2,

@@ -24,7 +24,7 @@ export type BandActions = {
 export const BAND_MARK = '\u{f15c6}'
 
 /**
- * One row above the prompt: `<mark> ✎ 2 pending · plan updated   open   ➤ send` — the accent Raven
+ * One row above the prompt: `<mark> ✎ 2 pending · plan updated   open   ➤ send`: the accent Raven
  * mark, the notes summary in the suggestion colour (the plan flag dim), then the controls as
  * pills on the right, `send` the one primary action. No brackets, one row. `chipsLayout` shrinks
  * `open` before `send` keeps its words, same priority rule as the diff header's own chips.

@@ -28,7 +28,7 @@ const PROPS: Record<PieceStyle, { dimColor?: true; bold?: true; color?: string }
  * A GFM table drawn by Raven from rows already fitted to the pane (the engine's `Markdown` sizes
  * tables to the terminal, not the pane). Dim box borders, centred bold header, body cells aligned
  * per the delimiter row, `code` spans in the accent-ish `suggestion` colour. One `Text` line per
- * drawn row, truncated rather than ever wrapped — the layout already guarantees each line fits.
+ * drawn row, truncated rather than ever wrapped; the layout already guarantees each line fits.
  */
 export function table(kit: UiKit, props: TableProps): RenderElement {
   const { Box, Text } = kit.ui

@@ -1,109 +1,105 @@
 # Raven
 
-A live preview pane for Claude Code. Raven docks beside the transcript and shows:
+A diff pane that sits next to Claude Code. Watch Claude's edits land, leave a note on the line you
+mean, and Claude reads it on its next turn.
 
-- **Diff** — the working tree against `HEAD`, coloured by Claude Code's own theme keys: a change
-  map sketches the shape of every file's edits at a glance, each file's section carries a
-  status-coloured left rail, and a file Claude is editing this turn lights up in the accent colour
-  across the file list, the map and its rail. One scrolling stream of every changed file's icon
-  and syntax-highlighted hunks, each hunk labelled by its function context, refreshed as Claude
-  edits and runs commands. Comment on a file or a hunk; your comments ride the next prompt as a
-  review, or go at once with the primary **send** chip.
-- **Review tools** — the header and file list stay pinned while the stream scrolls, and the list
-  stays in sync with whichever file is at the top; every control is a clickable pill that shrinks
-  to an icon on a narrow pane (keyboard: after a click in its strip, or everywhere with
-  `keyboardControls`); comments on a single diff line, shown as margin notes; after Claude replies, Raven checks which comments it
-  addressed and marks them ✓; stage or revert one hunk; compare against HEAD, the session's start,
-  the branch point, or one turn's edits.
-- **Files** and **Tasks** — the repository tree with status-coloured change marks, and Claude's
-  task list with a progress bar and state dots.
-- **Status band** — pending comments and updated plans show above the prompt when the pane is closed.
-- **Doc** — plans and specs rendered as Claude writes them (`docs/superpowers/`, `.superpowers/`,
-  and plan mode's plan file, wherever plans are kept), plus anything Claude chooses to show with the
-  `raven` CLI. Leaving or re-entering plan mode opens the plan (unless `autoOpen` is off). Comment on a section of a rendered
-  markdown doc the same way you comment on the diff; the note rides with your next review.
+![Leaving a note on a hunk; Claude fixes the line and the note is marked addressed](docs/media/raven-note.gif)
 
-Raven is a Claude Code *mod*: a plugin whose behaviour is a TypeScript function-hooks module running
-inside Claude Code, paired with a Bun CLI and a skill so Claude can drive the pane itself.
+Claude finishes a turn with "I've updated the retry logic across the codebase", and you scroll up to
+find out where. Then you describe the line you want changed in English ("the second change, the one
+with the hours, no, the other one"). Raven is a side panel for that moment.
+
+## What you get
+
+- **A live diff.** Every changed file in one scrolling view, with syntax highlighting, updated as
+  Claude edits files and runs commands. The file Claude is working on right now is highlighted.
+- **Notes Claude reads.** Comment on a file, a hunk or a single line. Your notes go to Claude with
+  your next prompt, or right away with **send**. After Claude replies, Raven marks the notes it
+  addressed with ✓.
+- **Stage and revert** a single hunk with a click.
+- **Compare** against your last commit, the start of the session, the branch point, or one turn's
+  edits.
+- **Plans and docs, rendered.** Plans and specs show up formatted as Claude writes them, and Claude
+  can show you any Markdown file on request. You can leave notes on their sections too.
+- **Files and Tasks.** Your repository tree with changed files marked, and Claude's task list with
+  its progress.
+- **Reminders above the prompt.** Pending notes and updated plans show there while the pane is
+  closed.
 
 ## Requirements
 
-- Claude Code 2.1.287+ (mods load by default there; no environment variable needed)
-- The fullscreen layout — on by default outside tmux; under tmux (which defaults to the main
-  screen) set `CLAUDE_CODE_NO_FLICKER=1` — and a terminal wide enough to dock: 110 columns once you
-  open the pane yourself (`/raven`), 144 for it to open on its own (`autoOpenColumns`). Narrower
-  than 110, the pane waits undrawn until you widen the terminal.
-- A Nerd Font for file icons
-- Bun on PATH for the `raven` CLI (every install runs it through Bun; nothing ships a prebuilt
-  binary)
-- The built-in diff panel closed: it takes the dock on the first edit and hides Raven. Close it once
-  with its ✕ and Claude Code remembers. (`CLAUDE_CODE_DISABLE_FILE_CHECKPOINTING=1` also stops it,
-  at the cost of `/rewind`.)
+- Claude Code 2.1.287 or later
+- A terminal at least 110 columns wide
+- [Bun](https://bun.sh) installed (Claude uses it to run Raven's command-line helper; self-contained
+  binaries that don't need Bun are coming soon)
+- A [Nerd Font](https://www.nerdfonts.com) for the file icons (optional; without one, icons show as
+  blank boxes)
+- Under tmux, `CLAUDE_CODE_NO_FLICKER=1` set in your environment
 
 ## Install
 
-From the marketplace (the repo is private, so this needs GitHub access from your Claude Code):
+In Claude Code:
 
 ```
 /plugin marketplace add arunkumar9t2/raven
 /plugin install raven@raven
 ```
 
-Then run `/reload-plugins` (or restart Claude Code).
+Then run `/reload-plugins`, or restart Claude Code.
 
-Or run it straight from a checkout, without installing it:
+## Use
 
-```bash
-bun install
-claude --plugin-dir ./plugins/raven
-```
+Type `/raven` to open the diff. Raven also opens on its own when Claude makes its first edit, writes
+a plan, or starts a task list (see [Settings](#settings) to turn that off).
 
-`bun run build` additionally compiles the CLI to `plugins/raven/dist/raven`, which `bin/raven`
-prefers when present; without it, `bin/raven` runs the TypeScript source through Bun directly — the
-same thing a marketplace install does, since the compiled binary is gitignored and not published.
+| Command | Does |
+| --- | --- |
+| `/raven` or `/raven diff` | opens the diff |
+| `/raven doc` | opens the rendered plan or doc |
+| `/raven files` | opens your repository tree |
+| `/raven tasks` | opens Claude's task list |
+| `/raven send` | sends your pending notes to Claude now |
 
-Or load this checkout live in every local session (keeps hot-reload on save):
+Run a pane's command again to close it.
 
-```bash
-bun run setup:local            # --remove to undo, --dry-run to preview
-```
+To leave a note, click **✎ note** on a file or a hunk, pick a line if you want one, type, and press
+Enter. To send notes without waiting for your next prompt, click **send**.
 
-It adds this plugin folder to `CLAUDE_CODE_PLUGIN_DIRS` in `~/.claude/settings.json`'s `env` (and,
-kept for backward compatibility with Claude Code older than 2.1.287,
-`CLAUDE_CODE_ENABLE_FUNCTION_HOOKS=1`), and allows `Bash(raven:*)`. With a chezmoi-managed settings
-file, follow it with `chezmoi add ~/.claude/settings.json`.
-
-Whichever way it's loaded: `/raven` (diff), `/raven doc`, `/raven files`, `/raven tasks`,
-`/raven send`. To let Claude run the CLI without a permission prompt, allow `Bash(raven:*)`.
-
-## CLI
-
-Claude runs these through its Bash tool; the plugin's `bin/` is on PATH while it is enabled. To use
-them in your own shell, add `plugins/raven/bin` to your PATH.
-
-```
-raven show <path> [--title T]     render a markdown file / show any file
-raven note [--title T] [<md>|-]   render markdown (stdin when omitted)
-raven diff [<path>]               open the diff, optionally at a file
-raven open <pane>                 open a pane: diff, doc, files or tasks
-raven comments                    print pending review comments
-```
+You can also ask Claude to show you things, like "show me the plan in raven". To let Claude do that
+without asking for permission each time, add `Bash(raven:*)` to the allowed tools in your settings.
 
 ## Settings
 
-`/config` lists four fields for this plugin:
+Open `/config` and look for Raven:
 
-| Field | Type | Default | Does |
-| --- | --- | --- | --- |
-| `watchedPaths` | string | `''` | Comma-separated path fragments; a landed edit under one (plus the built-in plan paths) opens its `.md` in the Doc view. |
-| `autoOpen` | boolean | `true` | Opens panes nobody asked for: the diff on the main loop's first edit, a plan or watched doc as it is written, Tasks on the first task list. Off, a pane opens only when asked (`/raven`, the Files view, Claude's `raven` CLI). |
-| `autoOpenColumns` | number | `144` | Skips those opens below this terminal width, in columns. |
-| `keyboardControls` | boolean | `false` | Draws plain Tab-reachable buttons instead of clickable pills, so every control works from the keyboard. |
+| Setting | Default | What it does |
+| --- | --- | --- |
+| `autoOpen` | on | Lets Raven open panes by itself: the diff on Claude's first edit, a plan as Claude writes it, the task list when Claude starts one. Turn it off and panes open only when you (or Claude, when you ask) open them. |
+| `autoOpenColumns` | `144` | Raven only opens by itself when the terminal is at least this many columns wide. |
+| `watchedPaths` | empty | Extra folders, comma-separated, whose Markdown files open rendered as Claude writes them. Plan folders are watched already. |
+| `keyboardControls` | off | Draws plain buttons you can reach with Tab, so every control works from the keyboard. |
 
-## Develop
+## Troubleshooting
 
-See `CLAUDE.md`. `bun run check` runs everything; `bun run cc` drives a real session in tmux.
+- **The pane doesn't appear.** Widen the terminal to at least 110 columns; the pane draws as soon as
+  it fits. Under tmux, set `CLAUDE_CODE_NO_FLICKER=1`.
+- **Claude Code's own diff panel covers Raven.** Close it once with its ✕; Claude Code remembers.
+- **Raven keeps opening by itself.** Turn off `autoOpen` in `/config`.
+- **Icons look like boxes.** Switch your terminal to a Nerd Font.
+
+## Contributing
+
+Raven is a Claude Code plugin written in TypeScript. To work on it:
+
+```bash
+bun install
+bun run setup:local    # load this checkout in every local Claude Code session (--remove to undo)
+bun run check          # typecheck, lint, tests and plugin validation
+```
+
+`claude --plugin-dir ./plugins/raven` loads it for a single session instead. The design lives in
+[`spec/`](./spec/README.md), and [`CLAUDE.md`](./CLAUDE.md) covers the layout and workflow.
 
 ## License
 
-Apache License 2.0 — see [LICENSE](./LICENSE).
+Apache License 2.0. See [LICENSE](./LICENSE).

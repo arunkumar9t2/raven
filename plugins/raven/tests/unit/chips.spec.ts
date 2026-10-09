@@ -74,7 +74,7 @@ describe('chipsLayout', () => {
   })
 
   test('the highest-priority chip shrinks too, as a last resort, once nothing else can help', () => {
-    // Fully shrunk: 3*3 + 2 gaps = 11, still short of 10 — every chip ends up in icons mode
+    // Fully shrunk: 3*3 + 2 gaps = 11, still short of 10; every chip ends up in icons mode
     // rather than leaving the row over its room with one chip left in words.
     expect(chipsLayout(CHIPS, 10)).toEqual(['icons', 'icons', 'icons'])
   })

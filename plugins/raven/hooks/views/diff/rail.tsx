@@ -7,7 +7,7 @@ import type { UiKit } from '../../core/view'
 
 /**
  * The 2-column left border of a file's card, `│ ` in `color`, one per row down a block of `rows`
- * rows. A `mark` colour turns the last row's cell into `◆ ` — the line a note hangs under.
+ * rows. A `mark` colour turns the last row's cell into `◆ `: the line a note hangs under.
  */
 export function railOf(kit: UiKit, rows: number, color: string, mark?: string): RenderElement {
   const { Text } = kit.ui

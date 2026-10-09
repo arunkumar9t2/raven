@@ -48,7 +48,7 @@ export function sourceOf(value: string): Source {
 
 /**
  * The selected file's hunks. A turn source's come only from the controller's own `turnHunks`: a
- * turn file with none (still loading, or genuinely none) must show that, not `modelHunks` — stale
+ * turn file with none (still loading, or genuinely none) must show that, not `modelHunks`: stale
  * working-tree data the diff view loaded for an unrelated source, which happens to share the same
  * path.
  */
@@ -77,7 +77,7 @@ export function sourceOptionsOf(args: SourceOptionsArgs): SelectOption[] {
   ]
   if (args.hasBranchPoint) options.push({ value: BRANCH_POINT_VALUE, label: 'branch point' })
   for (const turn of [...args.turns].reverse()) {
-    options.push({ value: turnValueOf(turn.index), label: `turn ${turn.index} — ${turn.prompt}` })
+    options.push({ value: turnValueOf(turn.index), label: `turn ${turn.index}: ${turn.prompt}` })
   }
   return options
 }

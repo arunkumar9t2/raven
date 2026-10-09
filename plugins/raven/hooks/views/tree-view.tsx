@@ -226,7 +226,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
       return emptyState(
         kit,
         EMPTY_ICONS.repo,
-        'Not a git repository — open Raven in a repo to browse its files',
+        'Not a git repository. Open Raven in a repo to browse its files',
       )
 
     const rows = rowsOfModel(model)

@@ -72,8 +72,8 @@ describe('sourceOptionsOf', () => {
     const options = sourceOptionsOf({ hasBranchPoint: false, turns })
 
     expect(options.slice(2)).toEqual([
-      { value: turnValueOf(2), label: 'turn 2 — second turn' },
-      { value: turnValueOf(1), label: 'turn 1 — first turn' },
+      { value: turnValueOf(2), label: 'turn 2: second turn' },
+      { value: turnValueOf(1), label: 'turn 1: first turn' },
     ])
   })
 })

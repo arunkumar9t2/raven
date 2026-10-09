@@ -31,7 +31,7 @@ export function fill(kit: UiKit, color: string): RenderElement {
 
 /**
  * A card's closing row: `╰` in `color`, the fill, and `end` (`╯` for a boxed card, none for an
- * open one) — the one close every card draws.
+ * open one); the one close every card draws.
  */
 export function closeRow(kit: UiKit, color: string, end?: string): RenderElement {
   const { Box, Text } = kit.ui

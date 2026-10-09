@@ -57,7 +57,7 @@ export function createBandState(host: Host, review: Review, deps: BandStateDeps)
   // band for one the person actually opened here before.
   const shownDocPaths = new Set<string>()
   // The in-flight (or settled) load, memoized so a second caller awaits the same promise instead
-  // of seeing a `true` guard set synchronously before the read it guards has actually finished —
+  // of seeing a `true` guard set synchronously before the read it guards has actually finished:
   // `band` and `takePromptContext` (and the session-start kick-off in `raven.ts`) all call this.
   let loading: Promise<void> | null = null
   // The last width any `ui.render` reported; undefined until one has, which the auto-open gate

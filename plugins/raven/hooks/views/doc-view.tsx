@@ -91,7 +91,7 @@ const titleOf = (doc: Doc) => doc.title ?? (doc.kind === 'file' ? baseName(doc.p
 export const labelOf = (path: string, cwd: string) =>
   path.startsWith(`${cwd}/`) ? path.slice(cwd.length + 1) : path
 
-/** The anchor for a doc section's controls, keyed by the section's INDEX, not its heading — two
+/** The anchor for a doc section's controls, keyed by the section's INDEX, not its heading. Two
  * sections sharing a heading never share controls. `hunk` only keys the controls; the comment
  * itself stores `section` (the heading) and `sectionIndex` (the index), never this string. */
 const sectionAnchorOf = (path: string, index: number): Anchor => ({ path, hunk: `§${index}` })
@@ -110,7 +110,7 @@ export function rowsBoundOf(text: string, width: number): number {
 
 /**
  * `children` behind the card's `│ ` border: the rail is one absolute column clipped to the box's
- * own height, `rows` tall at most (an upper bound, see `rowsBoundOf`) — so it spans the body
+ * own height, `rows` tall at most (an upper bound, see `rowsBoundOf`); so it spans the body
  * however long, with no fixed cap.
  */
 /** `kit` narrowed by the card border's cells. */
@@ -155,7 +155,7 @@ export function createDocView(
     return chunks
   }
 
-  /** `shown`'s sections, each pre-split into its own drawable chunks — commenting applies only
+  /** `shown`'s sections, each pre-split into its own drawable chunks: commenting applies only
    * to a file doc (a comment needs a real path to anchor to; an inline 'note' doc has none). */
   function sectionsOf(shown: Shown, text: string): readonly SectionView[] {
     const cached = sectionsByShown.get(shown)
@@ -282,7 +282,7 @@ export function createDocView(
             key: `${keyPrefix}table:${i}:${j}`,
             // One cell short of the pane, so a full-width line never loses its last cell.
             rows: tableRowsOf(block, kit.columns - 1),
-            // A blank row either side, like a Markdown block's own gap — none at the very start
+            // A blank row either side, like a Markdown block's own gap: none at the very start
             // or end of the section.
             gapTop: i > 0 || j > 0,
             gapBottom: i < chunks.length - 1 || j < chunk.blocks.length - 1,
@@ -319,11 +319,11 @@ export function createDocView(
 
   /**
    * A markdown file's body, per `docSectionsOf` section: its blocks, then its notes (the doc's
-   * comments whose `section`/`sectionIndex` match this section — a comment with no `sectionIndex`
+   * comments whose `section`/`sectionIndex` match this section: a comment with no `sectionIndex`
    * matches the first section with its heading), the compose box while composing, then an idle
    * ` ✎ note ` pill, right-aligned. A comment matching no section (its heading/index both gone)
    * draws at the end under a dim `Outdated` row instead of being dropped. Only comments carrying a
-   * `section` ever draw here — the same discriminator `blocks.ts`'s orphan group uses — so a diff
+   * `section` ever draw here (the same discriminator `blocks.ts`'s orphan group uses), so a diff
    * comment (hunk- or file-level) on this same path, which carries none, stays out of the Doc pane
    * entirely and is left for the diff stream alone.
    */
@@ -369,7 +369,7 @@ export function createDocView(
       const chip = canNote ? noteChip(anchor, startComposing) : null
 
       // Addressed notes collapse to one dim "✓ N addressed" row, same as a diff anchor's own
-      // `notesBlocksOf` (`diff/blocks.ts`) — one shared split (`splitAddressed`), one component
+      // `notesBlocksOf` (`diff/blocks.ts`): one shared split (`splitAddressed`), one component
       // (`addressedRow`), so a section's notes read the same way wherever they draw.
       const { addressed, visible } = splitAddressed(notes)
 
@@ -436,7 +436,7 @@ export function createDocView(
     const outdated = comments.filter(comment => !matchedIds.has(comment.id))
 
     // Grouped by the section identity each comment still carries (its heading and the index it
-    // was made at, even though neither names a section on screen any more) — the same per-anchor
+    // was made at, even though neither names a section on screen any more); the same per-anchor
     // split and collapse (`splitAddressed`/`addressedRow`) a live section's notes use, so two
     // addressed comments orphaned from the same gone section still draw as one "N addressed" row.
     const outdatedGroups = new Map<string, Comment[]>()
@@ -508,7 +508,7 @@ export function createDocView(
       )
     }
     // Commenting applies only to a file doc: a comment anchors to `doc.path`, which an inline
-    // 'note' doc has none of — it keeps the plain, uncommentable rendering it always had.
+    // 'note' doc has none of; it keeps the plain, uncommentable rendering it always had.
     if (shown.doc.kind === 'file' && isMarkdown(shown.doc.path)) {
       return sectionsBody(kit, shown, shown.doc, shown.text)
     }
@@ -554,7 +554,7 @@ export function createDocView(
       return emptyState(
         kit,
         EMPTY_ICONS.doc,
-        'Nothing shown yet — plans and docs Claude writes open here',
+        'Nothing shown yet. Plans and docs Claude writes open here',
       )
     }
 

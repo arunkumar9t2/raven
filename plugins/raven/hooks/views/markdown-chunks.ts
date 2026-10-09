@@ -5,7 +5,7 @@ const FENCE = /^\s*(`{3,}|~{3,})/
 
 /**
  * CommonMark: a fence closes on a line that is only the marker's character, at least as long as
- * the opener, with nothing but whitespace around it — an info string (e.g. a ```ts` line nested
+ * the opener, with nothing but whitespace around it: an info string (e.g. a ```ts` line nested
  * inside a ``` block) carries no closing, it is content.
  */
 export function closesFence(line: string, marker: string): boolean {

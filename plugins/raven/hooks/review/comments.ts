@@ -42,7 +42,7 @@ export function commentsOn(comments: Comments, path: string, hunk?: string): Com
 }
 
 /**
- * Splits one anchor's comments into their addressed ones and the rest, each keeping its order —
+ * Splits one anchor's comments into their addressed ones and the rest, each keeping its order:
  * the one implementation every anchor that collapses addressed comments into a single "✓ N
  * addressed" row (a diff anchor's `notesBlocksOf`, a doc section's own notes) builds on.
  */
@@ -55,7 +55,7 @@ export function splitAddressed(comments: Comments): { addressed: Comments; visib
 
 const PREAMBLE = "These are the user's review comments on files and docs. Address them."
 
-/** "2nd", "3rd", "4th", … — the English ordinal suffix for `n` (`n` is always ≥ 2 here). */
+/** "2nd", "3rd", "4th", …: the English ordinal suffix for `n` (`n` is always ≥ 2 here). */
 function ordinalOf(n: number): string {
   if (n % 100 >= 11 && n % 100 <= 13) return `${n}th`
   const suffix = ['th', 'st', 'nd', 'rd'][n % 10] ?? 'th'
@@ -88,7 +88,7 @@ export function reviewTextOf(comments: Comments): string | undefined {
     if (forPath.every(comment => comment.section !== undefined)) {
       const sorted = [...forPath].sort((a, b) => a.createdAt - b.createdAt)
       // Two sections can share a heading (duplicate headings in the doc); `sectionIndex`, when
-      // present, keys them apart so their comments never merge into one group for Claude — the
+      // present, keys them apart so their comments never merge into one group for Claude; the
       // heading text alone stays what Claude reads, a repeat just gets an ordinal suffix. A
       // legacy comment with no `sectionIndex` (made before that field existed) matches the first
       // section with its heading on screen (`doc-view.tsx`'s `sectionsBody`), so it groups the
@@ -108,8 +108,8 @@ export function reviewTextOf(comments: Comments): string | undefined {
         return index !== undefined ? `${heading}\u0000${index}` : heading
       }
       // A group's order of appearance (first commented on) is independent of its ordinal label:
-      // the label ranks groups by their `sectionIndex` ascending — the section's actual position
-      // in the doc — so Claude reads "(2nd)" as "further down the doc", never "commented on
+      // the label ranks groups by their `sectionIndex` ascending (the section's actual position
+      // in the doc) so Claude reads "(2nd)" as "further down the doc", never "commented on
       // second".
       const indicesByHeading = new Map<string, number[]>()
       for (const comment of sorted) {
@@ -183,7 +183,7 @@ export const lineKeyOf = (line: Pick<CommentLine, 'number' | 'side'>): string =>
 export type LineRow = { index: number; text: string }
 
 /**
- * Where each line of `hunk` draws, by `lineKeyOf` (a context line on both its sides) — one walk
+ * Where each line of `hunk` draws, by `lineKeyOf` (a context line on both its sides): one walk
  * per hunk, so many notes cost one lookup each. A line the hunk lacks is absent; the caller
  * compares `text` to know the line is still the one a note was made on.
  */

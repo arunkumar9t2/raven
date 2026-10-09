@@ -1,7 +1,7 @@
 /**
  * Text measurement and word wrap in terminal cells, pure: display width, styled spans wrapped to a
  * width (a word longer than a line breaks hard, preferring a `/`, `.`, `-` or `_`), and `wrapText`
- * for plain strings. The one wrapper for the pane — table cells and note cards both use it.
+ * for plain strings. The one wrapper for the pane: table cells and note cards both use it.
  */
 
 export type SpanStyle = 'plain' | 'bold' | 'code'

@@ -4,7 +4,7 @@ import type { TaskStatus } from '../review/tasks'
 /**
  * Semantic colour names for Raven's chrome, each pinned to a Claude Code theme key so the tree
  * follows the person's active theme (light/dark, `/theme`, or a custom theme) with no code of its
- * own — see spec/mod-api.md "Colours and the theme". Views (and the kit in `hooks/ui/`) reference
+ * own; see spec/mod-api.md "Colours and the theme". Views (and the kit in `hooks/ui/`) reference
  * `COLORS.x`, never a theme key or raw colour literal directly.
  */
 export const COLORS = {
