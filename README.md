@@ -11,6 +11,8 @@ with the hours, no, the other one"). Raven is a side panel for that moment.
 
 ## What you get
 
+<img src="docs/media/raven-grid.webp" alt="Raven's panes: the live diff, notes Claude has addressed, a rendered plan with a note, and the file tree with changes marked" width="640">
+
 - **A live diff.** Every changed file in one scrolling view, with syntax highlighting, updated as
   Claude edits files and runs commands. The file Claude is working on right now is highlighted.
 - **Notes Claude reads.** Comment on a file, a hunk or a single line. Your notes go to Claude with
@@ -48,6 +50,8 @@ In Claude Code:
 Then run `/reload-plugins`, or restart Claude Code.
 
 ## Use
+
+<img src="docs/media/raven-hero.webp" alt="Claude Code on the left and the Raven diff pane on the right, with a note marked addressed" width="640">
 
 Type `/raven` to open the diff. Raven also opens on its own when Claude makes its first edit, writes
 a plan, or starts a task list (see [Settings](#settings) to turn that off).
