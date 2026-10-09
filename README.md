@@ -3,7 +3,7 @@
 A diff pane that sits next to Claude Code. Watch Claude's edits land, leave a note on the line you
 mean, and Claude reads it on its next turn.
 
-![Leaving a note on a hunk; Claude fixes the line and the note is marked addressed](docs/media/raven-note.gif)
+![Claude Code on the left, Raven on the right: a note on a hunk, Claude fixes the line, the note is marked addressed](docs/media/raven-note.gif)
 
 Claude finishes a turn with "I've updated the retry logic across the codebase", and you scroll up to
 find out where. Then you describe the line you want changed in English ("the second change, the one
