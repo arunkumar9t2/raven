@@ -274,6 +274,47 @@ describe('options: main-loop-edit auto-open, defaults', () => {
   })
 })
 
+describe('options: autoOpen false, nothing opens on its own', () => {
+  const QUIET = { options: { autoOpen: false } }
+
+  test('the first main-loop edit leaves the diff closed', QUIET, async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf('/work/a.ts'))
+
+    expect(opened).not.toContain(DIFF_PANE.id)
+  })
+
+  test('a watched plan doc leaves the doc pane closed', QUIET, async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf('/work/docs/superpowers/plans/x.md'))
+
+    expect(opened).not.toContain(DOC_PANE.id)
+  })
+
+  test('a first task list leaves the tasks pane closed', QUIET, async ($, on) => {
+    const opened = openWorld(on)
+    on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))
+
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: 'TodoWrite', todos: [{ content: 'write tests', status: 'pending' }] })
+
+    expect(opened).toEqual([])
+  })
+
+  test('the person can still open the diff themselves', QUIET, async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect(opened).toContain(DIFF_PANE.id)
+  })
+})
+
 describe('options: watched doc paths, defaults', () => {
   test('a built-in watched path opens the doc pane', async ($, on) => {
     const opened = openWorld(on)

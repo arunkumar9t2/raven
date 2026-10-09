@@ -4,7 +4,10 @@ import type { PluginOptions } from 'claude-code'
 export type RavenSettings = {
   /** Extra path fragments (trimmed, non-empty) whose `.md` files open in the Doc view. */
   watchedPaths: readonly string[]
-  /** Opens the diff on the main loop's first edit of the session. */
+  /**
+   * Lets Raven open panes on its own: the diff on the main loop's first edit, a watched or plan doc
+   * as it is written, the tasks pane on the first task list. Off, only an ask opens a pane.
+   */
   autoOpen: boolean
   /** Skips that auto-open below this terminal width, in columns. */
   autoOpenColumns: number
