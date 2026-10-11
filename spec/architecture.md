@@ -35,7 +35,7 @@ directive contract in full; this spec stops at naming what each layer is for.
 ```mermaid
 flowchart TB
     subgraph engine["Claude Code engine"]
-        events["engine events\ntool.call · command.run · ui.render\nui.scroll · ui.close · turn.complete\nprompt.submit"]
+        events["engine events\ntool.call · command.run · ui.render\nui.scroll · ui.close · turn.complete\nprompt.submit · prompt.context\nprompt.attachment · tool.describe"]
     end
 
     events --> register["register.ts\nbinds $ into a Host, forwards events"]
@@ -140,8 +140,9 @@ all, for the same reason.
 
 ## The review loop
 
-The diff pane's comments exist to get a change reviewed without the person leaving the pane to type
-in the transcript. A comment rides the next prompt as hidden context; once Claude's turn finishes,
+The diff pane's and Doc pane's comments exist to get a change or a doc reviewed without the person
+leaving the pane to type in the transcript. A comment rides the next prompt, or the person's answer
+to Claude's AskUserQuestion, as hidden context; once Claude's turn finishes,
 Raven asks (via one more model turn, not by pattern-matching the reply) which of the comments it
 sent got addressed.
 
@@ -155,10 +156,15 @@ sequenceDiagram
 
     Person->>Pane: comment on a hunk
     Pane->>Review: add(comment) [status: pending]
-    Person->>Engine: sends next prompt (composer)
-    Engine->>Review: prompt.submit (origin.kind = composer)
+    alt the person's next prompt
+        Person->>Engine: sends next prompt (composer)
+        Engine->>Review: prompt.submit (origin.kind = composer)
+    else an answer to Claude's AskUserQuestion
+        Person->>Engine: picks an answer
+        Engine->>Review: tool.call (AskUserQuestion, landed, no agentId)
+    end
     Review-->>Engine: take() -> pending comments [status: sent]
-    Engine->>Claude: prompt + hidden review context
+    Engine->>Claude: prompt or answer + hidden review context
     Claude-->>Engine: turn.complete (reason: answer, no agentId)
     Engine->>Review: turnCompleted()
     Review->>Engine: $.model.fork(resolvePromptOf(sent))

@@ -20,7 +20,11 @@ export type Action =
   | { kind: 'refresh-diff'; path?: string }
   /** The main loop's edit landed: the controller opens the diff on the first of these. */
   | { kind: 'main-loop-edit' }
-  | { kind: 'show-doc'; path: string }
+  /**
+   * A doc to open unasked: once per path, unless `force` (leaving or re-entering plan mode, a moment
+   * the person chose) shows it again.
+   */
+  | { kind: 'show-doc'; path: string; force?: true }
   | { kind: 'reload-doc'; path: string }
   | { kind: 'directive'; directive: Directive }
   | { kind: 'tasks'; tool: string; input: Readonly<Record<string, unknown>>; result?: unknown }
@@ -139,5 +143,5 @@ export type PlanNote = {
 /** Leaving or re-entering plan mode opens the plan, when there is one to read. */
 export const planActionsOf = (note: PlanNote): readonly Action[] =>
   note.type !== 'plan_mode' && note.hasPlan !== false
-    ? [{ kind: 'show-doc', path: note.planFilePath }]
+    ? [{ kind: 'show-doc', path: note.planFilePath, force: true }]
     : []

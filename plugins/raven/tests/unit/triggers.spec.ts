@@ -108,7 +108,7 @@ describe('plan files', () => {
 
   test('leaving plan mode opens the plan when there is one', () => {
     expect(planActionsOf({ type: 'plan_mode_exit', planFilePath: PLAN, hasPlan: true })).toEqual([
-      { kind: 'show-doc', path: PLAN },
+      { kind: 'show-doc', path: PLAN, force: true },
     ])
     expect(planActionsOf({ type: 'plan_mode_exit', planFilePath: PLAN, hasPlan: false })).toEqual(
       [],
@@ -117,7 +117,7 @@ describe('plan files', () => {
 
   test('re-entering plan mode opens the earlier plan', () => {
     expect(planActionsOf({ type: 'plan_mode_reentry', planFilePath: PLAN })).toEqual([
-      { kind: 'show-doc', path: PLAN },
+      { kind: 'show-doc', path: PLAN, force: true },
     ])
   })
 })

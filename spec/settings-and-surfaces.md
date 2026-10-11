@@ -13,7 +13,7 @@ plugin and which `register`'s `options` argument carries at `session.start`:
 | Field | Type | Default | Does |
 | --- | --- | --- | --- |
 | `watchedPaths` | string | `''` | Comma-separated path fragments; a landed edit under one opens its `.md` in the Doc view. |
-| `autoOpen` | boolean | `true` | Opens panes nobody asked for: the diff on the main loop's first edit, a plan or watched doc as it is written, Tasks on the first task list. Off, a pane opens only when asked (`/raven`, the Files view, Claude's `raven` CLI). |
+| `autoOpen` | boolean | `true` | Opens panes nobody asked for: the diff on the main loop's first edit, a plan or watched doc the first time it is written, Tasks on the first task list. Off, a pane opens only when asked (`/raven`, the Files view, Claude's `raven` CLI). |
 | `autoOpenColumns` | number | `144` | Skips those opens below this terminal width, in columns. |
 | `keyboardControls` | boolean | `false` | Draws plain Tab-reachable buttons instead of interactive pills: `canClient` is forced false on every surface, so the bracket-free `Button` fallback draws and every control is in the Tab ring again (R42). |
 

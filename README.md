@@ -22,7 +22,9 @@ with the hours, no, the other one"). Raven is a side panel for that moment.
 - **Compare** against your last commit, the start of the session, the branch point, or one turn's
   edits.
 - **Plans and docs, rendered.** Plans and specs show up formatted as Claude writes them, and Claude
-  can show you any Markdown file on request. You can leave notes on their sections too.
+  can show you any Markdown file on request. You can leave notes on their sections too. When
+  Claude wants your sign-off on a doc, it asks: approve, or comment first. Leave your notes in the
+  pane, reply, and they go along with it.
 - **Files and Tasks.** Your repository tree with changed files marked, and Claude's task list with
   its progress.
 - **Reminders above the prompt.** Pending notes and updated plans show there while the pane is

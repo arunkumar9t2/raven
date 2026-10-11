@@ -7,6 +7,12 @@ into chat. The agentic layer is how Claude reaches for the pane on purpose (thro
 when the engine offers one, through a CLI otherwise) without either path needing to know which of
 the two is live.
 
+It is also how Claude learns what the pane already holds, so it can hand a doc to the person for
+review there instead of in the transcript. The trigger is never one workflow or one folder: whenever
+Claude produces something the person should read or decide on (a plan, spec, design, report or any
+other doc), either Raven opens it (a watched path or plan mode) and tells Claude so, or Claude shows
+it.
+
 ## The `show` tool
 
 At `session.start`, `plugins/raven/hooks/register.ts` registers a tool named `show` through
@@ -23,6 +29,48 @@ this is the one point where the tool's path resolution differs from a directive 
 output. The result text confirms what happened: "Shown in the Raven pane: `<what>`." when the pane
 opened, or a message that it could not dock the pane at all (the terminal too narrow) leaving nothing
 shown.
+
+## What Claude is told
+
+The model learns about the pane without the preview skill being loaded. Three surfaces sit in the
+prompt from the first turn, and a fourth arrives on the tool result of an edit that opened a pane:
+
+- **The tool itself.** A `tool.describe` hook answers `isDeferred: false` for Raven's own `show`
+  tool, so its schema and description sit in the prompt's tool list rather than behind ToolSearch.
+  The description (`TOOL_DESCRIPTION` in `register.ts`) is kept short because it is always loaded:
+  it names what to show and when, and says that a doc which opened by itself is named in the result
+  of the edit that wrote it, so no such note means it was not shown. The
+  [review handoff](#handing-a-doc-over-for-review) rides the note and the preview skill instead.
+  Another plugin's `show` tool keeps the engine's placement.
+- **A context block.** A `prompt.context` hook appends a `raven` block to the context every
+  conversation's first message carries: the pane exists, holds the live diff and rendered docs,
+  takes comments, and the `show` tool puts things in it.
+- **The MCP server instructions.** A `prompt.attachment` hook replaces the engine's stock line for
+  Raven in the MCP server instructions ([`mod-api.md`](./mod-api.md#events-raven-relies-on) has the
+  attachment's shape) with one saying what the tool is for; any other plugin's line passes through
+  untouched.
+- **Notes on an unasked open.** When the main loop's edit makes Raven open a pane by itself, the
+  edit's own `tool.call` result carries a note in its `context` (read by the model after the result,
+  never shown to the person): the first diff auto-open says the diff is live in the pane, and a doc's
+  first auto-show names the path, says the person can comment on its sections, and carries the
+  handoff. Plan mode's own plan file gets a note without the handoff (`planNoteOf`), since plan mode
+  approves the plan through its own exit. Each doc is named once: a subagent's edit is never told,
+  so a doc it opened is named on the main loop's first edit of it, and a doc the main loop put up
+  with `show` is never named again. An open the `autoOpen` gate refused, or one the terminal was too
+  narrow for, says nothing, and the next edit tries the open again.
+
+### Handing a doc over for review
+
+Once a doc the person should review or approve is in the pane, Claude keeps its chat reply to one
+line pointing at the pane and asks with AskUserQuestion ("Looks good, proceed", "I'll comment in the
+pane", plus whatever decision the current workflow needs). Proceeding is one click. Commenting takes
+a second step, because the question's dialog holds the keyboard and no note can be typed in the pane
+while it is open: on "I'll comment in the pane", Claude ends its turn with one line asking for notes
+and a reply. The person comments, then replies or presses send, and the notes ride that reply
+([`review.md`](./review.md#delivery) owns every delivery path, including notes left earlier riding
+the question's answer). Claude addresses them, the doc reloads in place, and Claude asks again until
+the person approves. Nothing in the mod blocks on this: it is guidance carried by the tool
+description, the auto-open note and the preview skill.
 
 ## The directive contract
 
@@ -89,12 +137,18 @@ sides of the contract cannot drift silently.
 ## The preview skill
 
 `plugins/raven/skills/preview/SKILL.md` carries the guidance for when and how Claude reaches for
-`show` (or the CLI fallback): when the person asks to see, open or preview something; when Claude
-finishes a plan or spec outside the paths the Doc view already watches; when a comparison or
-checklist reads better rendered than pasted into chat; and, after a batch of edits, to point the
-diff at one file. It documents the tool call shape and the CLI's command line side by side, and it
-tells Claude to check the tool's or CLI's result for whether the pane actually opened rather than
-assume it did; the terminal may be too narrow to dock, or function hooks may be off entirely.
+`show` (or the CLI fallback). Its triggers:
+
+- Claude produced something the person should read, review or approve, and no tool result said Raven
+  already opened it.
+- The person asks to see, open or preview something.
+- A comparison or checklist reads better rendered than pasted into chat.
+- After a batch of edits, Claude wants to point the diff at one file.
+
+It spells out the review handoff above, documents the tool call shape and the CLI's command line side
+by side, and tells Claude to check the tool's or CLI's result for whether the pane actually opened
+rather than assume it did; the terminal may be too narrow to dock, or function hooks may be off
+entirely.
 
 The skill is not named `raven`: a skill sharing the plugin's own name collides with `/raven`, and the
 mod's `$.command.register` call for that command is refused when a same-named skill is already

@@ -11,6 +11,7 @@ import { capabilitiesOf, type Kit, type Ui } from './core/view'
 import {
   COMMAND,
   COMMAND_DESCRIPTION,
+  NAME,
   PANE_IDS,
   PANE_SUBCOMMANDS,
   TOOL_NAME,
@@ -23,7 +24,30 @@ import { commandOutputRow } from './views/band'
 const TOOL_MATCH = new RegExp(`^mcp__.+__${TOOL_NAME}$`)
 
 const TOOL_DESCRIPTION =
-  'Show something to the user in the Raven preview pane beside the transcript.'
+  'Show something to the user in the Raven preview pane beside the transcript, where they can ' +
+  'comment on it. Use it whenever you produce something the user should read or decide on rather ' +
+  'than scroll past: a plan, spec, design, report or any doc you wrote (`show`), a summary or ' +
+  "checklist you compose (`note`), one file's changes (`diff`), or a pane by name (`open`). Some " +
+  'docs open by themselves, and the result of the edit that wrote them says so; no such note means ' +
+  'it was not shown, so show it. `comments` fetches pending comments on demand.'
+
+/** The context block every conversation carries: that the pane exists, and what it is for. */
+const CONTEXT_TEXT =
+  'Raven docks a preview pane beside the transcript: the live diff, and rendered plans and docs. ' +
+  'The user can comment on diff hunks and doc sections there. Use the Raven show tool to put ' +
+  'something in front of them.'
+
+/** The line Raven's entry in the MCP server instructions reads instead of the engine's stock one. */
+const INSTRUCTIONS_TEXT =
+  "Raven's show tool puts a plan, doc, note or diff in the preview pane beside the transcript, " +
+  'and reads the review comments the user leaves there.'
+
+/** The engine's stock line for a plugin's registered tools, which says nothing about them. */
+const stockInstructionsOf = (plugin: string) =>
+  `Tools registered by the ${plugin} plugin through $.tool.register.`
+
+/** The question tool whose answer, given to the main loop, carries the person's pending review. */
+const ASK_TOOL = 'AskUserQuestion'
 
 const TOOL_INPUT_SCHEMA = {
   type: 'object',
@@ -238,6 +262,28 @@ export function register(on: On, options: PluginOptions) {
     return result
   })
 
+  // The tool's schema and description sit in the prompt's tool list instead of behind ToolSearch,
+  // so the model knows the pane is there without first going looking for it.
+  on('tool.describe', { tool: TOOL_MATCH }, async ($, e, next) => {
+    const result = await next(e)
+    return e.tool === toolNameOf($.plugin.name) ? { ...result, isDeferred: false } : result
+  })
+
+  on('prompt.context', async ($, e, next) => {
+    const result = await next(e)
+    return { ...result, blocks: [...result.blocks, { name: NAME, text: CONTEXT_TEXT }] }
+  })
+
+  // The engine lists each plugin with registered tools under `## <plugin>` and a stock line; only
+  // Raven's own line is rewritten, and an attachment without it passes through untouched.
+  on('prompt.attachment', { type: 'mcp_instructions_delta' }, async ($, e, next) => {
+    const result = await next(e)
+    const stock = stockInstructionsOf($.plugin.name)
+    return result.text?.includes(stock)
+      ? { ...result, text: result.text.replace(stock, INSTRUCTIONS_TEXT) }
+      : result
+  })
+
   // Registered before the catch-all below: answering here without calling `next` keeps that hook
   // from also reacting to this call (a call no hook answers fails, so this one must answer).
   on('tool.call', { tool: TOOL_MATCH }, async ($, e, next) => {
@@ -265,13 +311,25 @@ export function register(on: On, options: PluginOptions) {
       result: isLanded ? result.result : undefined,
     }
 
-    const ack = await raven.afterTool(event)
-    if (ack === undefined || !isLanded || !isRecord(result.result)) return result
+    const outcome = await raven.afterTool(event)
+    const notes = [...outcome.notes]
+    // An answer the person gave the main loop's question carries their pending review, as a prompt
+    // they type does, so notes left before the question appeared are not held back. (The question's
+    // dialog holds the keyboard, so no note can be typed while it is open.)
+    if (isLanded && e.tool === ASK_TOOL && e.agentId === undefined) {
+      const review = await raven.takeAnswerContext()
+      if (review !== undefined) notes.push(review)
+    }
+    if (result.deny !== undefined) return result
+    const withNotes =
+      notes.length > 0 ? { ...result, context: [...(result.context ?? []), ...notes] } : result
+    const ack = outcome.text
+    if (ack === undefined || !isLanded || !isRecord(result.result)) return withNotes
     // The model reads Bash's result from its `stdout`, so the ack replaces the CLI's lines there;
     // anything else the command printed stays.
     const rest = withoutDirectives(event.stdout ?? '')
     const text = rest === '' ? ack : `${rest}\n${ack}`
-    return { ...result, result: { ...result.result, stdout: text }, text }
+    return { ...withNotes, result: { ...result.result, stdout: text }, text }
   })
 
   // Plan mode's notes name the plan file wherever plans are kept; observed, never rewritten.

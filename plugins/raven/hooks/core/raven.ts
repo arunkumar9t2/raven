@@ -27,16 +27,22 @@ import {
 } from './triggers'
 import type { Kit, View } from './view'
 
+/**
+ * What a finished tool call means for the model: `text` replaces a shell call's directive lines,
+ * `notes` are read after the result (the user never sees them).
+ */
+export type ToolOutcome = { text?: string; notes: readonly string[] }
+
 /** The engine-facing surface of Raven; `register` forwards engine events here and nothing else. */
 export type Raven = {
   /** The `/raven` argument hint: each view's subcommand, then `send`. */
   argumentHint: string
   command: (args: string) => Promise<CommandResult>
   /**
-   * Reacts to a finished tool call; returns replacement result text for the model, if any. Never
-   * rejects: a failure goes to the debug log.
+   * Reacts to a finished tool call: replacement result text for a directive, and notes telling the
+   * main loop what Raven opened by itself. Never rejects: a failure goes to the debug log.
    */
-  afterTool: (event: ToolEvent) => Promise<string | undefined>
+  afterTool: (event: ToolEvent) => Promise<ToolOutcome>
   /**
    * Learns the plan file plan mode named, so its edits render live; opens it on exit/re-entry.
    * Never rejects: a failure goes to the debug log.
@@ -55,6 +61,11 @@ export type Raven = {
   >
   /** The prompt `takePromptContext` primed went through: toasts how many comments it carried. */
   noteCarried: (count: number) => void
+  /**
+   * The main loop's AskUserQuestion was answered: takes the live pending review for the answer's
+   * hidden context, and toasts it. Never rejects: a failure is logged, and the review stays pending.
+   */
+  takeAnswerContext: () => Promise<string | undefined>
   /** The prompt `takePromptContext` primed was dropped: undoes it, restoring `ids` to pending. */
   restoreCarried: (ids: readonly string[]) => void
   /**
@@ -86,6 +97,31 @@ export type Raven = {
 }
 
 const REFRESH_DEBOUNCE_MS = 300
+
+/** Told to the main loop when the first edit opened the diff by itself. */
+export const DIFF_NOTE =
+  "Raven: the session's diff is now live in the Raven pane beside the transcript."
+
+/** Told to the main loop when a doc it wrote opened by itself. */
+export const docNoteOf = (path: string) =>
+  `Raven: ${path} is shown rendered in the Raven pane beside the transcript, and the user can ` +
+  'comment on its sections there. If it is something they should approve, say so in one line and ask with ' +
+  'AskUserQuestion ("Looks good, proceed" / "I\'ll comment in the pane"); on the second, end your ' +
+  'turn asking them to leave notes and reply, and the notes arrive with their reply.'
+
+/**
+ * Told to the main loop when plan mode's own plan opened by itself: plan mode approves through its
+ * own exit, so this names no question to ask.
+ */
+export const planNoteOf = (path: string) =>
+  `Raven: the plan ${path} is shown rendered in the Raven pane beside the transcript; the user ` +
+  'can comment on its sections there, and their notes arrive with their next reply.'
+
+/** What one action did: `text` answers a directive, `note` tells the model about an unasked open. */
+type ActionOutcome = { text?: string; note?: string }
+
+const toastOfCarried = (count: number, carrier: string) =>
+  `Raven: ${countOf(count, 'review comment')} sent with ${carrier}`
 const SEND = 'send'
 
 const REFUSAL_TEXTS: Record<'no_composer' | 'dialog', string> = {
@@ -113,6 +149,11 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   const open = new Set<string>()
   let refreshTimer: Timer | null = null
   let hasAutoOpened = false
+  // Every file the Doc view has shown, and whether the main loop has been told so (by a note, or by
+  // its own `show` call's result). A watched doc opens by itself only the first time, so later edits
+  // reload it in place instead of pulling it in front of a pane the person switched to; a doc a
+  // subagent's edit opened stays 'shown' until the main loop's first edit of it names it.
+  const docs = new Map<string, 'shown' | 'told'>()
   let hasOpenedTasks = false
   let hasWarnedDiffPanel = false
   // Guards the fork below from re-entering itself and caps it at one per sent batch.
@@ -287,7 +328,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       shown.kind === 'file' ? shown.path : undefined,
       await isPaneShown(doc.pane.id),
     )
-    return show(doc)
+    const isShown = await show(doc)
+    // A show the terminal was too narrow for is not counted, so the next edit tries again.
+    if (isShown && shown.kind === 'file' && !docs.has(shown.path)) docs.set(shown.path, 'shown')
+    return isShown
   }
 
   async function showTree() {
@@ -312,11 +356,15 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
 
   async function runDirective(directive: Directive): Promise<string> {
     switch (directive.op) {
-      case 'show':
-        return shownText(
-          await showDoc({ kind: 'file', path: directive.path, title: directive.title }),
-          directive.path,
-        )
+      case 'show': {
+        const isShown = await showDoc({
+          kind: 'file',
+          path: directive.path,
+          title: directive.title,
+        })
+        if (isShown) docs.set(directive.path, 'told')
+        return shownText(isShown, directive.path)
+      }
       case 'note':
         return shownText(
           await showDoc({ kind: 'note', markdown: directive.markdown, title: directive.title }),
@@ -342,35 +390,41 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   /** Every pane Raven opens unasked goes through this one gate. */
   const mayAutoOpen = () => shouldAutoOpen(settings, bandState.viewportColumns())
 
-  async function runAction(action: Action): Promise<string | undefined> {
+  /** `isMainLoop`: the action came from the main loop's own tool call, whose result a note can ride. */
+  async function runAction(action: Action, isMainLoop: boolean): Promise<ActionOutcome> {
     switch (action.kind) {
       case 'refresh-diff':
         if (action.path !== undefined) diff.noteEdited(action.path)
         if (open.has(diff.pane.id) || open.has(tree.pane.id)) scheduleRefresh()
-        return undefined
+        return {}
       case 'main-loop-edit':
         void warnDiffPanelOnce()
         if (!hasAutoOpened) {
           hasAutoOpened = true
-          if (mayAutoOpen()) await showDiff()
+          if (mayAutoOpen() && (await showDiff())) return { note: DIFF_NOTE }
         }
-        return undefined
-      case 'show-doc':
-        if (mayAutoOpen()) await showDoc({ kind: 'file', path: action.path })
-        return undefined
+        return {}
+      case 'show-doc': {
+        const { path } = action
+        if ((!docs.has(path) || action.force) && mayAutoOpen())
+          await showDoc({ kind: 'file', path })
+        if (!isMainLoop || docs.get(path) !== 'shown') return {}
+        docs.set(path, 'told')
+        return { note: planPaths.has(path) ? planNoteOf(path) : docNoteOf(path) }
+      }
       case 'reload-doc':
         await doc.reload(action.path)
         bandState.noteDocReloaded(action.path, await isPaneShown(doc.pane.id))
-        return undefined
+        return {}
       case 'directive':
-        return runDirective(action.directive)
+        return { text: await runDirective(action.directive) }
       case 'tasks': {
         const changed = tasksView.apply(action.tool, action.input, action.result)
         if (changed && !hasOpenedTasks && tasksView.hasTasks()) {
           hasOpenedTasks = true
           if (open.size === 0 && mayAutoOpen()) await show(tasksView)
         }
-        return undefined
+        return {}
       }
     }
   }
@@ -411,26 +465,57 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     }
   }
 
+  async function takePromptContext() {
+    // A prompt can carry comments before any pane has ever loaded the review (the band's own
+    // load path, reused here so both see the same `hasLoadedReview` guard).
+    await bandState.ensureReviewLoaded()
+    const known = diff.knownPaths()
+    const toplevel = diff.toplevel()
+    let existing: ReadonlySet<string> | null = null
+    if (known !== null && toplevel !== null) {
+      // Only the comments `known` doesn't already resolve need the existence check:
+      // `existingPathsOf` batches all of them together (chunked, never one call per comment),
+      // and this is skipped entirely when `known` is null (everything is already live) or
+      // there is nothing left to check.
+      const candidates = review
+        .pending()
+        .filter(comment => comment.section === undefined && !known.has(comment.path))
+      if (candidates.length > 0) {
+        const paths = [...new Set(candidates.map(comment => comment.path))]
+        existing = await existingPathsOf(host.run, toplevel, paths).catch(
+          loggedAs(host, 'checking comment file existence', null),
+        )
+      }
+    }
+    const taken = review.take(isLiveComment(known, existing))
+    const text = reviewTextOf(taken)
+    if (text === undefined) return undefined
+    return { text, count: taken.length, ids: taken.map(comment => comment.id) }
+  }
+
   return {
     argumentHint,
     command,
     afterTool: async event => {
+      const texts: string[] = []
+      const notes: string[] = []
       try {
-        const texts: string[] = []
         for (const action of actionsOf(event, triggers, planPaths)) {
-          const text = await runAction(action)
+          // A subagent's result is not where the main loop would read a note.
+          const { text, note } = await runAction(action, event.agentId === undefined)
           if (text !== undefined) texts.push(text)
+          if (note !== undefined) notes.push(note)
         }
-        return texts.length > 0 ? texts.join('\n') : undefined
       } catch (error) {
         host.debug(`raven: afterTool failed: ${String(error)}`)
-        return undefined
       }
+      return { text: texts.length > 0 ? texts.join('\n') : undefined, notes }
     },
     planNoted: async note => {
       planPaths.add(note.planFilePath)
       try {
-        for (const action of planActionsOf(note)) await runAction(action)
+        // No tool result carries these opens, so no note is made for them.
+        for (const action of planActionsOf(note)) await runAction(action, false)
       } catch (error) {
         host.debug(`raven: planNoted failed: ${String(error)}`)
       }
@@ -441,35 +526,19 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         throw new Error(`Invalid input for the Raven show tool: ${JSON.stringify(input)}`)
       return runDirective(await resolveDirective(directive))
     },
-    takePromptContext: async () => {
-      // A prompt can carry comments before any pane has ever loaded the review (the band's own
-      // load path, reused here so both see the same `hasLoadedReview` guard).
-      await bandState.ensureReviewLoaded()
-      const known = diff.knownPaths()
-      const toplevel = diff.toplevel()
-      let existing: ReadonlySet<string> | null = null
-      if (known !== null && toplevel !== null) {
-        // Only the comments `known` doesn't already resolve need the existence check:
-        // `existingPathsOf` batches all of them together (chunked, never one call per comment),
-        // and this is skipped entirely when `known` is null (everything is already live) or
-        // there is nothing left to check.
-        const candidates = review
-          .pending()
-          .filter(comment => comment.section === undefined && !known.has(comment.path))
-        if (candidates.length > 0) {
-          const paths = [...new Set(candidates.map(comment => comment.path))]
-          existing = await existingPathsOf(host.run, toplevel, paths).catch(
-            loggedAs(host, 'checking comment file existence', null),
-          )
-        }
-      }
-      const taken = review.take(isLiveComment(known, existing))
-      const text = reviewTextOf(taken)
-      if (text === undefined) return undefined
-      return { text, count: taken.length, ids: taken.map(comment => comment.id) }
-    },
+    takePromptContext,
     noteCarried: count => {
-      host.toast(`Raven: ${countOf(count, 'review comment')} sent with this prompt`)
+      host.toast(toastOfCarried(count, 'this prompt'))
+    },
+    takeAnswerContext: async () => {
+      try {
+        const carried = await takePromptContext()
+        if (carried) host.toast(toastOfCarried(carried.count, 'your answer'))
+        return carried?.text
+      } catch (error) {
+        host.debug(`raven: carrying the review on an answer failed: ${String(error)}`)
+        return undefined
+      }
     },
     restoreCarried: ids => {
       if (ids.length > 0) review.restore(ids)

@@ -80,13 +80,17 @@ A relative or `file:` link inside a shown markdown file resolves against that fi
 walks `..` and `.` segments against the showing file's directory, not the process cwd, so a doc
 shown by absolute path still resolves its own relative links correctly.
 
-The Doc view opens itself, as the visible pane, whenever the main loop writes or edits a markdown
-file under a watched path: the built-in plan and spec directories
+The Doc view opens itself, as the visible pane, the first time a markdown file under a watched path
+is written or edited: the built-in plan and spec directories
 (`docs/superpowers/plans/`, `docs/superpowers/specs/`, `.superpowers/`) or a `/`-bounded path
 segment named in the `watchedPaths` setting. Plan mode's own plan file is not guessed from a
 directory: the engine names it on plan mode's notes (`prompt.attachment` of type `plan_mode`,
 `plan_mode_exit`, `plan_mode_reentry`, main loop only), Raven watches that exact path from then on,
-and leaving plan mode with a plan, or re-entering it, opens the plan. These opens, like Tasks
+and leaving plan mode with a plan, or re-entering it, opens the plan. Each path opens by itself
+only once (once the Doc view has shown a file, by any route, a later edit reloads it in place rather
+than pulling the Doc pane in front of a pane the person switched to), except that leaving or
+re-entering plan mode shows the plan again. When the main loop's own edit opened it, that edit's
+result tells Claude so ([`agentic.md`](./agentic.md#what-claude-is-told)). These opens, like Tasks
 opening on the first task list, pass the `autoOpen` and `autoOpenColumns` gate;
 [`settings-and-surfaces.md`](./settings-and-surfaces.md) owns that gate and `watchedPaths`' exact matching rule.
 Configurable extras aside, these watched paths are the view's own built-in behavior, not something

@@ -1,6 +1,7 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
 import { TASK_STATE_COLORS, TASK_STATE_GLYPHS } from '../hooks/core/colors'
+import { DIFF_NOTE, docNoteOf, planNoteOf } from '../hooks/core/raven'
 import {
   commentsStoreKeyOf,
   DIFF_PANE,
@@ -224,7 +225,12 @@ describe('register', () => {
  * A world like `world`'s, but recording every pane opened rather than just the ones currently
  * shown, so a test can tell an auto-open happened from one that never did.
  */
-function openWorld(on: On, docText: Record<string, string> | ((path: string) => string) = {}) {
+/** `isPlaced` answers each open: a test flips it to stand in for a terminal too narrow to dock. */
+function openWorld(
+  on: On,
+  docText: Record<string, string> | ((path: string) => string) = {},
+  isPlaced: () => boolean = () => true,
+) {
   const opened: string[] = []
   baseWorld(on)
   on('process.run', () => ran(128, '', 'not a repo'))
@@ -234,7 +240,7 @@ function openWorld(on: On, docText: Record<string, string> | ((path: string) => 
   on('settings.read', () => ({ value: {} }))
   on('ui.open', ($, e) => {
     opened.push(e.id)
-    return { value: { isPlaced: true } }
+    return { value: isPlaced() ? { isPlaced: true } : { isPlaced: false, reason: 'narrow' } }
   })
   on('ui.close', () => ({ value: undefined }))
   on('ui.panes', () => ({ value: [] }))
@@ -690,6 +696,226 @@ describe('plan mode', () => {
     await $.prompt.attachment(planNote('plan_mode_exit', true, 'agent-1'))
 
     expect(opened).not.toContain(DOC_PANE.id)
+  })
+
+  test("the plan file's note names no question: plan mode approves through its own exit", async ($, on) => {
+    planWorld(on)
+
+    await $.session.start(SESSION)
+    await $.prompt.attachment(planNote('plan_mode', false))
+    const result = await $.tool.call(editOf(PLAN))
+
+    expect(result.context).toContain(planNoteOf(PLAN))
+    expect((result.context ?? []).join('\n')).not.toContain('AskUserQuestion')
+  })
+
+  test('leaving plan mode shows the plan again, even once it has been shown', async ($, on) => {
+    const opened = planWorld(on)
+
+    await $.session.start(SESSION)
+    await $.prompt.attachment(planNote('plan_mode', false))
+    await $.tool.call(editOf(PLAN))
+    await $.prompt.attachment(planNote('plan_mode_exit', true))
+
+    expect(opened.filter(id => id === DOC_PANE.id)).toHaveLength(2)
+  })
+})
+
+describe('telling Claude what the pane holds', () => {
+  const DOC = '/work/docs/superpowers/plans/x.md'
+
+  test('the show tool sits in the prompt tool list, not behind ToolSearch', async ($, on) => {
+    world(on, '')
+    on('tool.describe', ($, e) => ({ description: e.description, isDeferred: e.isDeferred }))
+
+    await $.session.start(SESSION)
+    const described = await $.tool.describe({
+      tool: TOOL,
+      description: 'x',
+      isDeferred: true,
+      provider: { plugin: NAME, tier: 'user' },
+    })
+
+    expect(described.isDeferred).toBe(false)
+  })
+
+  test("another plugin's show tool keeps its placement", async ($, on) => {
+    world(on, '')
+    on('tool.describe', ($, e) => ({ description: e.description, isDeferred: e.isDeferred }))
+
+    await $.session.start(SESSION)
+    const described = await $.tool.describe({
+      tool: 'mcp__other__show',
+      description: 'x',
+      isDeferred: true,
+      provider: { plugin: 'other', tier: 'user' },
+    })
+
+    expect(described.isDeferred).not.toBe(false)
+  })
+
+  test('every conversation carries a Raven context block', async ($, on) => {
+    world(on, '')
+    on('prompt.context', ($, e) => ({ blocks: e.blocks }))
+
+    await $.session.start(SESSION)
+    const context = await $.prompt.context({ blocks: [] })
+
+    expect(context.blocks.find(block => block.name === NAME)?.text).toMatch(/preview pane/)
+  })
+
+  test("only Raven's stock line in the MCP instructions is rewritten", async ($, on) => {
+    world(on, '')
+    on('prompt.attachment', ($, e) => ({ text: e.text }))
+    const other = 'Tools registered by the other plugin through $.tool.register.'
+
+    await $.session.start(SESSION)
+    const result = await $.prompt.attachment({
+      type: 'mcp_instructions_delta',
+      text: `## ${NAME}\nTools registered by the ${NAME} plugin through $.tool.register.\n## other\n${other}`,
+      origin: { kind: 'engine' },
+    })
+
+    expect(result.text).toContain("Raven's show tool")
+    expect(result.text).not.toContain(`by the ${NAME} plugin`)
+    expect(result.text).toContain(other)
+  })
+
+  test('a doc and the diff that open by themselves are named in the edit result', async ($, on) => {
+    openWorld(on)
+
+    await $.session.start(SESSION)
+    const result = await $.tool.call(editOf(DOC))
+
+    expect(result.context).toContain(DIFF_NOTE)
+    expect(result.context).toContain(docNoteOf(DOC))
+  })
+
+  test('a second edit to the same doc reloads it in place, unannounced', async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC))
+    const second = await $.tool.call(editOf(DOC))
+
+    expect(opened.filter(id => id === DOC_PANE.id)).toHaveLength(1)
+    expect(second.context ?? []).not.toContain(docNoteOf(DOC))
+  })
+
+  test("a subagent's edit still opens the doc but is told nothing", async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    const result = await $.tool.call({ ...editOf(DOC), agentId: 'sub-1' })
+
+    expect(opened).toContain(DOC_PANE.id)
+    expect(result.context ?? []).toEqual([])
+  })
+
+  test("a doc a subagent's edit opened is named on the main loop's first edit of it", async ($, on) => {
+    const opened = openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call({ ...editOf(DOC), agentId: 'sub-1' })
+    const first = await $.tool.call(editOf(DOC))
+    const second = await $.tool.call(editOf(DOC))
+
+    expect(opened.filter(id => id === DOC_PANE.id)).toHaveLength(1)
+    expect(first.context).toContain(docNoteOf(DOC))
+    expect(second.context ?? []).not.toContain(docNoteOf(DOC))
+  })
+
+  test('a doc the show tool put up is not named again by a later edit', async ($, on) => {
+    openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: TOOL, op: 'show', path: DOC })
+    const result = await $.tool.call(editOf(DOC))
+
+    expect(result.context ?? []).not.toContain(docNoteOf(DOC))
+  })
+
+  test('a doc the terminal was too narrow for opens on a later edit', async ($, on) => {
+    let isPlaced = false
+    openWorld(on, {}, () => isPlaced)
+
+    await $.session.start(SESSION)
+    const narrow = await $.tool.call(editOf(DOC))
+    isPlaced = true
+    const wide = await $.tool.call(editOf(DOC))
+
+    expect(narrow.context ?? []).not.toContain(docNoteOf(DOC))
+    expect(wide.context).toContain(docNoteOf(DOC))
+  })
+
+  test(
+    'nothing opened by itself, nothing told',
+    { options: { autoOpen: false } },
+    async ($, on) => {
+      openWorld(on)
+
+      await $.session.start(SESSION)
+      const result = await $.tool.call(editOf(DOC))
+
+      expect(result.context ?? []).toEqual([])
+    },
+  )
+
+  test('an answer to AskUserQuestion carries the pending review, and marks it sent', async ($, on) => {
+    openWorld(on, { [DOC]: '# Plan\n\nIntro\n\n## Goals\n\n- a\n' })
+    on('tool.call', { tool: 'AskUserQuestion' }, () => ({ result: { answers: {} } }))
+    const prompts: (readonly string[] | undefined)[] = []
+    on('prompt.submit', ($, e) => {
+      prompts.push(e.context)
+      return { text: e.text }
+    })
+    const toasts: string[] = []
+    on('ui.toast', ($, e) => {
+      toasts.push(e.text)
+      return { value: undefined }
+    })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const goals = { path: DOC, hunk: '§1' }
+    await pressPill(ui, commentButtonKeyOf(goals))
+    await ui.input({ key: inputKeyOf(goals), text: 'tighten the goals' })
+
+    const answer = await $.tool.call({ tool: 'AskUserQuestion', questions: [] })
+    expect(answer.context?.join('\n')).toContain('tighten the goals')
+    expect(toasts).toContain('Raven: 1 review comment sent with your answer')
+
+    // Sent with the answer, so the next typed prompt carries nothing more.
+    await $.prompt.submit({ text: 'go', origin: { kind: 'composer' }, wait: false })
+    expect(prompts.flat().join('\n')).not.toContain('tighten the goals')
+  })
+
+  test("a subagent's AskUserQuestion answer carries no review", async ($, on) => {
+    openWorld(on, { [DOC]: '# Plan\n\n## Goals\n\n- a\n' })
+    on('tool.call', { tool: 'AskUserQuestion' }, () => ({ result: { answers: {} } }))
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const goals = { path: DOC, hunk: '§1' }
+    await pressPill(ui, commentButtonKeyOf(goals))
+    await ui.input({ key: inputKeyOf(goals), text: 'tighten the goals' })
+
+    const answer = await $.tool.call({ tool: 'AskUserQuestion', questions: [], agentId: 'sub-1' })
+    expect((answer.context ?? []).join('\n')).not.toContain('tighten the goals')
   })
 })
 

@@ -76,7 +76,7 @@ under a line reads as attached to it.
 
 - **pending**: word `pending`, `suggestion`-coloured; not yet sent, and the only status a
   header's "send N" count includes.
-- **sent**: word `sent`, dim (`inactive`), once it has ridden a prompt.
+- **sent**: word `sent`, dim (`inactive`), once it has ridden a prompt or an answer.
 - **addressed**: `success`-coloured, collapsed with every other addressed comment at the same
   anchor into one dim "✓ N addressed" row, once a resolution names it (a card that does draw reads
   `✓ addressed`).
@@ -118,19 +118,28 @@ regardless of which group was commented on first) and a legacy comment made befo
 existed joins whichever group is the heading's first occurrence. Every comment ends in `[id]` so a
 later reply can name which it addressed.
 
-- **Hidden context**: the next prompt the person sends through the composer or Remote Control (a
-  `bridge` origin) carries the pending review as hidden context, appended in `prompt.submit`
-  (`plugins/raven/hooks/register.ts`). A prompt from any other origin does not trigger this. This is
-  the one delivery path that filters for *live* comments rather than taking every pending one: a
-  doc comment always rides; a diff comment rides only when its file is still among the diff's known
-  paths, or (for a path the diff hasn't resolved) a batched, chunked existence read confirms the
-  file still exists on disk. That read is skipped (and the comment rides) whenever the diff hasn't
-  loaded yet or the check itself fails: fail open, never silently drop a live comment over a read
-  it can't complete. A pending diff comment the check rejects moves straight to `open` instead of
-  riding (see [Status](#status)). Once the prompt is primed, Raven toasts "Raven: N review comments
-  sent with this prompt" only after that prompt actually went through
-  (`plugins/raven/hooks/core/raven.ts`); a dropped prompt, or one that throws, restores every
-  comment it carried back to `pending` instead, so nothing is lost to a prompt that never landed.
+The two hidden paths below, a prompt and a question's answer, filter for *live* comments rather
+than taking every pending one: a doc comment always rides; a diff comment rides only when its file
+is still among the diff's known paths, or (for a path the diff hasn't resolved) a batched, chunked
+existence read confirms the file still exists on disk. That read is skipped (and the comment rides)
+whenever the diff hasn't loaded yet or the check itself fails: fail open, never silently drop a live
+comment over a read it can't complete. A pending diff comment the check rejects moves straight to
+`open` instead of riding (see [Status](#status)).
+
+- **Hidden context on a prompt**: the next prompt the person sends through the composer or Remote
+  Control (a `bridge` origin) carries the live pending review as hidden context, appended in
+  `prompt.submit` (`plugins/raven/hooks/register.ts`). A prompt from any other origin does not
+  trigger this. Raven toasts "Raven: N review comments sent with this prompt" only after that prompt
+  actually went through (`plugins/raven/hooks/core/raven.ts`); a dropped prompt, or one that throws,
+  restores every comment it carried back to `pending` instead, so nothing is lost to a prompt that
+  never landed.
+- **Hidden context on an AskUserQuestion answer**: when the main loop's AskUserQuestion call lands
+  (not a subagent's, and not a denied or errored one), the person's answer carries the live pending
+  review the same way, appended to the call's `tool.call` result as `context` (`register.ts`'s
+  catch-all `tool.call` hook), with a "Raven: N review comments sent with your answer" toast. The
+  question's dialog holds the keyboard, so these are notes left before it appeared; notes written in
+  answer to Claude's [review handoff](./agentic.md#handing-a-doc-over-for-review) ride the reply
+  after it. The call has already landed when the review is taken, so there is nothing to restore.
 - **Edit & send**: the header's plain "edit & send" button, shown alongside send whenever comments
   are pending (header order is [`diff-pane.md`](./diff-pane.md)'s concern), takes the same review
   text and fills the prompt box with it (`$.prompt.fill`, replacing the draft) so the person can
@@ -174,7 +183,7 @@ Comments live in memory for the running session and are written to `$.store`, ke
 repository's toplevel path, on every mutation. Raven reads them back the first time a repository is
 seen in a session, so a restarted session or a hot-reloaded module picks the stored set back up
 mid-cycle at whatever status each comment was left in: a `pending` comment rides the next composer
-or bridge prompt as usual, and a `sent` batch left over from before a restart is swept into the next
+or bridge prompt, or the main loop's next AskUserQuestion answer, as usual, and a `sent` batch left over from before a restart is swept into the next
 resolution fork exactly as a batch sent in the current session would be. The load itself merges
 rather than replaces: a comment added in memory before the stored load for its repository lands (composing is never blocked on a pending read) survives the load rather than being overwritten by
 the stored set, keyed by id. Only the "resend" control moves a comment back to `pending` on its

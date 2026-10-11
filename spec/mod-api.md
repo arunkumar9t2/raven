@@ -127,6 +127,9 @@ carries a matcher.
   Raven's directive-ack rewrite (`register.ts`'s catch-all `tool.call` hook) replaces the CLI's
   directive and fallback lines inside `result.stdout` itself, keeping `text` and `result.stdout`
   aligned, because rewriting only `text` would leave the model reading the unswapped CLI output.
+  `context` is read by the model after the result and never shown to the person, so it works for any
+  tool, unlike the `stdout` rewrite: Raven appends its unasked-open notes and an AskUserQuestion
+  answer's review there ([`agentic.md`](./agentic.md#what-claude-is-told)).
   `e.tool` for an MCP tool call is spelled `mcp__<server>__<name>`; Raven's own tool answers on a
   `RegExp` matcher (`^mcp__.+__show$`) because the plugin's own name is not known statically at
   matcher-registration time, only once `$` binds inside the handler.
@@ -134,13 +137,25 @@ carries a matcher.
   inputSchema?})` returns once the tool is listed; the model calls it as `mcp__<plugin>__<name>`. A
   mod serves the call itself with a `tool.call` hook matched on that full name; there is no separate
   registration for *how* the tool answers, only for what it is named and described.
+- **`tool.describe`**: fired once per tool when the engine first renders its schema; a hook answers
+  `{description, isDeferred?}`. A registered tool is deferred behind ToolSearch by the engine's rule
+  for MCP tools; `isDeferred: false` lists it in the prompt instead, which Raven answers for its own
+  `show` tool (matched by name, so another plugin's `show` keeps its placement).
+- **`prompt.context`**: fired once per conversation with the named context blocks its first user
+  message carries (`claudeMd`, `currentDate`, …); a hook answers the blocks to send. Raven appends
+  one block of its own, `raven`, saying the pane exists.
+- **`prompt.attachment`**: each message the engine injects for the model, by `type`; a hook may
+  rewrite its `text`. Raven observes plan mode's notes (`plan_mode`, `plan_mode_exit`,
+  `plan_mode_reentry`) for the plan file's path, and rewrites `mcp_instructions_delta`, which carries
+  the MCP server instructions: each plugin with registered tools appears under `## <plugin>` with a
+  stock line (`Tools registered by the <plugin> plugin through $.tool.register.`), and Raven replaces
+  only its own. No `prompt.section` carries these instructions.
 - **`prompt.submit`**: input carries `origin: PromptOrigin`, whose `kind` tells a person's own
   submission (`'composer'`, or `'bridge'` for Remote Control) from every other source (an agent's own
   turn, a scheduled run). A hook injects hidden context for the next turn by calling `next({...e,
-  context: [...(e.context ?? []), text]})`; `prompt.context` and `prompt.section` exist to rewrite
-  fixed blocks instead of appending, which Raven does not use. Raven's review comments ride only a
-  person's own prompt (`origin.kind` `'composer'` or `'bridge'`), never an agent's or a forked turn's,
-  so a subagent never sees another conversation's pending review injected into its own context.
+  context: [...(e.context ?? []), text]})`. Raven's review comments ride only a person's own prompt
+  (`origin.kind` `'composer'` or `'bridge'`), never an agent's or a forked turn's, so a subagent
+  never sees another conversation's pending review injected into its own context.
 - **`turn.complete`**: Raven reacts only when `e.reason === 'answer'` and `e.agentId === undefined`,
   i.e. the main loop's own turn finished by answering, not a subagent's turn and not one interrupted
   or errored. A turn that is itself a fork of the module's own resolution prompt (below) raises no
