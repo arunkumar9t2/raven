@@ -10,7 +10,7 @@ import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../..
 import { ageOf } from '../../ui/age'
 import { boxedCard, noteCard, ruleRow } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
-import { RULE_START } from '../../ui/chrome'
+import { BOXED_CELLS, RULE_START } from '../../ui/chrome'
 import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { pillRow } from '../../ui/strip'
 import {
@@ -26,7 +26,13 @@ import {
   stageKeyOf,
 } from './anchor'
 import { hunkLabelOf } from './hunk-label'
-import { composeInnerRowsOf, noteChipsOf, noteRowsOf, STATUS_WORDS } from './note-layout'
+import {
+  COMPOSE_PICKER_CELLS,
+  composeLayoutOf,
+  noteChipsOf,
+  noteRowsOf,
+  STATUS_WORDS,
+} from './note-layout'
 
 const WHOLE_HUNK = 'whole'
 
@@ -47,31 +53,41 @@ export type CommentBoxProps = {
   /** The anchor's hunk; present only for a hunk anchor, drives the line-picker Select. */
   hunk?: Hunk
   /**
-   * Whether the line-picker Select draws, above the Input. The same value `blocksOf` used to
-   * size this block's rows, so the row count and the drawing never disagree.
+   * Whether the line picker draws. The same value `blocksOf` used to size this block's rows, so
+   * the row count and the drawing never disagree.
    */
   hasPicker: boolean
+  /** The Input's rows (`composeInputRowsOf`): 2 once its text has outgrown one row. */
+  inputRows: 1 | 2
   /** The line chosen in the picker; null means "whole hunk". */
   line: CommentLine | null
+  /** The box's own width, frame included: what `composeLayoutOf` lays out against. */
   columns: number
+  /** Runs on every change of the Input's text; the view tracks its length for `inputRows`. */
+  onInput?: (text: string) => void
   onLineChange: (line: CommentLine | null) => void
   onSubmit: (text: string) => void
   onCancel: () => void
 }
 
 /**
- * The compose state for an anchor being written to: a line picker (on a hunk, when `hasPicker`)
- * plus an Input+cancel pair. `blocksOf` emits this block only while the anchor is being composed
- * and only on a surface with `canType`, so this always runs with a real `Input` to draw; the
- * idle "<note glyph> note" control is `noteChip`, drawn by the heading or the hunk's toolbar instead.
+ * The compose box, the one frame on screen: `┌─ ✎ comment for Claude ──┐`, the interior on the
+ * user-message fill, `└──┘` (`style.compose`: sharp, rounded under `rounded`). Its interior is one
+ * row, `whole hunk ▾  <Input>  ✕ cancel` (the Input draws its own `⏎ add`), until the pane is too
+ * narrow: then the picker takes a row above the Input and the cancel pill a row below
+ * (`composeLayoutOf`). `blocksOf` emits this block only while the anchor is being composed and
+ * only on a surface with `canType`, so this always runs with a real `Input` to draw; the idle
+ * note control is `noteChip`, drawn by the title or the hunk's label row instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Input, Select, Text } = kit.ui
   const { anchor } = props
+  const innerWidth = Math.max(1, props.columns - BOXED_CELLS)
+  const layout = composeLayoutOf(props.hasPicker, innerWidth, props.inputRows)
 
   const lines = props.hunk ? changedLinesOf(props.hunk) : []
-  // Leaves room for "Lnnn ± " and the Select's own chrome (label, current value marker).
-  const maxLabelLen = Math.max(8, props.columns - 12)
+  // Inline, the selected label must stay inside the picker's cells; on its own row it may use the room.
+  const maxLabelLen = layout.pickerRow ? Math.max(8, innerWidth - 12) : COMPOSE_PICKER_CELLS - 4
   const options = [
     { value: WHOLE_HUNK, label: 'whole hunk' },
     ...lines.map(line => ({
@@ -83,18 +99,33 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     })),
   ]
 
-  const hint = (
-    <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+  const picker = props.hasPicker ? (
+    <Box flexShrink={0}>
+      <Select
+        key={selectKeyOf(anchor)}
+        options={options}
+        value={props.line ? lineValueOf(props.line) : WHOLE_HUNK}
+        onSelect={value => props.onLineChange(lineOfValue(value, lines))}
+      />
+    </Box>
+  ) : null
+  const input = (
+    <Box flexGrow={1} flexShrink={1} overflow="hidden">
+      <Input
+        key={props.inputKey}
+        autoFocus
+        placeholder="Your comment for Claude…"
+        submitLabel="add"
+        onInput={text => props.onInput?.(text)}
+        onSubmit={text => props.onSubmit(text)}
+      />
+    </Box>
+  )
+  const cancel = (
+    <Box flexShrink={0}>
       {pillRow(
         kit,
-        [
-          {
-            key: cancelKeyOf(anchor),
-            icon: '✕',
-            label: 'cancel',
-            onPress: props.onCancel,
-          },
-        ],
+        [{ key: cancelKeyOf(anchor), icon: '✕', label: 'cancel', onPress: props.onCancel }],
         'words',
         commentBoxKeyOf(anchor),
       )}
@@ -103,30 +134,22 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
 
   return boxedCard(kit, {
     color: COLORS.accent,
+    frame: kit.style.compose,
     title: (
       <Text color={COLORS.accent} bold wrap="truncate-end">
         {iconText(NOTE_GLYPH, 'comment for Claude')}
       </Text>
     ),
-    rows: composeInnerRowsOf(props.hasPicker),
+    rows: layout.inner,
     children: (
       <Box flexDirection="column">
-        {props.hasPicker ? (
-          <Select
-            key={selectKeyOf(anchor)}
-            options={options}
-            value={props.line ? lineValueOf(props.line) : WHOLE_HUNK}
-            onSelect={value => props.onLineChange(lineOfValue(value, lines))}
-          />
-        ) : null}
-        <Input
-          key={props.inputKey}
-          autoFocus
-          placeholder="Your comment for Claude…"
-          submitLabel="add"
-          onSubmit={text => props.onSubmit(text)}
-        />
-        {hint}
+        {layout.pickerRow ? picker : null}
+        <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
+          {layout.pickerRow ? null : picker}
+          {input}
+          {layout.actionsRow ? null : cancel}
+        </Box>
+        {layout.actionsRow ? cancel : null}
       </Box>
     ),
   })

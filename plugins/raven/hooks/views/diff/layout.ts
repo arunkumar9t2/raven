@@ -51,9 +51,11 @@ export function contentRowsOf(blocks: readonly Block[]): number {
 /**
  * The blocks visible in rows [top, top + rows). A fixed block is placed whole when its first row
  * is visible (the pane clips any overhang); a hunk is placed with the exact visible line range.
+ * A pinned block straddling `top` is drawn whole, so the blocks after it lose as many rows at the
+ * bottom as it draws above `top`: the window never draws more than `rows` rows.
  */
 export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: number): Placed<T>[] {
-  const bottom = top + rows
+  let bottom = top + rows
   const placed: Placed<T>[] = []
   let offset = 0
 
@@ -69,6 +71,9 @@ export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: numb
       // A card straddling the top stays placed with its top rows clipped; a pinned block whole.
       const from = block.pinned ? 0 : Math.max(0, top - start)
       placed.push({ block, from, to: blockRows })
+      // A pinned block drawn whole from above the window pushes what follows down by the rows
+      // that would have been clipped, so the window gives them up at its bottom.
+      if (block.pinned && start < top) bottom -= top - start
     } else {
       const from = Math.max(0, top - start)
       const to = Math.min(blockRows, bottom - start)

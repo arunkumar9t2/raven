@@ -202,7 +202,8 @@ function notesBlocksOf(notes: Comments, anchor: Anchor, width: number): Block<Bo
  * while idle, the "＋ note" control lives on the heading or the hunk's actions row instead, so no
  * block is emitted at all. A surface without `canType` drops the box entirely (no controls to
  * draw); `hasPicker` (whether the box draws its line-picker row) is carried on the block itself
- * so the row count here and `commentBox`'s own drawing never disagree.
+ * so the row count here and `commentBox`'s own drawing never disagree. The box's rows come from
+ * `composeRowsOf` at this width and Input height.
  */
 function anchorBlocksOf(
   notes: Comments,
@@ -210,13 +211,14 @@ function anchorBlocksOf(
   composing: Anchor | null,
   capabilities: Capabilities,
   width: number,
+  inputRows: 1 | 2,
   hunk?: Hunk,
 ): Block<BodyItem>[] {
   const notesBlocks = notesBlocksOf(notes, anchor, width)
   if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
 
   const hasPicker = hunk !== undefined && capabilities.canPick
-  const rows = composeRowsOf(hasPicker)
+  const rows = composeRowsOf(hasPicker, width, inputRows)
   return [
     ...notesBlocks,
     {
@@ -304,6 +306,8 @@ export type BlocksOptions = {
   unreadText?: string
   /** The border style: what a title takes (2 rows under `none`) and whether a close row ends the card. Bar when omitted. */
   style?: Style
+  /** 2 when the compose Input has outgrown one row (`composeInputRowsOf`); 1 when omitted. */
+  composeInputRows?: 1 | 2
 }
 
 /**
@@ -326,6 +330,7 @@ export function blocksOf(
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const style = options.style ?? styleOf('bar')
   const width = options.width
+  const inputRows = options.composeInputRows ?? 1
   const whole = wholeSideOf(file.status)
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
@@ -344,7 +349,7 @@ export function blocksOf(
   ]
   const fileLevel = isReadOnly
     ? []
-    : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width)
+    : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width, inputRows)
   if (fileLevel.length > 0) blocks.push(...fileLevel, blankBlock(FILE_GAP_KEY))
 
   if (hunks === undefined || hunks.length === 0) {
@@ -380,7 +385,7 @@ export function blocksOf(
     }
     const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
     blocks.push(...hunkSegmentsOf(index, hunk, inline, width, whole))
-    blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, hunk))
+    blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, inputRows, hunk))
   })
 
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated, width))

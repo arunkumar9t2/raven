@@ -423,6 +423,7 @@ export function createDocView(
                 anchor,
                 inputKey: inputKeyOf(anchor),
                 hasPicker: false,
+                inputRows: 2,
                 line: null,
                 columns: kit.columns,
                 onLineChange: () => {},

@@ -23,7 +23,7 @@ import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { cardTitle, frameBottom } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { groupCellsOf, ruleRoomFor } from '../ui/chrome'
+import { BOXED_CELLS, groupCellsOf, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
@@ -60,6 +60,7 @@ import {
   stepFileIndexOf,
   viewOf,
 } from './diff/layout'
+import { composeInputRowsOf } from './diff/note-layout'
 import { railedRows } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
@@ -80,6 +81,8 @@ type Model = {
   composing: Anchor | null
   /** The line picked in the composing anchor's Select; null is "whole hunk". */
   composingLine: CommentLine | null
+  /** The length of the text typed into the open compose box; sizes its Input rows. */
+  composingChars: number
   top: number
   /** Staged hunk headers per file path, cleared for a path when its hunks no longer carry them. */
   stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
@@ -199,6 +202,7 @@ export function createDiffView(
     hunks: new Map(),
     composing: null,
     composingLine: null,
+    composingChars: 0,
     top: 0,
     stagedHunks: new Map(),
     confirming: null,
@@ -226,6 +230,7 @@ export function createDiffView(
     hunks: ReadonlyMap<string, readonly Hunk[]>
     comments: Comments
     composing: Anchor | null
+    composeInputRows: 1 | 2
     readOnly: boolean
     capabilities: Capabilities
     isLoaded: boolean
@@ -447,13 +452,13 @@ export function createDiffView(
   let isClient = false
 
   function startComposing(anchor: Anchor) {
-    update({ composing: anchor, composingLine: null })
+    update({ composing: anchor, composingLine: null, composingChars: 0 })
     actions.focus(inputKeyOf(anchor))
   }
 
   /** Closes the compose box and hands the keyboard back to its anchor's comment button. */
   function stopComposing(anchor: Anchor) {
-    update({ composing: null, composingLine: null })
+    update({ composing: null, composingLine: null, composingChars: 0 })
     if (!isClient) actions.focus(commentButtonKeyOf(anchor))
   }
 
@@ -524,6 +529,13 @@ export function createDiffView(
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
     const comments = review.comments()
+    const composeInputRows: 1 | 2 = model.composing
+      ? composeInputRowsOf(
+          model.composingChars,
+          model.composing.hunk !== undefined && capabilities.canPick,
+          Math.max(1, width - BOXED_CELLS),
+        )
+      : 1
 
     if (
       cache &&
@@ -531,6 +543,7 @@ export function createDiffView(
       cache.hunks === model.hunks &&
       cache.comments === comments &&
       cache.composing === model.composing &&
+      cache.composeInputRows === composeInputRows &&
       cache.readOnly === readOnly &&
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick &&
@@ -552,6 +565,7 @@ export function createDiffView(
         capabilities,
         width,
         style,
+        composeInputRows,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -563,6 +577,7 @@ export function createDiffView(
       hunks: model.hunks,
       comments,
       composing: model.composing,
+      composeInputRows,
       readOnly,
       capabilities,
       isLoaded: model.isLoaded,
@@ -650,25 +665,25 @@ export function createDiffView(
       case 'note':
         return noteRowOf(kit, item)
       case 'comment-box':
-        // Indented one cell after the border, like a note card.
-        return (
-          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-            <Text> </Text>
-            <Box flexGrow={1} overflow="hidden">
-              {commentBox(kit, {
-                anchor: item.anchor,
-                inputKey: inputKeyOf(item.anchor),
-                hunk: item.hunk,
-                hasPicker: item.hasPicker,
-                line: model.composingLine,
-                columns: Math.max(1, contentWidth - 1),
-                onLineChange: line => update({ composingLine: line }),
-                onSubmit: text => submitComment(item.anchor, text),
-                onCancel: () => stopComposing(item.anchor),
-              })}
-            </Box>
-          </Box>
-        )
+        return commentBox(kit, {
+          anchor: item.anchor,
+          inputKey: inputKeyOf(item.anchor),
+          hunk: item.hunk,
+          hasPicker: item.hasPicker,
+          inputRows: composeInputRowsOf(
+            model.composingChars,
+            item.hasPicker,
+            Math.max(1, contentWidth - BOXED_CELLS),
+          ),
+          line: model.composingLine,
+          columns: contentWidth,
+          onInput: text => {
+            if (text.length !== model.composingChars) update({ composingChars: text.length })
+          },
+          onLineChange: line => update({ composingLine: line }),
+          onSubmit: text => submitComment(item.anchor, text),
+          onCancel: () => stopComposing(item.anchor),
+        })
       case 'hunk-header':
         return (
           <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
@@ -775,7 +790,7 @@ export function createDiffView(
     placed: Placed<BodyItem>,
     filesByPath: ReadonlyMap<string, ChangedFile>,
   ): RenderElement {
-    const { Box, Code } = kit.ui
+    const { Box, Code, Text } = kit.ui
     const { style } = kit
     const { block } = placed
     if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
@@ -816,6 +831,23 @@ export function createDiffView(
         kit,
         block.key,
         <Box key={block.key}>{bodyRowOf(kit, item, file, kit.columns, railColor)}</Box>,
+        placed,
+      )
+    }
+
+    // The compose box is the one frame: under bar and none the rail does not run through its rows;
+    // it sits on the code's left edge instead (inside the rails under a frame style).
+    if (item.kind === 'comment-box' && !style.frame) {
+      const indent = groupCellsOf(style)
+      return clippedOf(
+        kit,
+        block.key,
+        <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+          {indent > 0 ? <Text>{' '.repeat(indent)}</Text> : null}
+          <Box flexGrow={1} overflow="hidden">
+            {bodyRowOf(kit, item, file, contentWidth, railColor)}
+          </Box>
+        </Box>,
         placed,
       )
     }

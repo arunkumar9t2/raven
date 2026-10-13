@@ -21,6 +21,7 @@ import { iconText, NOTE_GLYPH } from '../hooks/ui/icon-text'
 import {
   anchorKeyOf,
   cancelKeyOf,
+  commentBoxKeyOf,
   commentButtonKeyOf,
   dropKeyOf,
   hunkHeaderKeyOf,
@@ -2957,7 +2958,7 @@ describe('a note is a card (R38)', () => {
     expect(await ui.find({ text: /pending/ })).toBeDefined()
   })
 
-  test('the compose box is the same card in the accent: ╭─ note glyph + comment for Claude, the Input, ⏎ add and cancel, ╰ ╯', async ($, on) => {
+  test('the compose box is the one frame: ┌─ note glyph + comment for Claude in the accent, the Input, cancel, └ ┘', async ($, on) => {
     gitWorld(on, {}, null)
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
@@ -2975,8 +2976,23 @@ describe('a note is a card (R38)', () => {
     expect(input?.props.submitLabel).toBe('add')
     expect(await ui.find({ type: 'Text', text: /⏎ add/ })).toBeUndefined()
     expect((await pillOf(ui, cancelKeyOf({ path: 'a.ts' })))?.t).toContain('cancel')
-    expect(await ui.find({ text: '╮' })).toBeDefined()
-    expect(await ui.find({ text: '╯' })).toBeDefined()
+    // the sharp frame (the bar style's compose frame), closed on every side
+    expect(await ui.find({ text: '┐' })).toBeDefined()
+    expect(await ui.find({ text: '┘' })).toBeDefined()
+    expect(await ui.find({ text: '└' })).toBeDefined()
+    expect(await ui.find({ text: '╮' })).toBeUndefined()
+  })
+
+  test('the ▌ rail does not run through the compose box, which sits on the code edge', async ($, on) => {
+    gitWorld(on, {}, null)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
+    const box = await ui.find({ key: `a.ts#${commentBoxKeyOf({ path: 'a.ts' })}` })
+    expect(box?.text.startsWith('▌')).toBe(false)
+    expect(box?.text).toContain('┌')
   })
 
   test('composing shows a real cancel chip; pressing it closes the box', async ($, on) => {

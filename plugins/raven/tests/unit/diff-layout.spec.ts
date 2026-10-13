@@ -389,6 +389,23 @@ describe('viewOf', () => {
     expect(view.placed.find(p => p.block.key === 'a#box')).toEqual({ block: box, from: 0, to: 3 })
   })
 
+  test('a straddling pinned compose box never makes the body draw more rows than it has', () => {
+    const box: Block = { kind: 'fixed', key: 'a#box', rows: 3, item: null, pinned: true, card: 'a' }
+    const tail: Block = { kind: 'hunk', key: 'a#tail', hunk: hunk10, card: 'a' }
+    const stream = [titleOf('a#title', 'a'), inCard('a#gap', 'a', 1), box, tail]
+    const drawnOf = (top: number, rows: number): number => {
+      const view = viewOf(stream, top, rows)
+      return (view.pinned ? 1 : 0) + view.placed.reduce((sum, p) => sum + (p.to - p.from), 0)
+    }
+    // Rows 2 and 3 put the box across the window's start, beside the pinned title.
+    for (const rows of [4, 5, 6, 8, 12]) {
+      for (const top of [2, 3]) expect(drawnOf(top, rows)).toBeLessThanOrEqual(rows)
+    }
+    // A box whose last row is exactly the window's start stays mounted (placed whole).
+    const lastRow = windowOf(stream, 4, 6)
+    expect(lastRow.find(p => p.block.key === 'a#box')).toEqual({ block: box, from: 0, to: 3 })
+  })
+
   test('fewer than two body rows never pin: the body keeps its single row', () => {
     expect(viewOf(cards, 3, 1).pinned).toBeNull()
     expect(viewOf(cards, 3, 0).pinned).toBeNull()

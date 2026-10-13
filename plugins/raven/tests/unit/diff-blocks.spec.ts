@@ -335,27 +335,34 @@ describe('blocksOf', () => {
     ])
   })
 
-  test('composing on a hunk is 6 rows (top border, line-picker Select, Input at most two rows, hint row, bottom border); the file box stays absent', () => {
+  test('composing on a hunk at 100 columns is 3 rows: a top border, one row holding the picker, the Input and cancel, a bottom border; the file box stays absent', () => {
     const blocks = blocksOf(file, [hunkA], [], { path: file.path, hunk: hunkA.header })
     const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
     const hunkBox = blocks.find(
       b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
     )
     expect(fileBox).toBeUndefined()
-    expect(hunkBox).toMatchObject({ rows: 6 })
+    expect(hunkBox).toMatchObject({ rows: 3 })
   })
 
-  test('composing on the file (no hunk) is 5 rows (two borders, Input at most two rows, hint row): no line-picker to draw', () => {
+  test('composing on the file (no hunk) at 100 columns is 3 rows: no picker to draw', () => {
     const blocks = blocksOf(file, [hunkA], [], { path: file.path })
     const fileBox = blocks.find(b => b.key === commentBoxKeyOf({ path: file.path }))
-    expect(fileBox).toMatchObject({ rows: 5 })
+    expect(fileBox).toMatchObject({ rows: 3 })
   })
 
-  test('the compose box is a constant: the Input draws at most two rows, plus the hint row and two borders', () => {
-    const rowsOf = (composing: { path: string; hunk?: string }, hunks = [hunkA]) =>
-      blocksOf(file, hunks, [], composing).find(b => b.key.startsWith('comment-box:'))
-    expect(rowsOf({ path: file.path })).toMatchObject({ rows: 5 })
-    expect(rowsOf({ path: file.path, hunk: hunkA.header })).toMatchObject({ rows: 6 })
+  test('the compose box grows a row when the picker or the cancel pill wraps, and when the Input needs a second row', () => {
+    const boxAt = (width: number, composing: { path: string; hunk?: string }, extra = {}) =>
+      blocksOf(file, [hunkA], [], composing, { width, ...extra }).find(b =>
+        b.key.startsWith('comment-box:'),
+      )
+    const onHunk = { path: file.path, hunk: hunkA.header }
+    expect(boxAt(100, { path: file.path })).toMatchObject({ rows: 3 })
+    expect(boxAt(100, onHunk)).toMatchObject({ rows: 3 })
+    expect(boxAt(60, onHunk)).toMatchObject({ rows: 4 })
+    expect(boxAt(40, onHunk)).toMatchObject({ rows: 5 })
+    expect(boxAt(40, { path: file.path })).toMatchObject({ rows: 4 })
+    expect(boxAt(100, onHunk, { composeInputRows: 2 })).toMatchObject({ rows: 4 })
   })
 
   test('row total matches title + notes + toolbar + hunk lines', () => {
@@ -369,7 +376,7 @@ describe('blocksOf', () => {
     const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
     const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
     // title(1) + gap(1) + hunkA label(1) + hunkA(3 lines) + note + composebox (with the line picker)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + noteRowsOf(1) + composeRowsOf(true))
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + noteRowsOf(1) + composeRowsOf(true, 100))
   })
 
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
@@ -495,20 +502,17 @@ describe('blocksOf with degraded capabilities', () => {
     ).toBe(false)
   })
 
-  test('no Select composing on a hunk is 5 rows: the picker row is dropped', () => {
-    const blocks = blocksOf(
-      file,
-      [hunkA],
-      [],
-      { path: file.path, hunk: hunkA.header },
-      {
-        capabilities: { canType: true, canPick: false, canShowImage: false, canClient: false },
-      },
+  test('no Select composing on a hunk drops the picker: one row less than with it at 60 columns', () => {
+    const composing = { path: file.path, hunk: hunkA.header }
+    const rowsWith = blocksOf(file, [hunkA], [], composing, { width: 60 }).find(b =>
+      b.key.startsWith('comment-box:'),
     )
-    const hunkBox = blocks.find(
-      b => b.key === commentBoxKeyOf({ path: file.path, hunk: hunkA.header }),
-    )
-    expect(hunkBox).toMatchObject({ rows: 5 })
+    const rowsWithout = blocksOf(file, [hunkA], [], composing, {
+      width: 60,
+      capabilities: { canType: true, canPick: false, canShowImage: false, canClient: false },
+    }).find(b => b.key.startsWith('comment-box:'))
+    expect(rowsWith).toMatchObject({ rows: 4 })
+    expect(rowsWithout).toMatchObject({ rows: 3 })
   })
 })
 
