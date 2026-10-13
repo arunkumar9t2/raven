@@ -397,13 +397,26 @@ describe('viewOf', () => {
       const view = viewOf(stream, top, rows)
       return (view.pinned ? 1 : 0) + view.placed.reduce((sum, p) => sum + (p.to - p.from), 0)
     }
-    // Rows 2 and 3 put the box across the window's start, beside the pinned title.
     for (const rows of [4, 5, 6, 8, 12]) {
-      for (const top of [2, 3]) expect(drawnOf(top, rows)).toBeLessThanOrEqual(rows)
+      for (const top of [2, 3, 4]) {
+        expect(drawnOf(top, rows)).toBeLessThanOrEqual(rows)
+        expect(viewOf(stream, top, rows).placed.some(p => p.block.key === 'a#box')).toBe(true)
+      }
     }
-    // A box whose last row is exactly the window's start stays mounted (placed whole).
-    const lastRow = windowOf(stream, 4, 6)
-    expect(lastRow.find(p => p.block.key === 'a#box')).toEqual({ block: box, from: 0, to: 3 })
+    // With a tail long enough, the body is filled exactly.
+    for (const top of [2, 3, 4]) expect(drawnOf(top, 8)).toBe(8)
+  })
+
+  test('a box whose last row is exactly the window top stays mounted through viewOf, pin or not', () => {
+    const box: Block = { kind: 'fixed', key: 'a#box', rows: 3, item: null, pinned: true, card: 'a' }
+    const stream = [titleOf('a#title', 'a'), inCard('a#gap', 'a', 1), box, inCard('a#tail', 'a', 4)]
+    // The box spans rows 2-4: at top 4 its last row sits under the pinned title.
+    const view = viewOf(stream, 4, 6)
+    expect(view.pinned?.key).toBe('a#title')
+    expect(view.placed.find(p => p.block.key === 'a#box')).toEqual({ block: box, from: 0, to: 3 })
+    // One row further, nothing of it remains: unmounted.
+    expect(viewOf(stream, 5, 6).placed.some(p => p.block.key === 'a#box')).toBe(false)
+    expect(windowOf(stream, 4, 6).find(p => p.block.key === 'a#box')).toBeDefined()
   })
 
   test('fewer than two body rows never pin: the body keeps its single row', () => {

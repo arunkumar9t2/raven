@@ -54,7 +54,12 @@ export function contentRowsOf(blocks: readonly Block[]): number {
  * A pinned block straddling `top` is drawn whole, so the blocks after it lose as many rows at the
  * bottom as it draws above `top`: the window never draws more than `rows` rows.
  */
-export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: number): Placed<T>[] {
+export function windowOf<T>(
+  blocks: readonly Block<T>[],
+  top: number,
+  rows: number,
+  mountTop: number = top,
+): Placed<T>[] {
   let bottom = top + rows
   const placed: Placed<T>[] = []
   let offset = 0
@@ -65,7 +70,10 @@ export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: numb
     const end = start + blockRows
     offset = end
 
-    if (end <= top || start >= bottom) continue
+    // A pinned block stays mounted while any of its rows is at or below `mountTop` (the row the
+    // pinned title overlays, when one is shown); others only while a row is in the window.
+    if (end <= (block.kind === 'fixed' && block.pinned ? mountTop : top) || start >= bottom)
+      continue
 
     if (block.kind === 'fixed') {
       // A card straddling the top stays placed with its top rows clipped; a pinned block whole.
@@ -122,7 +130,7 @@ export function viewOf<T>(
 ): { pinned: FixedBlock<T> | null; placed: Placed<T>[] } {
   const pinned = rows >= 2 ? pinnedTitleOf(blocks, top) : null
   if (pinned === null) return { pinned: null, placed: windowOf(blocks, top, rows) }
-  return { pinned, placed: windowOf(blocks, top + 1, rows - 1) }
+  return { pinned, placed: windowOf(blocks, top + 1, rows - 1, top) }
 }
 
 /**
