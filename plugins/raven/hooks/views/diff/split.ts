@@ -115,3 +115,11 @@ export function runEndOf(body: readonly string[], at: number): number {
 /** The lines a note may be put on: both sides in unified, the new side only in split. */
 export const pickableLinesOf = (lines: readonly CommentLine[], isSplit: boolean): CommentLine[] =>
   isSplit ? lines.filter(line => line.side === 'new') : [...lines]
+
+/**
+ * The line a compose box really holds: a line the picker does not offer in this mode (an old-side
+ * one, picked in unified, once the hunk draws split) counts as "whole hunk". The picker and the
+ * submit both read this, so what is shown is what is saved.
+ */
+export const effectiveLineOf = (line: CommentLine | null, isSplit: boolean): CommentLine | null =>
+  line && isSplit && line.side !== 'new' ? null : line

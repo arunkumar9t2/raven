@@ -65,6 +65,7 @@ import {
 import { composeInputRowsOf } from './diff/note-layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
+import { effectiveLineOf } from './diff/split'
 import { createSplitMode } from './diff/split-mode'
 import { fileTagOf, type WholeSource, wholePiecesOf, wholeSourceOf } from './diff/whole-file'
 import { iconOf, statusMarkOf } from './icons'
@@ -464,9 +465,9 @@ export function createDiffView(
     if (!isClient) actions.focus(commentButtonKeyOf(anchor))
   }
 
-  function submitComment(anchor: Anchor, text: string) {
+  function submitComment(anchor: Anchor, text: string, isSplit = false) {
     if (text.trim() !== '') {
-      const line = model.composingLine
+      const line = effectiveLineOf(model.composingLine, isSplit)
       review.add(line ? { ...anchor, line, text: text.trim() } : { ...anchor, text: text.trim() })
     }
     stopComposing(anchor)
@@ -690,13 +691,13 @@ export function createDiffView(
             item.hasPicker,
             Math.max(1, contentWidth - BOXED_CELLS),
           ),
-          line: model.composingLine,
+          line: effectiveLineOf(model.composingLine, item.isSplit ?? false),
           columns: contentWidth,
           onInput: text => {
             if (text.length !== model.composingChars) update({ composingChars: text.length })
           },
           onLineChange: line => update({ composingLine: line }),
-          onSubmit: text => submitComment(item.anchor, text),
+          onSubmit: text => submitComment(item.anchor, text, item.isSplit ?? false),
           onCancel: () => stopComposing(item.anchor),
         })
       case 'hunk-header':
@@ -956,7 +957,8 @@ export function createDiffView(
       isSplit: splitMode.isSplit(kit.columns),
       onToggleSplit: () => {
         splitMode.toggle(kit.columns)
-        update({})
+        // The picked line may be one the other mode does not offer.
+        update({ composingLine: null })
       },
       onSend: () => {
         resetConfirm()

@@ -187,3 +187,80 @@ describe('notes in a split hunk', () => {
     expect(plainBox && 'isSplit' in (plainBox as { item: object }).item).toBe(false)
   })
 })
+
+describe('notes in a split hunk: more shapes', () => {
+  const MULTI = hunkFrom('@@ -1,7 +1,7 @@', [' c0', '-a1', '+b1', ' c3', '-a2', '+b2', ' c6'])
+  const on = (id: string, number: number, side: 'old' | 'new', text: string) =>
+    noteOn(id, { number, side, text })
+  const multiNote = (notes: Comment[]) =>
+    shapeOf(
+      blocksOf(
+        FILE,
+        [MULTI],
+        notes.map(n => ({ ...n, hunk: MULTI.header })),
+        null,
+        { width: 100, split: true },
+      ),
+    )
+
+  test('a context note between two runs cuts right under that context row', () => {
+    expect(multiNote([on('c', 3, 'new', 'c3')])).toEqual([
+      'title',
+      'hunk-header',
+      'hunk:3',
+      'note',
+      'hunk:2',
+    ])
+  })
+
+  test('a context note followed by a run keeps the run whole in the next segment', () => {
+    expect(multiNote([on('c', 1, 'new', 'c0')])).toEqual([
+      'title',
+      'hunk-header',
+      'hunk:1',
+      'note',
+      'hunk:4',
+    ])
+  })
+
+  test('notes on different runs each get their own cut', () => {
+    expect(multiNote([on('x', 2, 'new', 'b1'), on('y', 4, 'new', 'b2')])).toEqual([
+      'title',
+      'hunk-header',
+      'hunk:2',
+      'note',
+      'hunk:2',
+      'note',
+      'hunk:1',
+    ])
+  })
+
+  test('a whole hunk in split keeps unified cuts and its box carries no isSplit', () => {
+    const added = hunkFrom('@@ -0,0 +1,3 @@', ['+l1', '+l2', '+l3'])
+    const file: ChangedFile = { path: 'n.ts', status: 'added', adds: 3, dels: 0, isBinary: false }
+    const note: Comment = {
+      ...noteOn('w', { number: 2, side: 'new', text: 'l2' }),
+      path: 'n.ts',
+      hunk: added.header,
+    }
+    const blocks = blocksOf(
+      file,
+      [added],
+      [note],
+      { path: 'n.ts', hunk: added.header },
+      { width: 100, split: true },
+    )
+    expect(shapeOf(blocks)).toEqual([
+      'title',
+      'hunk-header',
+      'hunk:2',
+      'note',
+      'hunk:1',
+      'comment-box',
+    ])
+    const box = blocks.find(
+      block => block.kind === 'fixed' && (block.item as BodyItem).kind === 'comment-box',
+    )
+    expect(box && 'isSplit' in (box as { item: object }).item).toBe(false)
+  })
+})

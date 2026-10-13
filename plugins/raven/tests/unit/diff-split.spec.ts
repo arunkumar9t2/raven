@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import { hunkFrom } from '../../hooks/git/hunks'
 import {
+  effectiveLineOf,
   gutterWidthOf,
   pickableLinesOf,
   runEndOf,
@@ -170,5 +171,20 @@ describe('pickableLinesOf', () => {
   test('split offers the new side only; a removed-only hunk offers none', () => {
     expect(pickableLinesOf(lines, true)).toEqual(lines.slice(1))
     expect(pickableLinesOf([lines[0] as (typeof lines)[number]], true)).toEqual([])
+  })
+})
+
+describe('effectiveLineOf', () => {
+  const oldLine = { number: 2, side: 'old' as const, text: 'old1' }
+  const newLine = { number: 2, side: 'new' as const, text: 'new1' }
+
+  test('split turns an old-side pick into "whole hunk" (null), so a submit saves the hunk', () => {
+    expect(effectiveLineOf(oldLine, true)).toBeNull()
+  })
+
+  test('split keeps a new-side pick; unified keeps either; null stays null', () => {
+    expect(effectiveLineOf(newLine, true)).toBe(newLine)
+    expect(effectiveLineOf(oldLine, false)).toBe(oldLine)
+    expect(effectiveLineOf(null, true)).toBeNull()
   })
 })
