@@ -217,7 +217,6 @@ export function createDiffView(
 
   const sourceController = createSourceController(host)
   const splitMode = createSplitMode(host, options.splitColumns)
-  void splitMode
 
   // The body rows and the title rows/content-row count of the most recent render computed, so
   // `scroll` and `select` (which have no kit) can clamp/jump without recomputing them.
@@ -944,6 +943,11 @@ export function createDiffView(
       sourceOptions: sourceController.options(),
       onSourceChange: selectSource,
       onRefresh: () => void refresh(),
+      isSplit: splitMode.isSplit(kit.columns),
+      onToggleSplit: () => {
+        splitMode.toggle(kit.columns)
+        update({})
+      },
       onSend: () => {
         resetConfirm()
         actions.send()

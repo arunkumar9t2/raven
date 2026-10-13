@@ -45,6 +45,9 @@ export type HeaderProps = {
   sourceOptions: readonly SelectOption[]
   onSourceChange: (value: string) => void
   onRefresh: () => void
+  /** Whether the body draws side by side now; the chip offers the other layout. */
+  isSplit: boolean
+  onToggleSplit: () => void
   onSend: () => void
   onEditSend: () => void
   onPrevious: () => void
@@ -60,6 +63,7 @@ const handlersOf = (props: HeaderProps): HeaderHandlers => ({
   onPrevious: props.onPrevious,
   onNext: props.onNext,
   onRefresh: props.onRefresh,
+  onToggleSplit: props.onToggleSplit,
   onSend: props.onSend,
   onEditSend: props.onEditSend,
   onClear: props.onClear,
@@ -136,7 +140,12 @@ function oneRow(
   const { files } = props
   const { adds, dels } = totalsOf(files)
   const chips = headerChipsOf(
-    { pending: props.pending, confirmingClear: props.confirmingClear, includeRefresh: true },
+    {
+      pending: props.pending,
+      confirmingClear: props.confirmingClear,
+      includeRefresh: true,
+      isSplit: props.isSplit,
+    },
     handlersOf(props),
   )
   const room = Math.max(0, kit.columns - plan.leftCells - 2)
@@ -215,7 +224,10 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       ? iconText(NOTE_GLYPH, `${countOf(pending, 'note')} pending`)
       : ''
   const compactNotesText = !confirmingClear && pending > 0 ? NOTE_GLYPH : ''
-  const fullChips = headerChipsOf({ pending, confirmingClear, includeRefresh: true }, handlers)
+  const fullChips = headerChipsOf(
+    { pending, confirmingClear, includeRefresh: true, isSplit: props.isSplit },
+    handlers,
+  )
   const fullMapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
   const fullLeftWidth = fullMapCells.length + (fullNotesText === '' ? 0 : 1 + fullNotesText.length)
   const ample = confirmingClear || fullLeftWidth + 2 + chipsIconsWidthOf(fullChips) <= kit.columns
@@ -224,7 +236,10 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const notesText = ample ? fullNotesText : compactNotesText
   const chips = ample
     ? fullChips
-    : headerChipsOf({ pending, confirmingClear, includeRefresh: false }, handlers)
+    : headerChipsOf(
+        { pending, confirmingClear, includeRefresh: false, isSplit: props.isSplit },
+        handlers,
+      )
   const room = Math.max(0, kit.columns - fullLeftWidth - 2)
   const modes = chipsLayout(chips, room)
 

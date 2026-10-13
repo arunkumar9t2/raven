@@ -438,6 +438,8 @@ describe('rows the review found miscounted or misrouted', () => {
       ],
       onSourceChange() {},
       onRefresh() {},
+      isSplit: false,
+      onToggleSplit() {},
       onSend() {},
       onEditSend() {},
       onPrevious() {},

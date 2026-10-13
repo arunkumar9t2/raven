@@ -12,6 +12,7 @@ import {
   DIFF_PANE,
   DOC_PANE,
   NAME,
+  splitStoreKeyOf,
   TASKS_PANE,
   TREE_PANE,
   toolNameOf,
@@ -3307,5 +3308,51 @@ describe('comments outside the stream (R32)', () => {
 
     const ui = await mountDiff($)
     expect(await ui.find({ text: 'Not in this diff' })).toBeDefined()
+  })
+})
+
+/** Mounts the diff pane `bodyColumns` wide. */
+const mountDiffAt = ($: Engine, bodyColumns: number) =>
+  $.ui.mount({
+    plugin: NAME,
+    surface: 'terminal',
+    component: 'Pane',
+    props: { ...PANE_PROPS, bodyColumns },
+    requestId: DIFF_PANE.id,
+  })
+
+describe('side-by-side toggle chip', () => {
+  test('a wide pane offers unified', async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect((await pillOf(await mountDiffAt($, 160), 'split'))?.t).toContain('unified')
+  })
+
+  test('a narrow pane offers split', async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect((await pillOf(await mountDiffAt($, 100), 'split'))?.t).toContain('split')
+  })
+
+  test('pressing the chip flips the label', async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiffAt($, 100)
+    await pressPill(ui, 'split')
+    expect((await pillOf(ui, 'split'))?.t).toContain('unified')
+  })
+
+  test('a stored forced mode wins over the width', async ($, on) => {
+    hunkWorld(on, () => {}, undefined, 'a.ts', { [splitStoreKeyOf(REPO)]: 'unified' })
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect((await pillOf(await mountDiffAt($, 160), 'split'))?.t).toContain('split')
   })
 })

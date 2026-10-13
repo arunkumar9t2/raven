@@ -1,5 +1,6 @@
 import { type Host, loggedAs } from '../../core/host'
 import { splitStoreKeyOf } from '../../names'
+import type { Chip } from '../../ui/chips'
 
 /** A layout the person forced with the header chip; null means the pane width decides. */
 export type ForcedMode = 'split' | 'unified' | null
@@ -61,3 +62,15 @@ export function createSplitMode(host: Host, splitColumns: number): SplitMode {
 
   return { resolveStored, isSplit, toggle }
 }
+
+/** The `chipsLayout` priority of the split chip: between refresh (1) and clear (2), so it gives way right after refresh. */
+export const SPLIT_CHIP_PRIORITY = 1.5
+
+/** The header chip that flips the layout; it names the mode a press switches to. */
+export const splitChipOf = (isSplit: boolean, onPress: () => void): Chip => ({
+  key: 'split',
+  icon: isSplit ? '≡' : '◫',
+  label: isSplit ? 'unified' : 'split',
+  priority: SPLIT_CHIP_PRIORITY,
+  onPress,
+})

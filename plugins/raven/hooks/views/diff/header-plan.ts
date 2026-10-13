@@ -2,12 +2,14 @@ import { countOf } from '../../core/format'
 import { type Chip, chipsIconsWidthOf } from '../../ui/chips'
 import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { widthOf } from '../../ui/wrap'
+import { splitChipOf } from './split-mode'
 
 /** What each header chip does; `NO_HANDLERS` for the width math, which never presses anything. */
 export type HeaderHandlers = {
   onPrevious: () => void
   onNext: () => void
   onRefresh: () => void
+  onToggleSplit: () => void
   onSend: () => void
   onEditSend: () => void
   onClear: () => void
@@ -18,6 +20,7 @@ export const NO_HANDLERS: HeaderHandlers = {
   onPrevious: NOTHING,
   onNext: NOTHING,
   onRefresh: NOTHING,
+  onToggleSplit: NOTHING,
   onSend: NOTHING,
   onEditSend: NOTHING,
   onClear: NOTHING,
@@ -28,13 +31,15 @@ export type HeaderChipArgs = {
   confirmingClear: boolean
   /** The two-row fallback drops `refresh` when even the icons floor does not fit. */
   includeRefresh: boolean
+  /** Whether the body draws side by side now; the split chip offers the other layout. */
+  isSplit: boolean
 }
 
 /**
  * The header's controls as data, in drawing order. `chipsLayout` shrinks the lowest `priority`
  * to a bare icon first: nav (0, never gives way: the file list's only chord carriers), refresh
- * (1), clear (2), edit & send (3), send (4). The side-by-side toggle chip (Part D) goes between
- * refresh and clear with `priority: 1.5`, so it gives way right after refresh.
+ * (1), the side-by-side toggle (1.5, so it gives way right after refresh), clear (2), edit & send
+ * (3), send (4). The toggle names the mode a press switches to.
  */
 export function headerChipsOf(args: HeaderChipArgs, on: HeaderHandlers = NO_HANDLERS): Chip[] {
   const { pending, confirmingClear } = args
@@ -59,13 +64,16 @@ export function headerChipsOf(args: HeaderChipArgs, on: HeaderHandlers = NO_HAND
       },
     )
     if (args.includeRefresh) {
-      chips.push({
-        key: 'refresh',
-        icon: '↻',
-        label: 'refresh',
-        priority: 1,
-        onPress: on.onRefresh,
-      })
+      chips.push(
+        {
+          key: 'refresh',
+          icon: '↻',
+          label: 'refresh',
+          priority: 1,
+          onPress: on.onRefresh,
+        },
+        splitChipOf(args.isSplit, on.onToggleSplit),
+      )
     }
   }
   if (pending > 0) {
@@ -188,6 +196,7 @@ export function headerPlanOf(input: HeaderPlanInput): HeaderPlan {
     pending: input.pending,
     confirmingClear: input.confirmingClear,
     includeRefresh: true,
+    isSplit: false,
   })
   // A forceWords chip (the armed clear) never shrinks, so the floor counts it at its words.
   const floor = chipsIconsWidthOf(chips)

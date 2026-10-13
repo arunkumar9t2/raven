@@ -1,9 +1,13 @@
 import { describe, expect, test } from 'bun:test'
 import { splitStoreKeyOf } from '../../hooks/names'
+import { type Chip, chipsLayout } from '../../hooks/ui/chips'
+import { headerChipsOf } from '../../hooks/views/diff/header-plan'
 import {
   createSplitMode,
   forcedOf,
+  SPLIT_CHIP_PRIORITY,
   SPLIT_MIN_COLUMNS,
+  splitChipOf,
   splitModeOf,
 } from '../../hooks/views/diff/split-mode'
 import { fakeHost } from './fake-host'
@@ -114,5 +118,48 @@ describe('createSplitMode', () => {
     mode.toggle(200)
     await new Promise(resolve => setTimeout(resolve, 0))
     expect(debugs.length).toBe(2)
+  })
+})
+
+describe('splitChipOf', () => {
+  const noop = () => {}
+
+  test('names the mode a press switches to', () => {
+    expect(splitChipOf(false, noop)).toMatchObject({ key: 'split', icon: '◫', label: 'split' })
+    expect(splitChipOf(true, noop)).toMatchObject({ key: 'split', icon: '≡', label: 'unified' })
+  })
+
+  test('presses through the handler it was given', () => {
+    let pressed = 0
+    splitChipOf(false, () => {
+      pressed += 1
+    }).onPress()
+    expect(pressed).toBe(1)
+  })
+
+  test('sits between refresh and clear in priority', () => {
+    expect(SPLIT_CHIP_PRIORITY).toBe(1.5)
+  })
+
+  const chips = (): Chip[] =>
+    headerChipsOf({ pending: 2, confirmingClear: false, includeRefresh: true, isSplit: false })
+
+  test('every chip keeps its words when the row has room', () => {
+    expect(chipsLayout(chips(), 66)).toEqual(Array(7).fill('words'))
+  })
+
+  test('refresh gives way first, the split chip right after it, clear only after both', () => {
+    const modesAt = (room: number) => chipsLayout(chips(), room)
+    const keys = chips().map(chip => chip.key)
+    const iconed = (room: number) => keys.filter((_, i) => modesAt(room)[i] === 'icons')
+    expect(iconed(66)).toEqual([])
+    // Find the first room that shrinks anything: it must be refresh alone.
+    let room = 66
+    while (iconed(room - 1).length === 0) room -= 1
+    const firstShrunk = iconed(room - 1)
+    expect(firstShrunk).toEqual(['previous', 'next', 'refresh'])
+    while (!iconed(room - 1).includes('split')) room -= 1
+    expect(iconed(room - 1)).toEqual(['previous', 'next', 'refresh', 'split'])
+    expect(iconed(room - 1)).not.toContain('clear')
   })
 })

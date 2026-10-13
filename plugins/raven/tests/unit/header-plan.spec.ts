@@ -24,11 +24,17 @@ const input = (patch: Partial<HeaderPlanInput> = {}): HeaderPlanInput => ({
 
 describe('headerChipsOf', () => {
   test('nav, refresh, edit & send, send and clear, with the shrink priorities the header relies on', () => {
-    const chips = headerChipsOf({ pending: 2, confirmingClear: false, includeRefresh: true })
+    const chips = headerChipsOf({
+      pending: 2,
+      confirmingClear: false,
+      includeRefresh: true,
+      isSplit: false,
+    })
     expect(chips.map(chip => chip.key)).toEqual([
       'previous',
       'next',
       'refresh',
+      'split',
       'edit-send',
       'send',
       'clear',
@@ -36,24 +42,40 @@ describe('headerChipsOf', () => {
     const priorityOf = (key: string) => chips.find(chip => chip.key === key)?.priority
     expect(priorityOf('previous')).toBe(0)
     expect(priorityOf('refresh')).toBe(1)
+    expect(priorityOf('split')).toBe(1.5)
     expect(priorityOf('clear')).toBe(2)
     expect(priorityOf('edit-send')).toBe(3)
     expect(priorityOf('send')).toBe(4)
   })
 
   test('with nothing pending there is no send; refresh can be left out', () => {
-    const chips = headerChipsOf({ pending: 0, confirmingClear: false, includeRefresh: false })
+    const chips = headerChipsOf({
+      pending: 0,
+      confirmingClear: false,
+      includeRefresh: false,
+      isSplit: false,
+    })
     expect(chips.map(chip => chip.key)).toEqual(['previous', 'next', 'clear'])
   })
 
   test('an armed clear drops nav and refresh and keeps its own words', () => {
-    const chips = headerChipsOf({ pending: 0, confirmingClear: true, includeRefresh: true })
+    const chips = headerChipsOf({
+      pending: 0,
+      confirmingClear: true,
+      includeRefresh: true,
+      isSplit: false,
+    })
     expect(chips.map(chip => chip.key)).toEqual(['clear'])
     expect(chips[0]).toMatchObject({ label: 'clear all?', kind: 'armed', forceWords: true })
   })
 
   test('the send chip carries the count even as a bare icon', () => {
-    const chips = headerChipsOf({ pending: 3, confirmingClear: false, includeRefresh: true })
+    const chips = headerChipsOf({
+      pending: 3,
+      confirmingClear: false,
+      includeRefresh: true,
+      isSplit: false,
+    })
     expect(chips.find(chip => chip.key === 'send')?.short).toBe(iconText('➤', '3'))
   })
 })
@@ -131,7 +153,12 @@ describe('headerPlanOf with an armed clear', () => {
             input({ columns, pending, sourceLabel, confirmingClear: true, adds: 0, dels: 0 }),
           )
           if (plan.rows !== 1) continue
-          const chips = headerChipsOf({ pending, confirmingClear: true, includeRefresh: true })
+          const chips = headerChipsOf({
+            pending,
+            confirmingClear: true,
+            includeRefresh: true,
+            isSplit: false,
+          })
           const room = Math.max(0, columns - plan.leftCells - 2)
           const modes = chipsLayout(chips, room)
           const width =
