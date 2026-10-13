@@ -327,6 +327,36 @@ describe('options: autoOpen false, nothing opens on its own', () => {
   })
 })
 
+describe('options: paneBackground', () => {
+  test(
+    'a configured colour is the outermost fill of the diff pane',
+    {
+      options: { paneBackground: '#101315' },
+    },
+    async ($, on) => {
+      openWorld(on)
+
+      await $.session.start(SESSION)
+      await $.command.run(ravenCommand('diff'))
+      const ui = await mountDiff($)
+
+      const [outermost] = await ui.findAll({ type: 'Box' })
+      expect(outermost?.props.backgroundColor).toBe('#101315')
+    },
+  )
+
+  test('without the option no Box carries a pane fill', async ($, on) => {
+    openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    const [outermost] = await ui.findAll({ type: 'Box' })
+    expect(outermost?.props.backgroundColor).toBeUndefined()
+  })
+})
+
 describe('options: watched doc paths, defaults', () => {
   test('a built-in watched path opens the doc pane', async ($, on) => {
     const opened = openWorld(on)

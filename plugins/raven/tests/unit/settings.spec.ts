@@ -20,6 +20,7 @@ describe('settingsOf', () => {
         autoOpenColumns: 80,
         cardStyle: 'rounded',
         splitColumns: 120,
+        paneBackground: ' #101315 ',
       }),
     ).toEqual({
       watchedPaths: ['notes/', 'docs/adr'],
@@ -28,6 +29,7 @@ describe('settingsOf', () => {
       keyboardControls: false,
       cardStyle: 'rounded',
       splitColumns: 120,
+      paneBackground: '#101315',
     })
   })
 
@@ -83,6 +85,19 @@ describe('settingsOf', () => {
   test('a non-finite, non-positive or wrong-typed splitColumns falls back to 160', () => {
     for (const bad of [0, -1, Number.NaN, Number.POSITIVE_INFINITY, '120']) {
       expect(settingsOf({ splitColumns: bad }).splitColumns).toBe(160)
+    }
+  })
+
+  test('paneBackground defaults to empty and keeps a trimmed string', () => {
+    expect(DEFAULT_SETTINGS.paneBackground).toBe('')
+    expect(settingsOf({}).paneBackground).toBe('')
+    expect(settingsOf({ paneBackground: '#101315' }).paneBackground).toBe('#101315')
+    expect(settingsOf({ paneBackground: '  #101315  ' }).paneBackground).toBe('#101315')
+  })
+
+  test('a blank or wrong-typed paneBackground falls back to empty', () => {
+    for (const bad of ['  ', '', 3, true]) {
+      expect(settingsOf({ paneBackground: bad }).paneBackground).toBe('')
     }
   })
 })

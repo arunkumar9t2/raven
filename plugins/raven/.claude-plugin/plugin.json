@@ -50,6 +50,13 @@
       "description": "Show the diff side by side at or above this body width, in columns, unless the header chip forced a mode.",
       "required": false,
       "default": 160
+    },
+    "paneBackground": {
+      "type": "string",
+      "title": "Pane background",
+      "description": "A colour painted behind every Raven pane, so the pane matches your terminal (for example #101315). Empty: the engine's own pane colour.",
+      "required": false,
+      "default": ""
     }
   }
 }

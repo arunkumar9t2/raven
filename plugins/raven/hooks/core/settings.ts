@@ -15,6 +15,8 @@ export type RavenSettings = {
   cardStyle: CardStyle
   /** Body width, in columns, at which the diff goes side-by-side unless the header chip forced a mode. */
   splitColumns: number
+  /** A colour painted behind every pane so it matches the terminal; `''` leaves the engine's own. */
+  paneBackground: string
 }
 
 export const DEFAULT_SETTINGS: RavenSettings = {
@@ -24,6 +26,7 @@ export const DEFAULT_SETTINGS: RavenSettings = {
   keyboardControls: false,
   cardStyle: 'bar',
   splitColumns: 160,
+  paneBackground: '',
 }
 
 const watchedPathsOf = (value: unknown): readonly string[] => {
@@ -51,6 +54,9 @@ const splitColumnsOf = (value: unknown): number =>
     ? value
     : DEFAULT_SETTINGS.splitColumns
 
+const paneBackgroundOf = (value: unknown): string =>
+  typeof value === 'string' ? value.trim() : DEFAULT_SETTINGS.paneBackground
+
 /** Parses `register`'s `options` defensively: a field of the wrong type falls back to its default. */
 export function settingsOf(options: PluginOptions): RavenSettings {
   return {
@@ -63,5 +69,6 @@ export function settingsOf(options: PluginOptions): RavenSettings {
         : DEFAULT_SETTINGS.keyboardControls,
     cardStyle: cardStyleOf(options.cardStyle),
     splitColumns: splitColumnsOf(options.splitColumns),
+    paneBackground: paneBackgroundOf(options.paneBackground),
   }
 }
