@@ -8,10 +8,12 @@ import {
   type SideLine,
   splitHunkOf,
   splitLinesOf,
-  splitRowsOf,
   splitRowsOfHunk,
 } from '../../hooks/views/diff/split'
 
+/** `splitLinesOf` over a body joined with newlines ('' is no lines). */
+const splitRowsOf = (text: string, oldStart: number, newStart: number) =>
+  splitLinesOf(text === '' ? [] : text.split('\n'), oldStart, newStart)
 const body = (...lines: string[]) => lines.join('\n')
 const side = (n: number, text: string, mark: SideLine['mark']): SideLine => ({ n, text, mark })
 

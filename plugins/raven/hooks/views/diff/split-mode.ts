@@ -8,13 +8,16 @@ export type ForcedMode = 'split' | 'unified' | null
 /** Below this many body columns two sides cannot hold a gutter and some text, so nothing splits. */
 export const SPLIT_MIN_COLUMNS = 40
 
+/** Whether a body `bodyColumns` wide is wide enough to split at all. */
+export const canSplitIn = (bodyColumns: number): boolean => bodyColumns >= SPLIT_MIN_COLUMNS
+
 /** Whether the diff draws side by side in a body `bodyColumns` wide. */
 export function splitModeOf(
   bodyColumns: number,
   splitColumns: number,
   forced: ForcedMode,
 ): boolean {
-  if (bodyColumns < SPLIT_MIN_COLUMNS) return false
+  if (!canSplitIn(bodyColumns)) return false
   if (forced === 'split') return true
   if (forced === 'unified') return false
   return bodyColumns >= splitColumns
@@ -60,12 +63,10 @@ export function createSplitMode(host: Host, splitColumns: number): SplitMode {
 
   const isSplit = (bodyColumns: number) => splitModeOf(bodyColumns, splitColumns, forced)
 
-  const canSplit = (bodyColumns: number) => bodyColumns >= SPLIT_MIN_COLUMNS
-
   function toggle(bodyColumns: number): void {
     // Below the minimum nothing can split, so a press would only store a choice that changes
     // nothing now and surprises the person once the pane grows.
-    if (!canSplit(bodyColumns)) return
+    if (!canSplitIn(bodyColumns)) return
     toggles += 1
     forced = isSplit(bodyColumns) ? 'unified' : 'split'
     if (toplevel === null) return
@@ -74,7 +75,7 @@ export function createSplitMode(host: Host, splitColumns: number): SplitMode {
       .catch(loggedAs(host, 'saving the split mode', undefined))
   }
 
-  return { resolveStored, isSplit, canSplit, toggle }
+  return { resolveStored, isSplit, canSplit: canSplitIn, toggle }
 }
 
 /** The `chipsLayout` priority of the split chip: between refresh (1) and clear (2), so it gives way right after refresh. */

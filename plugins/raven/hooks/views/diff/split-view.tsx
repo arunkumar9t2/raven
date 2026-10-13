@@ -121,10 +121,10 @@ function textSide(
 }
 
 /** A truncation marker: one dim line across the whole body, not a numbered row. */
-function markerRow(kit: Kit, row: SplitRow, width: number): RenderElement {
+function markerRow(kit: Kit, row: SplitRow, width: number, key: string): RenderElement {
   const { Box, Text } = kit.ui
   return (
-    <Box width={width} flexShrink={0} overflow="hidden">
+    <Box key={key} width={width} flexShrink={0} overflow="hidden">
       <Text dimColor wrap="truncate-end">
         {plainOf(row.text ?? '')}
       </Text>
@@ -157,7 +157,9 @@ export function splitHunk(kit: Kit, props: SplitHunkProps): RenderElement {
         {pieces.map(piece =>
           piece.kind === 'marker' ? (
             <Box key={`run:${props.from + piece.start}`} flexDirection="column" overflow="hidden">
-              {piece.rows.map(row => markerRow(kit, row, props.width))}
+              {piece.rows.map((row, i) =>
+                markerRow(kit, row, props.width, `marker:${props.from + piece.start + i}`),
+              )}
             </Box>
           ) : (
             <Box
@@ -181,7 +183,7 @@ export function splitHunk(kit: Kit, props: SplitHunkProps): RenderElement {
     <Box key={props.key} flexDirection="column" overflow="hidden">
       {rows.map((row, index) => {
         if (row.kind === 'marker') {
-          return <Box key={`row:${props.from + index}`}>{markerRow(kit, row, props.width)}</Box>
+          return markerRow(kit, row, props.width, `row:${props.from + index}`)
         }
         const words =
           withWords && row.left && row.right

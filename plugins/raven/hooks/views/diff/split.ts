@@ -22,17 +22,12 @@ export type SplitRow = {
 export type SplitHunk = { rows: readonly SplitRow[]; gutter: number }
 
 /**
- * Cuts a hunk body (its lines joined with '\n', header excluded) into side-by-side rows. A change
- * run (consecutive removed and added lines, in any order) pairs its removed lines with its added
- * lines by position, the shorter side padded with `null` after the pairs; a context line is one
- * row on both sides. A `\ No newline at end of file` marker and a blank line are not rows: they
- * belong to the line above and advance neither counter, as in `hunkLinesOf`.
+ * Cuts a hunk's body lines (header excluded) into side-by-side rows. A change run (consecutive
+ * removed and added lines, in any order) pairs its removed lines with its added lines by position,
+ * the shorter side padded with `null` after the pairs; a context line is one row on both sides. A
+ * `\ No newline at end of file` marker is not a row: it belongs to the line above and advances
+ * neither counter, as in `hunkLinesOf`. A bare blank line is a blank context row.
  */
-export function splitRowsOf(hunkBody: string, oldStart: number, newStart: number): SplitRow[] {
-  return hunkBody === '' ? [] : splitLinesOf(hunkBody.split('\n'), oldStart, newStart)
-}
-
-/** `splitRowsOf` over a hunk's body lines, so a body of one blank line is not mistaken for an empty one. */
 export function splitLinesOf(
   lines: readonly string[],
   oldStart: number,
@@ -85,7 +80,10 @@ export function splitLinesOf(
 
 const rowsCache = new WeakMap<Hunk, readonly SplitRow[]>()
 
-/** A hunk's split rows, numbered from its header (1 and 1 for a malformed one), memoized per hunk. */
+/**
+ * A hunk's split rows, numbered from its header (1 and 1 for a malformed one), memoized per hunk:
+ * the block builder asks the same whole hunk for its rows, gutter and column check in turn.
+ */
 export function splitRowsOfHunk(hunk: Hunk): readonly SplitRow[] {
   const cached = rowsCache.get(hunk)
   if (cached) return cached

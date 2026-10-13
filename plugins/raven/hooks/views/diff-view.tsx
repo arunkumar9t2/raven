@@ -829,29 +829,34 @@ export function createDiffView(
       // A segment ending at a commented line draws its ◆ only once that last row is in view.
       const isMarked = block.mark !== undefined && placed.to === rowsOf(block)
       const mark = isMarked && block.mark ? NOTE_STATE_COLORS[block.mark] : undefined
-      const sliced = sliceHunk(block.hunk, placed.from, placed.to)
-      const whole = block.whole ? wholeSourceOf(sliced, block.whole) : null
+      const bodyOf = (): RenderElement => {
+        if (block.split) {
+          // Windowed by split-row index, so there is no unified slice to take.
+          return splitHunk(kit, {
+            key: `split:${block.key}`,
+            split: block.split,
+            from: placed.from,
+            to: placed.to,
+            width: contentWidth,
+            path: file.path,
+            render: SPLIT_RENDER,
+          })
+        }
+        const sliced = sliceHunk(block.hunk, placed.from, placed.to)
+        const whole = block.whole ? wholeSourceOf(sliced, block.whole) : null
+        return whole ? (
+          wholeCodeOf(kit, file.path, whole)
+        ) : (
+          <Code source={sliced.text} format="diff" path={file.path} wrap="truncate-end" />
+        )
+      }
       return (
         <Box key={block.key}>
           {groupRows(kit, style, {
             color: railColor,
             rows: placed.to - placed.from,
             mark,
-            children: whole ? (
-              wholeCodeOf(kit, file.path, whole)
-            ) : block.split ? (
-              splitHunk(kit, {
-                key: `split:${block.key}`,
-                split: block.split,
-                from: placed.from,
-                to: placed.to,
-                width: contentWidth,
-                path: file.path,
-                render: SPLIT_RENDER,
-              })
-            ) : (
-              <Code source={sliced.text} format="diff" path={file.path} wrap="truncate-end" />
-            ),
+            children: bodyOf(),
           })}
         </Box>
       )
