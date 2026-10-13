@@ -70,6 +70,28 @@ describe('piecesOf', () => {
     ])
   })
 
+  test('a null side costs one newline, as the renderer draws it', () => {
+    const rows = [change(null, 'a'), change(null, 'b'), change(null, 'c')]
+    expect(piecesOf(rows, 2)).toEqual([
+      [0, 1],
+      [1, 2],
+      [2, 3],
+    ])
+    expect(piecesOf(rows, 4)).toEqual([
+      [0, 2],
+      [2, 3],
+    ])
+  })
+
+  test('a row costing exactly the limit fits; one more cuts', () => {
+    const rows = [change('abc', 'x'), change('d', 'y')]
+    expect(piecesOf(rows, 6)).toEqual([[0, 2]])
+    expect(piecesOf(rows, 5)).toEqual([
+      [0, 1],
+      [1, 2],
+    ])
+  })
+
   test('no rows, no pieces', () => {
     expect(piecesOf([], 100)).toEqual([])
   })
@@ -101,6 +123,12 @@ describe('text cleaning', () => {
     expect(capLine('x'.repeat(LINE_CAP + 50)).length).toBe(LINE_CAP)
     expect(codeTextOf('x'.repeat(LINE_CAP + 50)).length).toBe(LINE_CAP)
     expect(capLine('short')).toBe('short')
+  })
+
+  test('the cap never leaves half an emoji', () => {
+    const capped = capLine(`${'a'.repeat(LINE_CAP - 1)}😀b`)
+    expect(capped.length).toBe(LINE_CAP - 1)
+    expect(capped.endsWith('a')).toBe(true)
   })
 })
 
@@ -135,6 +163,13 @@ describe('sideCellOf', () => {
 
   test('a line wider than the side gets no padding (the Text truncates it)', () => {
     expect(sideCellOf({ n: 1, text: 'x'.repeat(50), mark: ' ' }, 1, 10).pad).toBe('')
+  })
+
+  test('pad counts display width: CJK is two cells, VS16 emoji two', () => {
+    const cjk = sideCellOf({ n: 1, text: '日本', mark: ' ' }, 1, 12)
+    expect(cjk.pad).toBe(' '.repeat(12 - 3 - 4))
+    const vs = sideCellOf({ n: 1, text: '\u2764\uFE0F', mark: ' ' }, 1, 12)
+    expect(vs.pad).toBe(' '.repeat(12 - 3 - 2))
   })
 
   test('tabs and carriage returns in the text are made drawable', () => {

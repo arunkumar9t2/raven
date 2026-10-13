@@ -5,8 +5,12 @@ import type { Seg } from './word-diff'
 /** A line longer than this is cut before it is drawn: no pane is this wide, and the cap bounds an element. */
 export const LINE_CAP = 1000
 
-export const capLine = (text: string): string =>
-  text.length > LINE_CAP ? text.slice(0, LINE_CAP) : text
+export function capLine(text: string): string {
+  if (text.length <= LINE_CAP) return text
+  const last = text.charCodeAt(LINE_CAP - 1)
+  // Never end on a lone high surrogate: drop it with the emoji it started.
+  return text.slice(0, last >= 0xd800 && last <= 0xdbff ? LINE_CAP - 1 : LINE_CAP)
+}
 
 /** `text` without the control characters an element refuses; a tab stays (a `Code` takes it). */
 export function cleanTextOf(text: string): string {
@@ -51,7 +55,7 @@ export function runsOf(rows: readonly SplitRow[]): Run[] {
  * cut at the same rows, which keeps the two columns aligned; every piece takes at least one row.
  */
 export function piecesOf(rows: readonly SplitRow[], limit: number): [number, number][] {
-  const costOf = (line: SideLine | null) => (line ? codeTextOf(line.text).length + 1 : 0)
+  const costOf = (line: SideLine | null) => (line ? codeTextOf(line.text).length + 1 : 1)
   const pieces: [number, number][] = []
   let start = 0
   let left = 0
