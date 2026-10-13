@@ -47,4 +47,8 @@ describe('docSectionsOf', () => {
   test('a first line keeps its indent (an indented code block)', () => {
     expect(docSectionsOf('\n    code\n')[0]?.text).toBe('    code')
   })
+
+  test('CRLF blank lines are blank: the top text and a heading body start at their content', () => {
+    expect(docSectionsOf('\r\n\r\nintro\r\n# A\r\n')[0]?.text).toBe('intro')
+  })
 })

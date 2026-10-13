@@ -4,7 +4,7 @@ import type { Align, TableData } from '../ui/table-layout'
 const FENCE = /^\s*(`{3,}|~{3,})/
 
 /** `text` without its blank lines at both ends; the first line's own indent stays (an indented code block). */
-export const trimBlankLines = (text: string) => text.replace(/^(?:[ \t]*\n)+/, '').trimEnd()
+export const trimBlankLines = (text: string) => text.replace(/^(?:[ \t\r]*\n)+/, '').trimEnd()
 
 /**
  * CommonMark: a fence closes on a line that is only the marker's character, at least as long as

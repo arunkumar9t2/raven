@@ -195,6 +195,14 @@ describe('doc view: heading rows', () => {
   })
 })
 
+describe('doc view: CRLF docs', () => {
+  test('a heading body drops its CRLF blank lines', async () => {
+    const { view } = await setup({ [PATH]: '# A\r\n\r\ntext\r\n' })
+    const md = findAll(view.render(kitOf()), n => n.type === 'Markdown')[0] as Node
+    expect(md.props.text).toBe('text')
+  })
+})
+
 describe('doc view: an empty file', () => {
   test('shows one dim "Empty file" line under the title', async () => {
     const { view } = await setup({ [PATH]: '' })
