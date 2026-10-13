@@ -23,6 +23,10 @@ const wholeOf = (line: string): Seg[] => (line === '' ? [] : [{ text: line, chan
  * only speckle the line). The segments of a side always join back to that side's line.
  */
 export function wordDiffOf(oldLine: string, newLine: string): { left: Seg[]; right: Seg[] } {
+  if (oldLine === newLine) {
+    const same: Seg[] = oldLine === '' ? [] : [{ text: oldLine, changed: false }]
+    return { left: same, right: same.map(seg => ({ ...seg })) }
+  }
   const a = tokensOf(oldLine)
   const b = tokensOf(newLine)
   const whole = { left: wholeOf(oldLine), right: wholeOf(newLine) }

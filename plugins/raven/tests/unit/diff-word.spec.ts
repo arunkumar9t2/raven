@@ -4,6 +4,14 @@ import { WORD_DIFF_MAX_TOKENS, wordDiffOf } from '../../hooks/views/diff/word-di
 const joined = (segs: readonly { text: string }[]) => segs.map(seg => seg.text).join('')
 
 describe('wordDiffOf', () => {
+  test('identical lines, even whitespace-only, have no changed segment', () => {
+    expect(wordDiffOf('   ', '   ')).toEqual({
+      left: [{ text: '   ', changed: false }],
+      right: [{ text: '   ', changed: false }],
+    })
+    expect(wordDiffOf('', '')).toEqual({ left: [], right: [] })
+  })
+
   test('a changed word is the only changed segment', () => {
     expect(wordDiffOf('let x = 1', 'let x = 2')).toEqual({
       left: [
