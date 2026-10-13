@@ -100,8 +100,9 @@ describe('createDiffView', () => {
     const view = createDiffView(host, review, NO_ACTIONS, () => 0)
 
     await view.refresh()
-    // rows=7: fixedRowsOf(2 files, 8) = 5, leaving 2 body rows: exactly a.ts's title+status, so
-    // only a stream jump to b.ts (3 rows down) changes which heading is in view.
+    // rows=7 at 100 columns: the header is one row, so fixedRowsOf(2 files, 8, 1) = 4, leaving 3
+    // body rows: a.ts's card, so only a stream jump to b.ts (4 rows down) changes which heading is
+    // in view.
     let tree = view.render(KIT)
     const pressA = () => {
       const onPress = findByKey(tree, 'file:a.ts')?.props.onPress as (() => void) | undefined

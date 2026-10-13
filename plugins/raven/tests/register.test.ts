@@ -22,7 +22,12 @@ import {
   revertKeyOf,
   stageKeyOf,
 } from '../hooks/views/diff/anchor'
-import { ACTIONS_ROW_KEY, SOURCE_SELECT_KEY, SUMMARY_ROW_KEY } from '../hooks/views/diff/header'
+import {
+  ACTIONS_ROW_KEY,
+  HEADER_ROW_KEY,
+  SOURCE_SELECT_KEY,
+  SUMMARY_ROW_KEY,
+} from '../hooks/views/diff/header'
 import { turnValueOf } from '../hooks/views/diff/source'
 import {
   allSegs,
@@ -1636,7 +1641,7 @@ describe('diff header', () => {
     expect((await pillOf(ui, 'clear'))?.t).toContain('clear all?')
   })
 
-  test('row 2 starts with the change map, tallest glyph for the biggest change', async ($, on) => {
+  test('the one-row header leads with the counts, then the change map, tallest glyph for the biggest change', async ($, on) => {
     baseWorld(on)
     on('process.run', ($, e) => {
       const [cmd, sub] = e.argv
@@ -1655,34 +1660,52 @@ describe('diff header', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const row = await ui.find({ key: ACTIONS_ROW_KEY })
-    expect(row?.text?.startsWith('█▁')).toBe(true)
+    const row = await ui.find({ key: HEADER_ROW_KEY })
+    const text = row?.text ?? ''
+    expect(text.indexOf('2 files')).toBeGreaterThan(-1)
+    expect(text.indexOf('█▁')).toBeGreaterThan(text.indexOf('2 files'))
+    expect(text).not.toContain('■')
+    expect(await ui.find({ key: SUMMARY_ROW_KEY })).toBeUndefined()
+    expect(await ui.find({ key: ACTIONS_ROW_KEY })).toBeUndefined()
   })
 
-  test('row 1 packs the picker after the stat bar, nothing stretched to the far right', async ($, on) => {
+  test('the one-row header holds the picker among the counts and the map, with no stat bar', async ($, on) => {
     gitWorld(on, {}, null)
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    const row = await ui.find({ key: SUMMARY_ROW_KEY })
-    // `.text` only flattens string-drawing leaves; a `Select` isn't one (confirmed live), so
-    // order is read off `children` (document order) instead: the stat bar is the third child
-    // (count, diffStat, statBar), the dim `·`, then the picker last.
-    const children = (row?.children ?? []) as readonly { type: string; props?: { key?: string } }[]
-    const pickerIndex = children.findIndex(child => child.props?.key === 'source')
-    expect(children.length).toBeGreaterThanOrEqual(5)
-    expect(pickerIndex).toBe(children.length - 1)
-    expect(pickerIndex).toBeGreaterThan(2)
+    const row = await ui.find({ key: HEADER_ROW_KEY })
+    expect(row?.text).not.toContain('■')
+    expect(await ui.find({ key: SOURCE_SELECT_KEY })).toBeDefined()
   })
 
-  test('row 2 shrinks refresh before edit & send and send, which keep their words at the default pane', async ($, on) => {
-    // 30 files, so the change map's left-side width (30 cells + the notes text) pushes the
-    // chips' room just under what every chip in words needs, but not so far under that the
-    // shrink has to reach edit & send or send: only refresh (and nav, which looks the same
-    // either way) need to give way.
-    const files = Array.from({ length: 30 }, (_, i) => `f${i}.ts`)
+  test('at the narrowest docked pane the header keeps its two rows: counts and picker, then map and chips', async ($, on) => {
+    gitWorld(on, {}, null)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 38 },
+      requestId: DIFF_PANE.id,
+    })
+    expect(await ui.find({ key: HEADER_ROW_KEY })).toBeUndefined()
+    const summary = await ui.find({ key: SUMMARY_ROW_KEY })
+    expect(summary?.text).not.toContain('■')
+    expect(await ui.find({ key: SOURCE_SELECT_KEY })).toBeDefined()
+    expect(await ui.find({ key: ACTIONS_ROW_KEY })).toBeDefined()
+  })
+
+  test('in the one-row header refresh gives way first, then clear and edit & send, while send keeps its words', async ($, on) => {
+    // 5 files, 2 pending, 100 columns: the left cluster takes 61 cells, so the chips get 37 of the
+    // 56 their words need: refresh, clear and edit & send shrink to icons in that order (48, 42,
+    // 30 cells) and send keeps its words.
+    const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
     const pending = [
       { id: 'c1', path: 'f0.ts', text: 'fix this', status: 'pending', createdAt: 0 },
       { id: 'c2', path: 'f0.ts', text: 'fix that', status: 'pending', createdAt: 0 },
@@ -1694,8 +1717,8 @@ describe('diff header', () => {
 
     const ui = await mountDiff($)
     expect((await pillOf(ui, 'send'))?.t).toContain('send 2')
-    expect((await pillOf(ui, 'edit-send'))?.t).toContain('edit & send')
     expect((await pillOf(ui, 'refresh'))?.t).not.toContain('refresh')
+    expect((await pillOf(ui, 'edit-send'))?.t).not.toContain('edit & send')
   })
 
   test('an armed clear drops nav and refresh from row 2 and keeps its own words whole, even at the narrowest pane with notes pending', async ($, on) => {
@@ -1848,7 +1871,15 @@ describe('diff header', () => {
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
-    const ui = await mountDiff($)
+    // Wide enough that every header chip keeps its words (the one-row header shrinks clear to an
+    // icon at 100 columns); the test is about the pill words carrying no brackets.
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, bodyColumns: 140 },
+      requestId: DIFF_PANE.id,
+    })
     await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
     const strips = await pillsText(ui)
     for (const label of ['clear', 'send 1', 'resend', 'cancel']) expect(strips).toContain(label)

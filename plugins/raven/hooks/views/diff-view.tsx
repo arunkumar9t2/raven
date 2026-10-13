@@ -47,7 +47,7 @@ import {
   outdatedTitle,
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
-import { header } from './diff/header'
+import { type HeaderProps, header, headerRowsOf } from './diff/header'
 import { clampTop, type Placed, rowsOf, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
 import { railOf } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
@@ -803,7 +803,31 @@ export function createDiffView(
       model.pendingReveal !== null ? stream.titleRows.get(model.pendingReveal) : undefined
     if (pendingRow !== undefined) model = { ...model, top: pendingRow, pendingReveal: null }
 
-    const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS))
+    const headerProps: HeaderProps = {
+      files,
+      edited: model.edited,
+      pending: review.pending().length,
+      confirmingClear: isArmed('clear'),
+      sourceValue: sourceValueOf(sourceController.source()),
+      sourceOptions: sourceController.options(),
+      onSourceChange: selectSource,
+      onRefresh: () => void refresh(),
+      onSend: () => {
+        resetConfirm()
+        actions.send()
+      },
+      onEditSend: () => {
+        resetConfirm()
+        actions.editAndSend()
+      },
+      onPrevious: () => stepSelection(-1),
+      onNext: () => stepSelection(1),
+      onClear: pressClear,
+    }
+    const bodyRows = Math.max(
+      0,
+      kit.rows - fixedRowsOf(files.length, MAX_ROWS, headerRowsOf(kit, headerProps)),
+    )
     lastBodyRows = bodyRows
     const top = clampTop(model.top, stream.contentRows, bodyRows)
     if (top !== model.top) model = { ...model, top }
@@ -813,27 +837,7 @@ export function createDiffView(
 
     return (
       <Box flexDirection="column">
-        {header(kit, {
-          files,
-          edited: model.edited,
-          pending: review.pending().length,
-          confirmingClear: isArmed('clear'),
-          sourceValue: sourceValueOf(sourceController.source()),
-          sourceOptions: sourceController.options(),
-          onSourceChange: selectSource,
-          onRefresh: () => void refresh(),
-          onSend: () => {
-            resetConfirm()
-            actions.send()
-          },
-          onEditSend: () => {
-            resetConfirm()
-            actions.editAndSend()
-          },
-          onPrevious: () => stepSelection(-1),
-          onNext: () => stepSelection(1),
-          onClear: pressClear,
-        })}
+        {header(kit, headerProps)}
         {fileList(kit, { files, selected: model.selected, edited: model.edited, onSelect: select })}
         {/* One short of the full width so the rule never wraps onto a row of its own. */}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>

@@ -50,13 +50,15 @@ const closeBlock: Block<BodyItem> = {
 const belongsTo = (comment: Comment, file: ChangedFile): boolean =>
   comment.section === undefined && (comment.path === file.path || comment.path === file.oldPath)
 
-/** The header's fixed row count (counts+source, then the action buttons) and the rule below it. */
-const HEADER_ROWS = 2
+/** The rule row below the file list. */
 const RULE_ROWS = 1
 
-/** The fixed rows above the scrolling body: the header, the (capped) file list, and the rule. */
-export function fixedRowsOf(fileCount: number, maxListRows: number): number {
-  return HEADER_ROWS + Math.min(fileCount, maxListRows) + RULE_ROWS
+/**
+ * The fixed rows above the scrolling body: the header (`headerRows`: 1, or 2 on a pane too narrow
+ * for one row, see `headerPlanOf`), the (capped) file list, and the rule.
+ */
+export function fixedRowsOf(fileCount: number, maxListRows: number, headerRows: number): number {
+  return headerRows + Math.min(fileCount, maxListRows) + RULE_ROWS
 }
 
 /** The 2-column left border (`│ `) every body row of a file's card draws behind. */
