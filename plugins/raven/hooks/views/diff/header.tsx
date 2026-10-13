@@ -10,6 +10,7 @@ import type { ChangedFile } from '../../git/changes'
 import { changeMap, changeMapOf } from '../../ui/change-map'
 import { type Chip, chipsIconsWidthOf, chipsLayout } from '../../ui/chips'
 import { diffStat } from '../../ui/diff-stat'
+import { iconText } from '../../ui/icon-text'
 import { statBar } from '../../ui/stat-bar'
 import { pillRow } from '../../ui/strip'
 import { selectButtons } from '../select-buttons'
@@ -198,7 +199,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
         {
           key: 'send',
           icon: '➤',
-          short: `➤ ${pending}`,
+          short: iconText('➤', `${pending}`),
           label: `send ${pending}`,
           kind: 'primary',
           priority: 4,
@@ -220,7 +221,7 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
 
   const maxCells = Math.floor(kit.columns / 3)
   const fullNotesText =
-    !confirmingClear && pending > 0 ? `✎ ${countOf(pending, 'note')} pending` : ''
+    !confirmingClear && pending > 0 ? iconText('✎', `${countOf(pending, 'note')} pending`) : ''
   const compactNotesText = !confirmingClear && pending > 0 ? '✎' : ''
   const fullChips = chipsOf(true)
   const fullMapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)

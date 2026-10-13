@@ -6,6 +6,7 @@ import { COLORS } from '../core/colors'
 import type { Kit } from '../core/view'
 import { type Chip, chipsLayout } from '../ui/chips'
 import { BAND_GUTTER, BAND_LABEL_CELLS } from '../ui/chrome'
+import { iconText } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
 
 /** What the `AbovePrompt` band has to say: pending review comments, an unseen doc, or both. */
@@ -59,7 +60,9 @@ export function band(kit: Kit, state: BandProps, actions: BandActions) {
       <Text wrap="truncate-end">
         <Text color={COLORS.accent}>{BAND_MARK}</Text>
         {state.pendingCount > 0 ? (
-          <Text color={COLORS.suggestion}>{` ✎ ${state.pendingCount} pending`}</Text>
+          <Text
+            color={COLORS.suggestion}
+          >{` ${iconText('✎', `${state.pendingCount} pending`)}`}</Text>
         ) : (
           ''
         )}
@@ -78,7 +81,7 @@ export function commandOutputRow(
   const { Text } = kit.ui
   return (
     <Text color={props.isErrored ? COLORS.error : undefined} wrap="truncate-end">
-      {props.glyph} {props.text}
+      {iconText(props.glyph, props.text)}
     </Text>
   )
 }

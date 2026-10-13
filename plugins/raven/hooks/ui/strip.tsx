@@ -7,6 +7,7 @@ import { PILL_COLORS, type PillKind } from '../core/colors'
 import type { Kit } from '../core/view'
 import type { Seg, StripRow } from '../surface/strip'
 import { type Chip, chipText } from './chips'
+import { ICON_GAP, iconText } from './icon-text'
 import { widthOf } from './wrap'
 
 export type { PillKind, Seg, StripRow }
@@ -24,8 +25,7 @@ export type KitRow = {
 }
 
 /** `pill`'s text: the label padded by one cell each side, so the background reads as a pill. */
-const padded = (icon: string, label: string): string =>
-  ` ${[icon, label].filter(Boolean).join(' ')} `
+const padded = (icon: string, label: string): string => ` ${iconText(icon, label)} `
 
 /**
  * One pill: ` icon label ` on its kind's background (`PILL_COLORS`), hover-lit by the surface;
@@ -52,6 +52,9 @@ export function pill(
 
 /** `n` blank cells between segments. */
 export const gap = (n = 1): KitSeg => ({ t: ' '.repeat(n) })
+
+/** The gap after an icon segment: `ICON_GAP`'s width, so a list row's icon never touches its label. */
+export const iconGap = (): KitSeg => ({ t: ICON_GAP })
 
 export type StripOpts = {
   /** The `Client`'s key: unique in the drawing; what `ui.message` reports as `e.element`. */

@@ -14,6 +14,7 @@ import { closeRow, ruleRow, stackOf } from '../ui/card'
 import { chipsFit } from '../ui/chips'
 import { BORDER_CELLS, RULE_START, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
+import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
 import { table } from '../ui/table'
 import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
@@ -578,11 +579,11 @@ export function createDocView(
         <Text color={icon.color}>{icon.glyph}</Text>
         {shown.doc.kind === 'file' && shown.doc.title ? (
           <Text>
-            <Text bold>{` ${shown.doc.title}`}</Text>
+            <Text bold>{`${ICON_GAP}${shown.doc.title}`}</Text>
             <Text dimColor>{`  ${shown.label}`}</Text>
           </Text>
         ) : (
-          <Text bold>{` ${shown.label}`}</Text>
+          <Text bold>{`${ICON_GAP}${shown.label}`}</Text>
         )}
       </Text>
     )

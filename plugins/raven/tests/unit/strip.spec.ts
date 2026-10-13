@@ -1,7 +1,8 @@
 import { describe, expect, test } from 'bun:test'
 import { createPresses } from '../../hooks/core/presses'
 import { cellsOf, focusAfter, pillAt, type StripRow, targetsOf } from '../../hooks/surface/strip'
-import { pill } from '../../hooks/ui/strip'
+import { ICON_GAP } from '../../hooks/ui/icon-text'
+import { iconGap, pill } from '../../hooks/ui/strip'
 import { widthOf } from '../../hooks/ui/wrap'
 
 describe('cellsOf', () => {
@@ -161,5 +162,17 @@ describe('the press registry', () => {
     presses.begin('doc')
     expect(presses.dispatch('diff', 'a')).toBe(true)
     expect(presses.dispatch('doc', 'a')).toBe(false)
+  })
+})
+
+describe('icon gap', () => {
+  test('iconGap is a plain segment as wide as ICON_GAP', () => {
+    expect(iconGap()).toEqual({ t: ICON_GAP })
+  })
+
+  test('a pill pairs its icon and label through the icon gap', () => {
+    expect(pill('x', '✎', 'note', 'normal', () => {}).t).toBe(` ✎${ICON_GAP}note `)
+    expect(pill('x', '', 'note', 'normal', () => {}).t).toBe(' note ')
+    expect(pill('x', '✕', '', 'normal', () => {}).t).toBe(' ✕ ')
   })
 })

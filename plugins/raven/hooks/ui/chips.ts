@@ -1,4 +1,5 @@
 import type { PillKind } from '../core/colors'
+import { iconText } from './icon-text'
 import { widthOf as cellsOf } from './wrap'
 
 /**
@@ -33,8 +34,8 @@ export type Chip = {
   priority?: number
 }
 
-/** `icon` and `label` joined by one space, either of which may be empty (`"✕"`, `"resend"`). */
-const wordsOf = (icon: string, label: string): string => [icon, label].filter(Boolean).join(' ')
+/** `icon` and `label` joined by the icon gap, either of which may be empty (`"✕"`, `"resend"`). */
+const wordsOf = iconText
 
 /** The text `chip` draws in `mode`; `forceWords` always wins over the mode. */
 export function chipText(

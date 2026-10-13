@@ -9,7 +9,7 @@ import type { Kit, View } from '../core/view'
 import { loadChanges, toplevelOf } from '../git/load'
 import { TREE_PANE } from '../names'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
-import { gap, type KitRow, type KitSeg, strip } from '../ui/strip'
+import { gap, iconGap, type KitRow, type KitSeg, strip } from '../ui/strip'
 import { clampTop } from './diff/layout'
 import { folderIconOf, iconOf, statusMarkOf, statusSegs } from './icons'
 import {
@@ -193,7 +193,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
           { t: row.isExpanded ? CHEVRON_OPEN : CHEVRON_CLOSED, dim: true },
           gap(),
           { t: folder.glyph, c: folder.color },
-          gap(),
+          iconGap(),
           { t: row.node.name, id, shrink: true, onPress: press },
         ],
         right: row.node.changed > 0 ? [{ t: `(${row.node.changed})`, dim: true }] : [],
@@ -212,7 +212,7 @@ export function createTreeView(host: Host, actions: TreeActions): TreeView {
         ...guides,
         { t: '  ' },
         { t: icon.glyph, c: icon.color },
-        gap(),
+        iconGap(),
         { t: row.node.name, id, shrink: true, onPress: press },
       ],
       right: mark ? statusSegs(mark) : [],

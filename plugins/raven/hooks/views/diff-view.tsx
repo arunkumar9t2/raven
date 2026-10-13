@@ -24,6 +24,7 @@ import { closeRow, ruleRow } from '../ui/card'
 import { chipsFit } from '../ui/chips'
 import { RULE_START, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
+import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import {
@@ -552,7 +553,7 @@ export function createDiffView(
         const left = (
           <Text wrap="truncate-end">
             <Text color={icon.color}>{icon.glyph}</Text>
-            <Text bold>{` ${item.file.path}`}</Text>
+            <Text bold>{`${ICON_GAP}${item.file.path}`}</Text>
             <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
             <Text color={COLORS.added}>{` +${item.file.adds}`}</Text>
             <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text>
