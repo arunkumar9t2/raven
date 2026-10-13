@@ -1,5 +1,6 @@
 import { bodyLinesOf, type Hunk, hunkFrom, hunkLinesOf, parseHeader } from '../../git/hunks'
 import type { CommentStatus } from '../../review/comments'
+import type { WholeSide } from './whole-file'
 
 /** A body block: a payload of known height, or a hunk whose body lines are its rows. */
 export type Block<T = unknown> =
@@ -17,6 +18,12 @@ export type Block<T = unknown> =
       hunk: Hunk
       /** Set when the block's last line carries a note: that note's status colours its rail cell. */
       mark?: CommentStatus
+      /**
+       * Set on a wholly added (`new`) or deleted (`old`) file's hunk blocks: drawn as numbered
+       * source (`wholeSourceOf`) rather than a diff, with the rail in the file's status colour.
+       * Never split side by side: one column would be blank.
+       */
+      whole?: WholeSide
     }
 
 /** A block placed in the window: rows [from, to) of it are visible. */

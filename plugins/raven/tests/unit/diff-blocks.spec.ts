@@ -749,3 +749,32 @@ describe('a card under each style', () => {
     expect(keys[keys.indexOf(`orphans#${ORPHANS_TITLE_KEY}`) - 1]).toBe('orphans#orphans-gap')
   })
 })
+
+describe('whole-file hunks', () => {
+  const added = hunkOf('@@ -0,0 +1,3 @@', ['+a', '+b', '+c'])
+  const hunkBlocksOf = (status: ChangedFile['status'], comments: Comments = []) =>
+    blocksOf({ ...file, status }, [added], comments, null).filter(b => b.kind === 'hunk')
+
+  test('untracked and added files stamp their hunk blocks new; a deleted file old; a modified file none', () => {
+    expect(hunkBlocksOf('untracked')[0]).toMatchObject({ whole: 'new' })
+    expect(hunkBlocksOf('added')[0]).toMatchObject({ whole: 'new' })
+    expect(hunkBlocksOf('deleted')[0]).toMatchObject({ whole: 'old' })
+    expect(hunkBlocksOf('modified')[0]).not.toHaveProperty('whole')
+  })
+
+  test('a line note splits the hunk and both segments keep the stamp', () => {
+    const note = commentOf({
+      id: 'n1',
+      hunk: added.header,
+      line: { number: 2, side: 'new', text: 'b' },
+    })
+    const segments = hunkBlocksOf('untracked', [note])
+    expect(segments).toHaveLength(2)
+    for (const segment of segments) expect(segment).toMatchObject({ whole: 'new' })
+  })
+
+  test('a turn source (read-only) stamps too', () => {
+    const blocks = blocksOf({ ...file, status: 'added' }, [added], [], null, { readOnly: true })
+    expect(blocks.find(b => b.kind === 'hunk')).toMatchObject({ whole: 'new' })
+  })
+})

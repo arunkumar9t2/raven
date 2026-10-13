@@ -56,6 +56,7 @@ import { railedRows } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { createSplitMode } from './diff/split-mode'
+import { fileTagOf, type WholeSource, wholePiecesOf, wholeSourceOf } from './diff/whole-file'
 import { iconOf, statusMarkOf } from './icons'
 
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
@@ -144,6 +145,36 @@ export type DiffView = View & {
 export type DiffOptions = {
   /** The body width, in columns, at which the diff goes side by side unless forced. */
   splitColumns: number
+}
+
+/**
+ * A wholly added or deleted file's visible lines as numbered source, its "No newline" marker dim
+ * beneath. A view over the `Code` cap is cut into numbered pieces (`wholePiecesOf`).
+ */
+function wholeCodeOf(kit: Kit, path: string, whole: WholeSource): RenderElement {
+  const { Box, Code, Text } = kit.ui
+  const pieces = wholePiecesOf(whole)
+  return (
+    <Box flexDirection="column" overflow="hidden">
+      {whole.count > 0
+        ? pieces.map(piece => (
+            <Code
+              key={`whole:${piece.startLine}`}
+              source={piece.source}
+              format="source"
+              startLine={piece.startLine}
+              path={path}
+              wrap="truncate-end"
+            />
+          ))
+        : null}
+      {whole.tail.map((line, index) => (
+        <Text key={`tail:${index}`} dimColor>
+          {line}
+        </Text>
+      ))}
+    </Box>
+  )
 }
 
 export function createDiffView(
@@ -558,6 +589,7 @@ export function createDiffView(
     const { Box, Text } = kit.ui
     const mark = statusMarkOf(item.file.status)
     const icon = iconOf(item.file.path)
+    const tag = fileTagOf(item.file.status)
     const title = (
       <Text wrap="truncate-end">
         <Text color={icon.color}>{icon.glyph}</Text>
@@ -565,6 +597,7 @@ export function createDiffView(
         <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
         <Text color={COLORS.added}>{` +${item.file.adds}`}</Text>
         <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text>
+        {tag ? <Text dimColor>{`  ${tag}`}</Text> : null}
       </Text>
     )
     const anchor: Anchor = { path: item.file.path }
@@ -757,19 +790,18 @@ export function createDiffView(
       // A segment ending at a commented line draws its ◆ only once that last row is in view.
       const isMarked = block.mark !== undefined && placed.to === rowsOf(block)
       const mark = isMarked && block.mark ? NOTE_STATE_COLORS[block.mark] : undefined
+      const sliced = sliceHunk(block.hunk, placed.from, placed.to)
+      const whole = block.whole ? wholeSourceOf(sliced, block.whole) : null
       return (
         <Box key={block.key}>
           {railedRows(kit, style, {
             color: railColor,
             rows: placed.to - placed.from,
             mark,
-            children: (
-              <Code
-                source={sliceHunk(block.hunk, placed.from, placed.to).text}
-                format="diff"
-                path={file.path}
-                wrap="truncate-end"
-              />
+            children: whole ? (
+              wholeCodeOf(kit, file.path, whole)
+            ) : (
+              <Code source={sliced.text} format="diff" path={file.path} wrap="truncate-end" />
             ),
           })}
         </Box>

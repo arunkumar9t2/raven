@@ -1,6 +1,6 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
-import { TASK_STATE_COLORS, TASK_STATE_GLYPHS } from '../hooks/core/colors'
+import { COLORS, TASK_STATE_COLORS, TASK_STATE_GLYPHS } from '../hooks/core/colors'
 import { DIFF_NOTE, docNoteOf, planNoteOf } from '../hooks/core/raven'
 import {
   commentsStoreKeyOf,
@@ -1328,6 +1328,41 @@ describe('review stream', () => {
     expect(at('b.ts#title')).toBe(at('b.ts#sep') + 1)
     expect(await ui.find({ key: 'a.ts#close' })).toBeUndefined()
     expect((await ui.find({ key: 'b.ts#sep' }))?.text.trim()).toBe('')
+  })
+
+  test('an untracked file draws as numbered source with a new file tag and an added-colour rail, not an all-green diff', async ($, on) => {
+    baseWorld(on)
+    on('session.messages', () => ({ value: [] }))
+    on('process.run', ($, e) => {
+      const [cmd, sub] = e.argv
+      if (cmd === 'git' && sub === 'rev-parse' && e.argv.includes('--show-toplevel')) {
+        return ran(0, REPO)
+      }
+      if (cmd === 'git' && sub === 'status') return ran(0, '?? new.ts\0')
+      if (cmd === 'git' && e.argv.includes('--no-index')) {
+        if (e.argv.includes('--numstat')) return ran(0, '3\t0\t/dev/null')
+        return ran(
+          0,
+          'diff --git a/new.ts b/new.ts\nnew file mode 100644\n--- /dev/null\n+++ b/new.ts\n@@ -0,0 +1,3 @@\n+one\n+two\n+three\n',
+        )
+      }
+      if (cmd === 'git' && e.argv.includes('--numstat')) return ran(0, '')
+      return ran(1)
+    })
+    trackShownPanes(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    const codes = await ui.findAll({ type: 'Code' })
+    const source = codes.find(code => code.props.format === 'source')
+    expect(source?.props.source).toBe('one\ntwo\nthree')
+    expect(source?.props.startLine).toBe(1)
+    expect(codes.some(code => code.props.format === 'diff')).toBe(false)
+    expect((await ui.find({ key: 'new.ts#title' }))?.text).toContain('new file')
+    const rail = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('▌'))
+    expect(rail?.props.color).toBe(COLORS.added)
   })
 
   test('pressing a file row scrolls its heading to the top of the stream', async ($, on) => {

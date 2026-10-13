@@ -23,6 +23,7 @@ import {
 import type { Block } from './layout'
 import { rowsOf, sliceHunk } from './layout'
 import { composeRowsOf, noteLinesOf, noteRowsOf } from './note-layout'
+import { type WholeSide, wholeSideOf } from './whole-file'
 
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
@@ -143,9 +144,11 @@ function hunkSegmentsOf(
   hunk: Hunk,
   inline: readonly InlineNotes[],
   width: number,
+  whole?: WholeSide,
 ): Block<BodyItem>[] {
   const key = hunkKeyOf(index, hunk)
-  if (inline.length === 0) return [{ kind: 'hunk', key, hunk }]
+  const stamp = whole ? { whole } : {}
+  if (inline.length === 0) return [{ kind: 'hunk', key, hunk, ...stamp }]
 
   // Each segment is a plain hunk block over a pre-sliced hunk (gutter renumbered by `sliceHunk`).
   const segmentOf = (from: number, to: number, mark?: CommentStatus): Block<BodyItem> => ({
@@ -153,6 +156,7 @@ function hunkSegmentsOf(
     key: from === 0 ? key : `${key}~${from}`,
     hunk: sliceHunk(hunk, from, to),
     mark,
+    ...stamp,
   })
   const body = bodyLinesOf(hunk)
   const total = body.length
@@ -329,6 +333,7 @@ export function blocksOf(
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const style = options.style ?? styleOf('bar')
   const width = indentedWidthOf(options.width)
+  const whole = wholeSideOf(file.status)
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
@@ -376,11 +381,11 @@ export function blocksOf(
       },
     })
     if (isReadOnly) {
-      blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
+      blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk, ...(whole ? { whole } : {}) })
       return
     }
     const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
-    blocks.push(...hunkSegmentsOf(index, hunk, inline, width))
+    blocks.push(...hunkSegmentsOf(index, hunk, inline, width, whole))
     blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, hunk))
   })
 
