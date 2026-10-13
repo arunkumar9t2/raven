@@ -1,5 +1,6 @@
 import { bodyLinesOf, type Hunk, hunkFrom, hunkLinesOf, parseHeader } from '../../git/hunks'
 import type { CommentStatus } from '../../review/comments'
+import type { SplitHunk } from './split'
 import type { WholeSide } from './whole-file'
 
 /** A body block: a payload of known height, or a hunk whose body lines are its rows. */
@@ -30,6 +31,8 @@ export type Block<T = unknown> =
        * Never split side by side: one column would be blank.
        */
       whole?: WholeSide
+      /** Present when the hunk draws side by side: its rows are these, not the body lines. Never on a `whole` block. */
+      split?: SplitHunk
       /** The file whose card this block belongs to. */
       card?: string
       /** See the fixed variant: set on the trailing orphans group's blocks. */
@@ -42,9 +45,10 @@ export type FixedBlock<T = unknown> = Extract<Block<T>, { kind: 'fixed' }>
 /** A block placed in the window: rows [from, to) of it are visible. */
 export type Placed<T = unknown> = { block: Block<T>; from: number; to: number }
 
-/** The rows a block takes: a fixed block its declared rows, a hunk its body line count. */
+/** The rows a block takes: a fixed block its declared rows, a hunk its split rows or body line count. */
 export function rowsOf(block: Block): number {
-  return block.kind === 'fixed' ? block.rows : bodyLinesOf(block.hunk).length
+  if (block.kind === 'fixed') return block.rows
+  return block.split ? block.split.rows.length : bodyLinesOf(block.hunk).length
 }
 
 /** The rows all the blocks take together. */

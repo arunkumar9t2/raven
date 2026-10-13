@@ -23,6 +23,7 @@ import {
 import type { Block } from './layout'
 import { rowsOf, sliceHunk } from './layout'
 import { composeRowsOf, noteLinesOf, noteRowsOf } from './note-layout'
+import { gutterWidthOf, splitHunkOf } from './split'
 import { type WholeSide, wholeSideOf } from './whole-file'
 
 export const TITLE_KEY = 'title'
@@ -138,19 +139,26 @@ function hunkSegmentsOf(
   inline: readonly InlineNotes[],
   width: number,
   whole?: WholeSide,
+  isSplit = false,
 ): Block<BodyItem>[] {
   const key = hunkKeyOf(index, hunk)
   const stamp = whole ? { whole } : {}
-  if (inline.length === 0) return [{ kind: 'hunk', key, hunk, ...stamp }]
+  // A whole-file hunk is source, never side by side. The gutter is the whole hunk's, so a sliced
+  // segment keeps its siblings' width.
+  const gutter = isSplit && !whole ? gutterWidthOf(hunk) : null
+  const blockOf = (blockKey: string, shown: Hunk, mark?: CommentStatus): Block<BodyItem> => ({
+    kind: 'hunk',
+    key: blockKey,
+    hunk: shown,
+    ...(mark === undefined ? {} : { mark }),
+    ...stamp,
+    ...(gutter === null ? {} : { split: splitHunkOf(shown, gutter) }),
+  })
+  if (inline.length === 0) return [blockOf(key, hunk)]
 
   // Each segment is a plain hunk block over a pre-sliced hunk (gutter renumbered by `sliceHunk`).
-  const segmentOf = (from: number, to: number, mark?: CommentStatus): Block<BodyItem> => ({
-    kind: 'hunk',
-    key: from === 0 ? key : `${key}~${from}`,
-    hunk: sliceHunk(hunk, from, to),
-    mark,
-    ...stamp,
-  })
+  const segmentOf = (from: number, to: number, mark?: CommentStatus): Block<BodyItem> =>
+    blockOf(from === 0 ? key : `${key}~${from}`, sliceHunk(hunk, from, to), mark)
   const body = bodyLinesOf(hunk)
   const total = body.length
   const blocks: Block<BodyItem>[] = []
@@ -308,6 +316,8 @@ export type BlocksOptions = {
   style?: Style
   /** 2 when the compose Input has outgrown one row (`composeInputRowsOf`); 1 when omitted. */
   composeInputRows?: 1 | 2
+  /** Draws each hunk side by side: hunk blocks carry `split` rows and count them as their height. */
+  split?: boolean
 }
 
 /**
@@ -332,7 +342,7 @@ export function blocksOf(
   const width = options.width
   const inputRows = options.composeInputRows ?? 1
   const whole = wholeSideOf(file.status)
-  const wholeStamp = whole ? { whole } : {}
+  const isSplit = options.split ?? false
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
@@ -381,11 +391,11 @@ export function blocksOf(
       },
     })
     if (isReadOnly) {
-      blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk, ...wholeStamp })
+      blocks.push(...hunkSegmentsOf(index, hunk, [], width, whole, isSplit))
       return
     }
     const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
-    blocks.push(...hunkSegmentsOf(index, hunk, inline, width, whole))
+    blocks.push(...hunkSegmentsOf(index, hunk, inline, width, whole, isSplit))
     blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, inputRows, hunk))
   })
 

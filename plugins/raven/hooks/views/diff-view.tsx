@@ -238,6 +238,7 @@ export function createDiffView(
     gonePaths: ReadonlySet<string>
     width: number
     cardStyle: Style['cardStyle']
+    isSplit: boolean
     stream: Stream
   } | null = null
 
@@ -525,7 +526,12 @@ export function createDiffView(
   }
 
   /** Every changed file's blocks in one stream, cached while its inputs are unchanged. */
-  function streamFor(capabilities: Capabilities, width: number, style: Style): Stream {
+  function streamFor(
+    capabilities: Capabilities,
+    width: number,
+    style: Style,
+    isSplit = false,
+  ): Stream {
     const files = filesOf()
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
@@ -551,7 +557,8 @@ export function createDiffView(
       cache.isLoaded === model.isLoaded &&
       cache.gonePaths === model.gonePaths &&
       cache.width === width &&
-      cache.cardStyle === style.cardStyle
+      cache.cardStyle === style.cardStyle &&
+      cache.isSplit === isSplit
     ) {
       return cache.stream
     }
@@ -567,6 +574,7 @@ export function createDiffView(
         width,
         style,
         composeInputRows,
+        split: isSplit,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -585,6 +593,7 @@ export function createDiffView(
       gonePaths: model.gonePaths,
       width,
       cardStyle: style.cardStyle,
+      isSplit,
       stream,
     }
     return stream
