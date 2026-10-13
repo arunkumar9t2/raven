@@ -53,26 +53,26 @@ with.
 
 ## Status
 
-A comment's status moves `pending` → `sent` → `addressed` or `open`. A note draws as a boxed card
-(`note` in `plugins/raven/hooks/views/diff/comment-box.tsx`, one component for the diff stream and
-the Doc pane), its border in the status colour (`NOTE_STATE_COLORS`):
+A comment's status moves `pending` → `sent` → `addressed` or `open`. A note draws as a `┃` bar
+on the subtle fill (`note` in `plugins/raven/hooks/views/diff/comment-box.tsx`, `noteCard` in
+`plugins/raven/hooks/ui/card.tsx`; one component for the diff stream and the Doc pane), in every
+`cardStyle` and with no frame:
 
 ```
-╭─ ● pending · L12 · 2m ───────── ✕ ─╮
-│ the comment text, wrapped to fit    │
-╰─────────────────────────────────────╯
+┃ ● pending · L12 · 2m                        ✕
+┃ the comment text, wrapped to fit
 ```
 
-The top border carries the status word in the status colour, then a dim ` · Lnn · age` (a ` · ` between every part, e.g. `● pending · L5 · now`), a `─` fill, and the
-card's pills (` resend ` when open, ` ✕ `) embedded before the closing `─╮`. The body rows are the text
-between `│ ` and ` │`, on the theme's `userMessageBackground` (`COLORS.userMessage`), the tint
-Claude Code puts behind the person's own messages, since a note is theirs; the file card's border and
-the one-cell indent beside it stay untinted. The text is wrapped at word boundaries to the card's width
-less the four border cells (a newline starts a line; one wrapper, `wrapText` in `hooks/ui/wrap.ts`,
-shared with the table layout), at most 6 lines (`NOTE_MAX_LINES`), the last ending `…` when the text
-is cut. The card's rows are its wrapped lines plus two (`noteLinesOf`, `noteRowsOf`), so a resize
-re-lays it out. No blank row sits before or after a card: the border is separation enough, and a note
-under a line reads as attached to it.
+The bar runs the note's full height in the status colour (`NOTE_STATE_COLORS`), and the whole note
+sits on the theme's `userMessageBackground` (`COLORS.userMessage`), the tint Claude Code puts behind
+the person's own messages, since a note is theirs. The first row is the header: the status word in
+the status colour, then a dim ` · Lnn · age` (a ` · ` between every part, e.g. `● pending · L5 ·
+now`), and the pills (` resend ` when open, ` ✕ `) right-aligned. The rows below are the text, wrapped
+at word boundaries to the note's width less the two bar cells (`NOTE_CELLS`; a newline starts a line;
+one wrapper, `wrapText` in `hooks/ui/wrap.ts`, shared with the table layout), at most 6 lines
+(`NOTE_MAX_LINES`), the last ending `…` when the text is cut. A note is therefore its text lines plus
+one: 2 to 7 rows (`noteLinesOf`, `noteRowsOf` in `views/diff/note-layout.ts`), re-laid out on a
+resize. No blank row sits before or after a note: a note under a line reads as attached to it.
 
 - **pending**: word `pending`, `suggestion`-coloured; not yet sent, and the only status a
   header's "send N" count includes.
@@ -88,16 +88,45 @@ under a line reads as attached to it.
   resend-all triggered from any open row. Every note row also carries a ` ✕ ` chip that removes it
   outright, regardless of status.
 
-The compose box (`commentBox`, same file) is the same card in the accent (`COLORS.accent`):
-`╭─ ✎ comment for Claude ───╮`, then the line picker (hunks only), the Input with its placeholder and one
-hint row (the ` ✕ cancel ` pill that closes the box (the Input's own `⏎ add` label is the only submit hint)) then `╰───╯`. The Input soft-wraps
-and draws at most two rows (longer text scrolls inside them), so the box's rows are constant
-(`composeRowsOf`): 5, or 6 with the line picker; a short comment leaves one spare tinted row. The
-box is never clipped at the top of a scrolled window, so its Input stays mounted.
+The compose box (`commentBox`, same file) is the one frame the panes draw. It is closed on all four
+sides in the accent (`COLORS.accent`), with the frame glyphs from the style (`style.compose`: `┌┐└┘`
+in every `cardStyle` but `rounded`, which draws `╭╮╰╯`), the interior on the same `userMessageBackground`
+fill, and a title `✎ comment for Claude` in its top border:
+
+```
+┌─ ✎ comment for Claude ──────────────────────────────────┐
+│ whole hunk ▾  Your comment for Claude…  ⏎ add  ✕ cancel │
+└─────────────────────────────────────────────────────────┘
+```
+
+Its interior is **one row** when the box is wide enough: the line picker (hunks only), the Input with
+its own `⏎ add` label, and the ` ✕ cancel ` pill side by side. A narrower box wraps pieces onto rows
+of their own (`composeLayoutOf`, `composeRowsOf` in `views/diff/note-layout.ts`). The box's width is
+the room beside the card's rail in the diff and the pane's width in the Doc pane, and its interior is
+that less the four frame cells (`BOXED_CELLS`). The picker (24 cells, plus a gap) moves to a row above
+the Input once the interior is under 68 cells, that is a box under 72; the cancel pill (10 cells,
+plus a gap) moves to a row below once the interior is under 43, a box under 47. The Input soft-wraps
+and draws at most two rows, taking the second as the typed text outgrows the first
+(`composeInputRowsOf`). The box's rows are the interior plus the two borders:
+
+- A hunk anchor with its picker: 3 rows from a box of 72 cells, 4 with the picker above, 5 with the
+  cancel pill below as well.
+- A file anchor, or a surface without `canPick`: no picker, so 3 rows from 47 cells and 4 below that.
+- Each of these gains a row once the Input has grown to two.
+- A doc section's box has no picker and always sizes its Input at two rows, so it is 4 rows from 47
+  cells and 5 below.
+
+The box is never clipped at the top of a scrolled window, so its Input stays mounted. On a
+side-by-side hunk its picker offers new-side lines only, see
+[`diff-pane.md`](./diff-pane.md#side-by-side). In the diff stream the box sits at the code's left
+edge under `bar` and `none` (the rail does not run through its rows) and inside the card's sides
+under a frame style.
 
 A comment with a `line` threads inline: its card draws directly under that line of the hunk, not
-after the whole hunk, and the line's border cell reads `◆` in the (first) note's status colour instead
-of `│`. The line is found by side and number (`lineRowsOf`: the old side counts context and removed
+after the whole hunk, and the rail cell of the line's row reads `◆` in the (first) note's status
+colour instead of `▌` (or `│` inside a frame; `none` has no rail, so the `◆` overlays the row's first
+cell). Side by side the note draws under the end of the change run the line belongs to, see
+[`diff-pane.md`](./diff-pane.md#side-by-side). The line is found by side and number (`lineRowsOf`: the old side counts context and removed
 lines, the new side context and added) and must still read as the text the note was made on; a line
 whose text changed since stays after the hunk. A `\ No newline` marker travels with the line above
 it. A hunk-wide note, an addressed one (collapsed into the

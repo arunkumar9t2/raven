@@ -93,8 +93,9 @@ optionally a `refresh()` the controller calls before a fresh module's first draw
 `Host` standing in for the engine. The `Host` itself is not "all of `$`": it is exactly the calls
 something under `hooks/` actually makes, added to as new capability is needed, which keeps the seam
 between deterministic logic and engine binding narrow enough to fake convincingly. `Kit` (`{ui,
-columns, rows}`) is the other half of what a view's `render` takes (the element table for whatever
-surface is drawing it plus the pane's own body dimensions), resolved lazily by `register.ts` so a
+columns, rows, capabilities, style}`) is the other half of what a view's `render` takes (the element
+table for whatever surface is drawing it, the pane's own body dimensions, what the surface can do and
+the border style, see [`views.md`](./views.md#the-drawing-kit)), resolved lazily by `register.ts` so a
 guard that declines to draw never pays for resolving it.
 
 A **trigger** is a pure `(ToolEvent) => Action[]`; a **directive** is the shared shape (`op`, `path`,
@@ -186,7 +187,7 @@ of the loop, not its every state.
 sandbox) that this spec's diagrams assume. [`agentic.md`](./agentic.md) owns the `show` tool, the CLI
 and the directive contract in full. [`diff-pane.md`](./diff-pane.md) and [`review.md`](./review.md)
 own the diff pane and its review tools in depth; [`views.md`](./views.md) owns the Doc, Files and
-Tasks views plus the chrome shared across all four (status band, command row, pane tabs);
+Tasks views plus the chrome shared across all four (drawing kit, status band, command row, pane tabs);
 [`settings-and-surfaces.md`](./settings-and-surfaces.md) owns the `/config` fields and how a view
 degrades on a surface missing an element; [`development.md`](./development.md) owns building, testing
 and the closed-loop tmux harness.
