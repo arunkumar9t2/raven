@@ -36,6 +36,7 @@ import {
   fixedRowsOf,
   type Stream,
   streamOf,
+  TITLE_GAP_KEY,
 } from './diff/blocks'
 import {
   addressedRow,
@@ -776,7 +777,9 @@ export function createDiffView(
     }
 
     const { item } = block
-    if (item.kind === 'gap' || item.kind === 'title' || item.kind === 'close') {
+    // The blank row under a title carries no rail outside a frame: the rail starts at the label.
+    const isOpenTitleGap = block.key.endsWith(`#${TITLE_GAP_KEY}`) && !style.frame
+    if (isOpenTitleGap || item.kind === 'gap' || item.kind === 'title' || item.kind === 'close') {
       return clippedOf(
         kit,
         block.key,

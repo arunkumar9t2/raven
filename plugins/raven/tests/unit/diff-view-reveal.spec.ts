@@ -285,6 +285,21 @@ describe('file cards as drawn at a narrow pane', () => {
     }
   })
 
+  test('the blank row under a title draws no rail in bar, and the frame sides in sharp and rounded', async () => {
+    for (const [name, expected] of [
+      ['bar', ' '],
+      ['none', ' '],
+      ['sharp', '│ '],
+      ['rounded', '│ '],
+    ] as const) {
+      const tree = await renderedAs(twoFiles, name, 60)
+      const drawn = drawnOf(findByKey(tree, 'a.ts#title-gap'))
+      expect(drawn).not.toContain('▌')
+      expect(drawn.startsWith(expected)).toBe(true)
+      expect(drawn.includes('│')).toBe(name === 'sharp' || name === 'rounded')
+    }
+  })
+
   test('a renamed file shows only its new path', async () => {
     const renamed = worldOf({
       status: 'R  new.ts\0old.ts\0',

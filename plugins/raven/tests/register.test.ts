@@ -1267,7 +1267,7 @@ describe('review stream', () => {
     expect(colorOf(await ui.find({ key: 'a.ts#status' }), '▌')).not.toBe('claude')
   })
 
-  test('each file is a card: a title row, a ▌ rail on every body row, and a blank gap row (no rail) between two files', async ($, on) => {
+  test('each file is a card: a title row, a ▌ rail on every body row from the hunk label down, and a blank gap row (no rail) between two files', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
@@ -1275,7 +1275,7 @@ describe('review stream', () => {
 
     expect((await ui.find({ key: 'a.ts#title' }))?.text).toContain('a.ts')
     expect((await ui.find({ key: 'a.ts#title' }))?.text).not.toContain('╭')
-    expect((await ui.find({ key: 'a.ts#title-gap' }))?.text.startsWith('▌')).toBe(true)
+    expect((await ui.find({ key: 'a.ts#title-gap' }))?.text.includes('▌')).toBe(false)
     expect((await ui.find({ key: 'a.ts#status' }))?.text.startsWith('▌')).toBe(true)
     expect(await ui.find({ key: 'a.ts#close' })).toBeUndefined()
     expect((await ui.find({ key: 'b.ts#sep' }))?.text.trim()).toBe('')
