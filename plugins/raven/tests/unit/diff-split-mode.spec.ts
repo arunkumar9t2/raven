@@ -56,6 +56,40 @@ describe('createSplitMode', () => {
     return { host, store }
   }
 
+  test('a toggle pressed while the stored read is in flight survives the late read', async () => {
+    let release: (value: unknown) => void = () => {}
+    const writes: unknown[] = []
+    const host = fakeHost({
+      storeGet: () => new Promise(resolve => (release = resolve)),
+      storeSet: async (_key, value) => {
+        writes.push(value)
+      },
+    })
+    const mode = createSplitMode(host, 160)
+    const reading = mode.resolveStored('/repo')
+    mode.toggle(200)
+    release('split')
+    await reading
+    expect(mode.isSplit(200)).toBe(false)
+    expect(writes).toEqual(['unified'])
+  })
+
+  test('a late read for a previous repository is dropped and the mode resets on a switch', async () => {
+    const releases = new Map<string, (value: unknown) => void>()
+    const host = fakeHost({
+      storeGet: key => new Promise(resolve => releases.set(key, resolve)),
+    })
+    const mode = createSplitMode(host, 160)
+    const first = mode.resolveStored('/a')
+    const second = mode.resolveStored('/b')
+    releases.get(splitStoreKeyOf('/a'))?.('unified')
+    await first
+    expect(mode.isSplit(200)).toBe(true)
+    releases.get(splitStoreKeyOf('/b'))?.('split')
+    await second
+    expect(mode.isSplit(100)).toBe(true)
+  })
+
   test('with nothing stored the width decides', async () => {
     const { host } = storeHost()
     const mode = createSplitMode(host, 160)
@@ -96,8 +130,9 @@ describe('createSplitMode', () => {
     expect(mode.isSplit(100)).toBe(true)
 
     await mode.resolveStored(null)
-    mode.toggle(100)
     expect(mode.isSplit(100)).toBe(false)
+    mode.toggle(100)
+    expect(mode.isSplit(100)).toBe(true)
     await Promise.resolve()
     expect(store.get(splitStoreKeyOf('/b'))).toBe('split')
   })
@@ -155,10 +190,11 @@ describe('splitChipOf', () => {
     expect(iconed(66)).toEqual([])
     // Find the first room that shrinks anything: it must be refresh alone.
     let room = 66
-    while (iconed(room - 1).length === 0) room -= 1
+    while (room > 0 && iconed(room - 1).length === 0) room -= 1
     const firstShrunk = iconed(room - 1)
     expect(firstShrunk).toEqual(['previous', 'next', 'refresh'])
-    while (!iconed(room - 1).includes('split')) room -= 1
+    while (room > 0 && !iconed(room - 1).includes('split')) room -= 1
+    expect(room).toBeGreaterThan(0)
     expect(iconed(room - 1)).toEqual(['previous', 'next', 'refresh', 'split'])
     expect(iconed(room - 1)).not.toContain('clear')
   })

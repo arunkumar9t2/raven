@@ -38,21 +38,28 @@ export function createSplitMode(host: Host, splitColumns: number): SplitMode {
   let forced: ForcedMode = null
   let toplevel: string | null = null
   let readFor: string | null | undefined
+  /** Counts toggles, so a read that was in flight across one knows to drop its value. */
+  let toggles = 0
 
   async function resolveStored(top: string | null): Promise<void> {
     if (readFor === top) return
     readFor = top
     toplevel = top
+    forced = null
     if (top === null) return
+    const stamp = toggles
     const stored = await host
       .storeGet(splitStoreKeyOf(top))
       .catch(loggedAs<unknown>(host, 'reading the split mode', undefined))
+    // A late read loses to a toggle pressed meanwhile, and to a newer repository.
+    if (readFor !== top || toggles !== stamp) return
     forced = forcedOf(stored)
   }
 
   const isSplit = (bodyColumns: number) => splitModeOf(bodyColumns, splitColumns, forced)
 
   function toggle(bodyColumns: number): void {
+    toggles += 1
     forced = isSplit(bodyColumns) ? 'unified' : 'split'
     if (toplevel === null) return
     void host
