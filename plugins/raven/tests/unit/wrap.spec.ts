@@ -70,3 +70,35 @@ describe('widthOf wide emoji', () => {
     expect(widthOf('✓')).toBe(1)
   })
 })
+
+describe('widthOf emoji sequences', () => {
+  test('a narrow base with VS16 (U+FE0F) measures 2', () => {
+    expect(widthOf('⚠️')).toBe(2)
+    expect(widthOf('✔️')).toBe(2)
+    expect(widthOf('❤️')).toBe(2)
+    expect(widthOf('a⚠️b')).toBe(4)
+  })
+
+  test('a keycap sequence stays 2', () => {
+    expect(widthOf('1️⃣')).toBe(2)
+  })
+
+  test('a ZWJ emoji sequence is one 2-cell grapheme', () => {
+    expect(widthOf('👨‍👩‍👧')).toBe(2)
+    expect(widthOf('👩‍⚕️')).toBe(2)
+    expect(widthOf('x👨‍👩‍👧y')).toBe(4)
+  })
+
+  test('a lone VS16 after a wide or combining base adds nothing, other widths are unchanged', () => {
+    expect(widthOf('✅️')).toBe(2)
+    expect(widthOf('漢字')).toBe(4)
+    expect(widthOf('é')).toBe(1)
+    expect(widthOf('a‍b')).toBe(2)
+    expect(widthOf('✓')).toBe(1)
+  })
+
+  test('a hard-broken word never splits a sequence and fits its width', () => {
+    expect(wrapText('⚠️⚠️⚠️', 4, 9)).toEqual(['⚠️⚠️', '⚠️'])
+    expect(wrapText('👨‍👩‍👧👨‍👩‍👧', 2, 9)).toEqual(['👨‍👩‍👧', '👨‍👩‍👧'])
+  })
+})

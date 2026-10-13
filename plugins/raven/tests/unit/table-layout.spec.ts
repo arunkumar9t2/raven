@@ -254,3 +254,21 @@ describe('rule tables', () => {
     expect(lines).toEqual(['A  B', '────'])
   })
 })
+
+describe('emoji cell widths', () => {
+  test('a VS16 and a ZWJ cell align the grid like a plain one', () => {
+    const data: TableData = {
+      header: ['Mark', 'Who'],
+      align: ['left', 'left'],
+      rows: [
+        ['⚠️', '👨‍👩‍👧'],
+        ['ok', 'plain'],
+      ],
+    }
+    const lines = drawn(layoutTable(data, 60), 'sharp')
+    const widths = lines.map(widthOf)
+    expect(new Set(widths).size).toBe(1)
+    // columns of 4 (the header) and 5 cells, plus the grid's 3n + 1 borders
+    expect(widths[0]).toBe(4 + 5 + 7)
+  })
+})

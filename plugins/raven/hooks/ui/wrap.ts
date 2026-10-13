@@ -71,10 +71,40 @@ function pointWidth(cp: number): number {
   return 1
 }
 
+const VS16 = 0xfe0f
+const ZWJ = 0x200d
+/** A code point a ZWJ can join onto the emoji before it (pictographs, arrows, dingbats, symbols). */
+const joinsAfterZwj = (cp: number) => cp >= 0x1f000 || (cp >= 0x2190 && cp <= 0x2bff)
+
+/**
+ * `text` as display clusters: a base code point with the VS16, keycap mark and ZWJ that follow it,
+ * and the emoji a ZWJ joins on, so a sequence is one unit to measure and to cut.
+ */
+export function clustersOf(text: string): string[] {
+  const out: string[] = []
+  let joinNext: boolean = false
+  for (const char of text) {
+    const cp = char.codePointAt(0) ?? 0
+    const attaches: boolean =
+      out.length > 0 &&
+      (cp === VS16 || cp === ZWJ || cp === 0x20e3 || (joinNext && joinsAfterZwj(cp)))
+    if (attaches) out[out.length - 1] += char
+    else out.push(char)
+    joinNext = cp === ZWJ && attaches
+  }
+  return out
+}
+
+/** Display width of one cluster: its base, widened to 2 by a VS16; what a ZWJ joins adds nothing. */
+function clusterWidth(cluster: string): number {
+  const base = pointWidth(cluster.codePointAt(0) ?? 0)
+  return base === 1 && cluster.includes(String.fromCodePoint(VS16)) ? 2 : base
+}
+
 /** Display width of `text` in terminal cells. */
 export function widthOf(text: string): number {
   let width = 0
-  for (const char of text) width += pointWidth(char.codePointAt(0) ?? 0)
+  for (const cluster of clustersOf(text)) width += clusterWidth(cluster)
   return width
 }
 
@@ -112,7 +142,7 @@ export function wordLinesOf(spans: readonly Span[]): Word[][] {
  */
 function breakWord(word: Word, width: number): Word[] {
   const chars = word.flatMap(span =>
-    [...span.text].map(char => ({ char, style: span.style, w: widthOf(char) })),
+    clustersOf(span.text).map(char => ({ char, style: span.style, w: widthOf(char) })),
   )
   const pieces: Word[] = []
   let start = 0
@@ -225,7 +255,7 @@ export function wrapText(
   // Cut the last line to `room` cells (one is left for the ellipsis), summing widths as it goes.
   let cut = ''
   let used = 0
-  for (const char of [...(lines[last] as string)]) {
+  for (const char of clustersOf(lines[last] as string)) {
     const w = widthOf(char)
     if (used + w > room) break
     cut += char
