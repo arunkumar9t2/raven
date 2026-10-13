@@ -74,7 +74,7 @@ code fences; text above the first heading is the `(top)` section). Each section 
   engine wraps the Markdown and a closed frame would need its height. The first heading follows
   the title with one blank row, the same as any other.
 - **The note chip, inline.** On a surface with `canType`, and only while the section is not already
-  being composed, a ` ✎ note ` pill draws two columns after the heading text (never at the pane's
+  being composed, a ` <note glyph> note ` pill draws two columns after the heading text (never at the pane's
   right edge, which stays free); it shrinks to its bare icon before it would leave the heading under
   12 cells. The `(top)` section has no heading to show, so its row is the chip alone, and with nothing
   to type it draws no row at all (while it is being composed the row stays, so the page does not jump).
@@ -97,7 +97,7 @@ comments the same way, grouped by the section identity (heading and index) each 
 even though neither names a section on screen any more.
 
 When a shown file is reloaded in place (an edit to an open plan) while a compose box is open, the box
-follows its section to wherever it now sits, found by heading and which of the equal headings it
+follows its section to wherever it sits after the edit, found by heading and which of the equal headings it
 was (`reconcileComposing`): the anchor moves to the section's new index and the Input is focused
 again, so what the person typed is kept; the box closes if the section is gone.
 Nothing here draws a note control at all for a `note` directive's inline markdown, for a file that
@@ -234,7 +234,7 @@ The pieces the panes share:
 
 ## Status band
 
-Above the prompt (`AbovePrompt`), one row reads `<mark> ✎ N pending  plan updated   open   ➤ send`
+Above the prompt (`AbovePrompt`), one row reads `<mark> <note glyph> N pending  plan updated   open   ➤ send`
 (`plugins/raven/hooks/views/band.tsx`, state in `plugins/raven/hooks/core/band-state.ts`): an accent
 Raven mark and the notes summary in the suggestion colour (the plan flag dim) on the left, then ` open `
 and (only while comments are pending) the primary ` ➤ send ` as right-aligned pills. The row is

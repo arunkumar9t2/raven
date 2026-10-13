@@ -47,7 +47,7 @@
     "splitColumns": {
       "type": "number",
       "title": "Side-by-side minimum width",
-      "description": "Show the diff side by side at or above this body width, in columns, unless the header chip forced a mode.",
+      "description": "Show the diff side by side at or above this pane width, in columns, unless the header chip forced a mode.",
       "required": false,
       "default": 160
     },

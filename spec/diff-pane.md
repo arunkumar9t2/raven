@@ -18,9 +18,9 @@ scrolls. The drawing kit that frames cards, notes and chips (`Style`, `cardStyle
 The header (`plugins/raven/hooks/views/diff/header.tsx`, plan in `header-plan.ts`) is **one row** when
 it fits: a Nerd Font git mark (`COLORS.git`), `N files`, `+adds −dels`, the [change
 map](#the-change-map), a dim `·`, the source picker (`source <value> ▾`), the notes summary once a
-comment is pending (`✎ N notes pending`, given up first), and, flush right, the action chips. The
+comment is pending (`<note glyph> N notes pending`, given up first; the note glyph is `NOTE_GLYPH`, U+F036A, drawn wherever a note is marked), and, flush right, the action chips. The
 chips are ` ↑ ` ` ↓ ` ` ↻ refresh `, the [side-by-side toggle](#side-by-side) ` ◫ split ` or ` ≡ unified `,
-then, once a comment is pending, ` ✎ edit & send ` and the primary ` ➤ send N ` (the pane's main
+then, once a comment is pending, ` <note glyph> edit & send ` and the primary ` ➤ send N ` (the pane's main
 action), then ` ⌫ clear ` (`headerChipsOf`). `chipsLayout` sizes them in the room the left cluster
 leaves and shrinks the lowest-priority chip to its bare icon first: refresh (1), split (1.5), clear
 (2), edit & send (3), send (4), so `send N` keeps its words longest. A stat bar is not drawn here;
@@ -32,12 +32,12 @@ the map (up to 12 cells, one per file) and then to the notes summary. Otherwise 
 **two rows**: counts and source on the first, the map and notes summary on the left of the second
 with the chips right-aligned. The two-row form keeps the narrow-pane rules: with a clear armed it drops
 nav, refresh, split and the map and notes summary entirely, so nothing competes with the confirm;
-with nothing armed it degrades instead of vanishing. ` ↑ ` ` ↓ ` never give way, in words, icons or by
+with nothing armed it degrades instead of vanishing, and ` ↑ ` ` ↓ ` never give way, in words, icons or by
 dropping, since they are the file list's only carriers of the person's own list chords (a `Client`
 cannot bind an engine chord, so these two draw as `plain` Buttons beside the strip, padded like
 pills); `refresh` gives way first; the map caps at 2 cells instead of a third of the width (two
 changed files each still draw their glyph; more than two draw one glyph plus the overflow `…`); and
-the notes summary compacts to a bare `✎`. Armed clear is drawn in the error colours, filled, and
+the notes summary compacts to a bare note glyph. Armed clear is drawn in the error colours, filled, and
 keeps its words in either form. The source label is cut to 24 cells with a trailing `…`
 (`sourceLabelOf`) so a long turn prompt cannot outgrow its counted width.
 
@@ -65,7 +65,7 @@ Content is never boxed. The card's rows, top to bottom, are:
   then a dim `new file` or `deleted` tag for a [whole file](#whole-files): a Nerd Font file-type icon
   coloured by type (`views/icons.ts`), a gap (`ICON_GAP`), the bold path, the status mark and the
   counts (a zero side is left out). A renamed file's title shows only its new path; the `old → new`
-  label is the file-list row's alone (`titleRowOf` in `diff-view.tsx`). The file's ` ✎ note ` chip
+  label is the file-list row's alone (`titleRowOf` in `diff-view.tsx`). The file's ` <note glyph> note ` chip
   draws **inline**, two columns after the title, never at the pane's edge; it shrinks to its bare
   icon when the row is too narrow for the words, the path (which truncates) giving way first.
 - A blank row (`title-gap`), always.
@@ -73,7 +73,7 @@ Content is never boxed. The card's rows, top to bottom, are:
   (`file-gap`); absent when there are none.
 - Each hunk in turn: a blank row before every hunk but the first, a **label row**, the code, its own
   notes, then (only while that hunk is being composed) its compose box. The label row (`hunkToolbar`)
-  is plain text with no rule: `ƒ name  L1–7`, and, unless read-only, the ` ✎ note `, ` ✓ stage `,
+  is plain text with no rule: `ƒ name  L1–7`, and, unless read-only, the ` <note glyph> note `, ` ✓ stage `,
   ` ↺ revert ` pills two columns after it, shrinking to icons together under `chipsFit`. The label is
   the function context git gives, and the line range, which is the new side's, or the old side's when
   the new side is empty (a pure deletion, a deleted file). A trailing `{` or `(` on the context is
@@ -148,14 +148,16 @@ sides.
 
 ### The change map
 
-Row 2's left side draws a change map (`plugins/raven/hooks/ui/change-map.tsx`): one glyph per
+The header draws a change map (`plugins/raven/hooks/ui/change-map.tsx`; after the counts in the
+one-row header, on the left of the second row in the two-row fallback): one glyph per
 changed file, chosen from `▁▂▃▄▅▆▇█` by that file's share of the *largest single file's* change
 in the set (`max = Math.max(1, ...sizes)`, `ratio = size / max`: the file with the most changed
 lines always draws `█`, every other file scaled against it, not against the diff's total), a
 skyline of the change set before reading any of it. Each glyph is coloured by the file's status;
 the file being edited this turn draws in the accent colour, same as its card's rail. A changed file
 never draws below `▁` even next to a much larger one, so nothing goes invisible. More files than
-fit the row's share of `kit.columns` keep the first few and end with one dim `…` cell rather than
+fit the map's cell budget (up to 12 cells in the one-row header, a third of `kit.columns` in the
+two-row form, 2 cells when that row is narrow) keep the first few and end with one dim `…` cell rather than
 wrapping or dropping files silently.
 
 A file's section shows only its own comments and, for a renamed file, comments made under its
@@ -242,8 +244,8 @@ already bounded by `LINE_CAP`.
 
 **Comments.** Anchors are the same as in unified, with one difference in what is offered. A new line
 note anchors to a new-side line only: the compose box's picker lists the hunk's added lines, and a
-line picked in unified that split does not offer (an old-side line) counts as "whole hunk" (`pickableLinesOf`, `effectiveLineOf` in `split.ts`; the picker and the submit read the same
-value, so what is shown is what is saved). A removed-only change is commented through its hunk. A note
+line picked in unified that split does not offer (an old-side line) counts as "whole hunk" (`pickableLinesOf`,
+`effectiveLineOf` in `split.ts`; the picker and the submit read the same value, so what is shown is what is saved). A removed-only change is commented through its hunk. A note
 made earlier on a removed line still draws, under its run. Notes draw full width under the *end of the
 change run* their line belongs to, not under the line itself, so a note never splits a pair: the cut
 moves to the run's end (`runEndOf`), notes on one run share it, and the segments' rows concatenate to
@@ -350,8 +352,8 @@ checked.
 No control carries a letter hotkey. Pills on a `Client` surface are mouse-first (R42): every action is reachable by click; the keyboard reaches a strip after a click inside it (←/→ move a focus ring between its pills, ↑/↓ between its rows, Enter or space presses the focused one); and with the `keyboardControls` setting every control is a plain Button in the Tab ring again, as on a surface without a `Client`. The file
 list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
 the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
-file's note chip, inline after its title, is the ` ✎ note ` pill; a hunk's, on its label row beside
-the stage and revert pills, is the ` ✎ note ` pill; the title's shrinks to its bare icon (` ✎ `)
+file's note chip, inline after its title, is the ` <note glyph> note ` pill; a hunk's, on its label row beside
+the stage and revert pills, is the same pill; the title's shrinks to its bare icon
 under `chipsFit` when the row is too narrow for every chip's words, the title's path giving way
 first; the label row's pills shrink to bare icons the same way. The header's [split
 chip](#side-by-side) and the rest of the header chips follow `chipsLayout`'s priority order
@@ -361,11 +363,11 @@ to the composer.
 
 ## Stage and revert one hunk
 
-Each hunk in a non-read-only source carries **pills** on its label row, two columns after the label,, drawn as one
-`Client` strip (`hooks/ui/strip.tsx`; [mod-api](./mod-api.md#client-and-uimessage)): ` ✎ note ` (when
+Each hunk in a non-read-only source carries **pills** on its label row, two columns after the label, drawn as one
+`Client` strip (`hooks/ui/strip.tsx`; [mod-api](./mod-api.md#client-and-uimessage)): ` <note glyph> note ` (when
 the surface has `canType` and the hunk isn't being composed), then ` ✓ stage `, then ` ↺ revert `:
 coloured text on a tinted background, no brackets, the background lighting under the pointer; icons
-only (` ✎ `, ` ✓ `, ` ↺ `) once the row is too narrow for every pill's words. A left click posts the
+only (the note glyph, ` ✓ `, ` ↺ `) once the row is too narrow for every pill's words. A left click posts the
 pill's id, which the press registry maps to the same handler a `Button` would have run. On a surface
 without `canClient` the same labels draw as `plain` Buttons. Before either runs, Raven re-reads that one file's current hunks and requires an exact
 header-and-text match against the hunk the button was drawn for. A mismatch (the working tree

@@ -91,10 +91,10 @@ resize. No blank row sits before or after a note: a note under a line reads as a
 The compose box (`commentBox`, same file) is the one frame the panes draw. It is closed on all four
 sides in the accent (`COLORS.accent`), with the frame glyphs from the style (`style.compose`: `┌┐└┘`
 in every `cardStyle` but `rounded`, which draws `╭╮╰╯`), the interior on the same `userMessageBackground`
-fill, and a title `✎ comment for Claude` in its top border:
+fill, and a title `<note glyph> comment for Claude` in its top border:
 
 ```
-┌─ ✎ comment for Claude ──────────────────────────────────┐
+┌─ * comment for Claude ──────────────────────────────────┐
 │ whole hunk ▾  Your comment for Claude…  ⏎ add  ✕ cancel │
 └─────────────────────────────────────────────────────────┘
 ```

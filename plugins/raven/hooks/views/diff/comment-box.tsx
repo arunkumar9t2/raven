@@ -74,7 +74,7 @@ export type CommentBoxProps = {
 }
 
 /**
- * The compose box, the one frame on screen: `┌─ ✎ comment for Claude ──┐`, the interior on the
+ * The compose box, the one frame on screen: `┌─ <note glyph> comment for Claude ──┐`, the interior on the
  * user-message fill, `└──┘` (`style.compose`: sharp, rounded under `rounded`). Its interior is one
  * row, `whole hunk ▾  <Input>  ✕ cancel` (the Input draws its own `⏎ add`), until the pane is too
  * narrow: then the picker takes a row above the Input and the cancel pill a row below

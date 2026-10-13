@@ -13,7 +13,7 @@ export type RavenSettings = {
   keyboardControls: boolean
   /** How files, doc sections, the compose box and tables are framed (`ui/style.ts`). */
   cardStyle: CardStyle
-  /** Body width, in columns, at which the diff goes side-by-side unless the header chip forced a mode. */
+  /** Pane width, in columns, at which the diff goes side-by-side unless the header chip forced a mode. */
   splitColumns: number
   /** A colour painted behind every pane so it matches the terminal; `''` leaves the engine's own. */
   paneBackground: string

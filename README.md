@@ -68,7 +68,7 @@ a plan, or starts a task list (see [Settings](#settings) to turn that off).
 
 Run a pane's command again to close it.
 
-To leave a note, click **✎ note** on a file or a hunk, pick a line if you want one, type, and press
+To leave a note, click **note** on a file or a hunk, pick a line if you want one, type, and press
 Enter. To send notes without waiting for your next prompt, click **send**.
 
 You can also ask Claude to show you things, like "show me the plan in raven". To let Claude do that
