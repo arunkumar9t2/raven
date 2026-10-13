@@ -1111,6 +1111,10 @@ describe('diff view keyboard control', () => {
       (await ui.findAll({ in: 'file-list', type: 'Box' })).map(box => box.props.backgroundColor)
     expect(await bgs()).toContain('selectionBg')
     expect(await bgs()).not.toContain('userMessageBackgroundHover')
+    // Hovering the selected row itself keeps the one selection tint: no second highlight stacks.
+    await ui.pointer({ type: 'move', x: 40, y: 0, in: 'file-list' })
+    expect(await bgs()).toContain('selectionBg')
+    expect(await bgs()).not.toContain('userMessageBackgroundHover')
     // Hovering the other row lights it; a left click anywhere on it selects it.
     await ui.pointer({ type: 'move', x: 40, y: 1, in: 'file-list' })
     expect(await bgs()).toContain('userMessageBackgroundHover')
