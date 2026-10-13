@@ -338,15 +338,23 @@ export function orphansTitle(kit: Kit): RenderElement {
   return <Text dimColor>Not in this diff</Text>
 }
 
-/** An orphaned path's own heading row: the path, plus a dim "file gone" when it no longer exists. */
+/** An orphaned path's own heading row, always one row: the path (it truncates first), plus a dim "file gone" when it no longer exists. */
 export function orphanPathRow(kit: Kit, path: string, isGone: boolean): RenderElement {
   const { Box, Text } = kit.ui
   return (
     <Box flexDirection="row" gap={1} overflow="hidden" flexWrap="nowrap">
-      <Text bold wrap="truncate-end">
-        {path}
-      </Text>
-      {isGone ? <Text dimColor>file gone</Text> : null}
+      <Box flexShrink={1} overflow="hidden">
+        <Text bold wrap="truncate-end">
+          {path}
+        </Text>
+      </Box>
+      {isGone ? (
+        <Box flexShrink={0}>
+          <Text dimColor wrap="truncate-end">
+            file gone
+          </Text>
+        </Box>
+      ) : null}
     </Box>
   )
 }

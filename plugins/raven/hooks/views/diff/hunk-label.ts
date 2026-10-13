@@ -54,8 +54,9 @@ export function isProsePath(path: string): boolean {
 }
 
 /**
- * A hunk's label: its function context and new-side line range (the old side when the new side is empty) (`ƒ handleRequest  L2–8`), or the
- * bare range when git gives no context or the file is prose. A trailing `{`/`(` off a long suffix is
+ * A hunk's label: its function context and line range (`ƒ handleRequest  L2–8`), or the bare
+ * range when git gives no context or the file is prose. The range is the new side's, or the old
+ * side's when the new side is empty (a deleted file, a pure deletion). A trailing `{`/`(` off a long suffix is
  * dropped. D10 point 3.
  *
  * The strip is unconditional, not gated on the suffix's length: git only ever puts one context

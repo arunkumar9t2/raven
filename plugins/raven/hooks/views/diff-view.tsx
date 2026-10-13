@@ -651,7 +651,11 @@ export function createDiffView(
       case 'title':
         return titleRowOf(kit, item, color, kit.style)
       case 'status':
-        return <Text dimColor>{item.text}</Text>
+        return (
+          <Text dimColor wrap="truncate-end">
+            {item.text}
+          </Text>
+        )
       case 'gap':
       case 'blank':
         return <Text> </Text>

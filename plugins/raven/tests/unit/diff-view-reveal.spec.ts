@@ -6,7 +6,7 @@ import { NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { styleOf } from '../../hooks/ui/style'
 import { widthOf } from '../../hooks/ui/wrap'
 import { cancelKeyOf, commentButtonKeyOf, inputKeyOf } from '../../hooks/views/diff/anchor'
-import { note } from '../../hooks/views/diff/comment-box'
+import { note, orphanPathRow } from '../../hooks/views/diff/comment-box'
 import {
   type HeaderProps,
   header,
@@ -478,5 +478,26 @@ describe('rows the review found miscounted or misrouted', () => {
       )
       expect(header.length).toBe(1)
     }
+  })
+
+  test('M3: a status row ("Binary file", "Not read") truncates, so it is one row under none', async () => {
+    const run = worldOf({ status: ' M pic.png\0', numstat: '-\t-\tpic.png\x00', diff: '' })
+    const tree = (await viewOver(run)).render(wideKit(14, 'none'))
+    const status = findByKey(tree, 'pic.png#status')
+    const texts = findAll(status, n => n.type === Text && drawnOf(n).includes('Binary'))
+    expect(texts.length).toBe(1)
+    expect(texts[0]?.props.wrap).toBe('truncate-end')
+  })
+
+  test('M9: an orphan path row is one row: the path truncates, "file gone" never shrinks or wraps', () => {
+    const tree = orphanPathRow(wideKit(40), `packages/${'deep/'.repeat(14)}gone.ts`, true)
+    const path = findAll(tree, n => n.type === Text && n.props.bold === true)[0]
+    expect(path?.props.wrap).toBe('truncate-end')
+    const gone = findAll(tree, n => n.type === Text && drawnOf(n) === 'file gone')[0]
+    expect(gone?.props.wrap).toBe('truncate-end')
+    const goneHolder = findAll(tree, n => n.type === Box && n.props.flexShrink === 0)
+    expect(goneHolder.length).toBe(1)
+    const pathHolder = findAll(tree, n => n.type === Box && n.props.flexShrink === 1)
+    expect(pathHolder.length).toBe(1)
   })
 })
