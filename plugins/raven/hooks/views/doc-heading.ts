@@ -18,7 +18,7 @@ export type HeadingLook = {
  * The heading's look by style and level. H1 and H2 carry the style's group mark and accent text; in
  * a style with no left bar (`none`) or with frames (`sharp`, `rounded`: a doc section cannot be
  * framed, its height is the engine's) they draw a dim rule under the heading instead. H3 and
- * deeper are bold only. Level 0 (text above the first heading) draws no heading at all.
+ * deeper are bold only. Level 0 (text above the first heading) produces no heading element, only its note chip.
  */
 export function headingLookOf(style: Style, level: number): HeadingLook {
   if (level === 0) return { mark: null, accent: false, dim: true, rule: false }

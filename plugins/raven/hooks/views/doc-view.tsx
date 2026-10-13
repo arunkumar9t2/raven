@@ -105,14 +105,13 @@ const sectionAnchorOf = (path: string, index: number): Anchor => ({ path, hunk: 
  */
 function titleRow(kit: Kit, shown: Shown): RenderElement {
   const { Box, Text } = kit.ui
-  const isFile = shown.doc.kind === 'file'
-  const icon =
-    shown.doc.kind === 'file' ? iconOf(shown.doc.path) : { glyph: NOTE_ICON, color: RAINBOW.blue }
-  const name =
-    shown.doc.kind === 'file' ? (shown.doc.title ?? baseName(shown.doc.path)) : shown.title
-  const path = isFile
-    ? titlePathOf(shown.label, kit.columns, widthOf(iconText(icon.glyph, name)))
-    : ''
+  const { doc } = shown
+  const icon = doc.kind === 'file' ? iconOf(doc.path) : { glyph: NOTE_ICON, color: RAINBOW.blue }
+  const name = doc.kind === 'file' ? (doc.title ?? baseName(doc.path)) : shown.title
+  const path =
+    doc.kind === 'file'
+      ? titlePathOf(shown.label, kit.columns, widthOf(iconText(icon.glyph, name)))
+      : ''
   return (
     <Box
       key="doc-title"

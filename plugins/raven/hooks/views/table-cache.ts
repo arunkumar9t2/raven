@@ -11,6 +11,7 @@ export type TableCache = {
 }
 
 /**
+ * Blocks are immutable and replaced on reload, so the cache keys on block identity (a WeakMap).
  * A table's layout costs more than drawing it, so each block keeps its last result; the key is
  * the width and the look (mode and corners), so a changed pane width or `cardStyle` lays it out
  * again rather than drawing stale rows.

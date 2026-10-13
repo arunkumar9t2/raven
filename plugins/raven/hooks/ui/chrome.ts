@@ -15,7 +15,7 @@ export const BAND_GUTTER = 3
 export const BAND_LABEL_CELLS = 24
 
 /** A rule's own cells beside its title: the opening glyphs (3), the gap before the fill (1) and one fill cell. */
-export const RULE_CHROME_CELLS = 5
+const RULE_CHROME_CELLS = 5
 
 /** A bar-style group's left rail: the `▌` or `┃` glyph and a space. */
 export const BAR_CELLS = 2

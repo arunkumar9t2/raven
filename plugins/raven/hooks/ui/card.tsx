@@ -45,7 +45,7 @@ export function closeRow(kit: UiKit, color: string, end?: string, start = '╰')
   )
 }
 
-export type RuleRowProps = {
+type RuleRowProps = {
   /** The border colour: `start`, the fill and `end`. */
   color: string
   /** The opening glyphs, space included: `╭─ ` or `├─ `. */
@@ -62,7 +62,7 @@ export type RuleRowProps = {
  * One border row: `╭─ title ───────── pills ─╮`. The fill takes the free width, so the pills sit
  * at the right edge and the corner (if any) closes it.
  */
-export function ruleRow(kit: UiKit, props: RuleRowProps): RenderElement {
+function ruleRow(kit: UiKit, props: RuleRowProps): RenderElement {
   const { Box, Text } = kit.ui
   const { color } = props
   return (
