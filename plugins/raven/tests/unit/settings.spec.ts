@@ -72,6 +72,20 @@ describe('settingsOf', () => {
   test('an unknown or wrong-typed cardStyle falls back to bar', () => {
     expect(settingsOf({ cardStyle: 'square' }).cardStyle).toBe('bar')
     expect(settingsOf({ cardStyle: 'Rounded' }).cardStyle).toBe('bar')
+  })
+
+  test('cardStyle is trimmed, like paneBackground', () => {
+    expect(settingsOf({ cardStyle: ' sharp ' }).cardStyle).toBe('sharp')
+    expect(settingsOf({ cardStyle: '\tnone\n' }).cardStyle).toBe('none')
+    expect(settingsOf({ cardStyle: '   ' }).cardStyle).toBe('bar')
+  })
+
+  test('paneBackground accepts any identifier as an open-ended theme key; the engine resolves it', () => {
+    expect(settingsOf({ paneBackground: 'userMessageBackground' }).paneBackground).toBe(
+      'userMessageBackground',
+    )
+    expect(settingsOf({ paneBackground: 'banana' }).paneBackground).toBe('banana')
+    expect(settingsOf({ paneBackground: 'not a key!' }).paneBackground).toBe('')
     expect(settingsOf({ cardStyle: 3 }).cardStyle).toBe('bar')
     expect(settingsOf({ cardStyle: true }).cardStyle).toBe('bar')
   })

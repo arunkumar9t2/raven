@@ -424,3 +424,56 @@ describe('viewOf', () => {
     expect(viewOf(cards, 3, 0).pinned).toBeNull()
   })
 })
+
+describe('clampTop with a pinned compose box over the tail', () => {
+  const box: Block = { kind: 'fixed', key: 'a#box', rows: 6, item: null, pinned: true, card: 'a' }
+  const tailHunk: Block = {
+    kind: 'hunk',
+    key: 'a#tail',
+    hunk: hunkOf(
+      '@@ -1,9 +1,9 @@',
+      Array.from({ length: 9 }, (_, i) => ` t${i}`),
+    ),
+    card: 'a',
+  }
+  // title [0,1), gap [1,2), box [2,8), tail [8,17): 17 rows.
+  const stream: Block[] = [titleOf('a#title', 'a'), inCard('a#gap', 'a', 1), box, tailHunk]
+  const rows = 10
+
+  const coversEnd = (top: number) =>
+    viewOf(stream, top, rows).placed.some(p => p.block === tailHunk && p.to === rowsOf(tailHunk))
+
+  test('without the blocks the plain maximum still hides the tail while the box straddles', () => {
+    expect(coversEnd(clampTop(1000, contentRowsOf(stream), rows))).toBe(false)
+  })
+
+  test('with the blocks the maximum moves down until the last row is drawn', () => {
+    const top = clampTop(1000, contentRowsOf(stream), rows, stream)
+    expect(top).toBeGreaterThan(contentRowsOf(stream) - rows)
+    expect(coversEnd(top)).toBe(true)
+  })
+
+  test('every stream row from the box on is drawn at some reachable top', () => {
+    const max = clampTop(1000, contentRowsOf(stream), rows, stream)
+    const seen = new Set<number>()
+    const startOf = new Map<Block, number>()
+    let offset = 0
+    for (const block of stream) {
+      startOf.set(block, offset)
+      offset += rowsOf(block)
+    }
+    for (let top = 0; top <= max; top++) {
+      const view = viewOf(stream, top, rows)
+      for (const p of view.placed) {
+        const start = startOf.get(p.block) ?? 0
+        for (let r = p.from; r < p.to; r++) seen.add(start + r)
+      }
+    }
+    for (let row = 8; row < contentRowsOf(stream); row++) expect(seen.has(row)).toBe(true)
+  })
+
+  test('streams without a pinned block keep the plain maximum', () => {
+    expect(clampTop(1000, contentRowsOf(cards), 6, cards)).toBe(contentRowsOf(cards) - 6)
+    expect(clampTop(1000, 3, 10, [inCard('x', 'a', 3)])).toBe(0)
+  })
+})

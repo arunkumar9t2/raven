@@ -444,7 +444,7 @@ export function streamOf(
   const isOwned = (comment: Comment) => files.some(file => belongsTo(comment, file))
   const orphans = comments.filter(comment => comment.section === undefined && !isOwned(comment))
   for (const block of orphanBlocksOf(orphans, gonePaths, options.width)) {
-    blocks.push({ ...block, key: `orphans#${block.key}` })
+    blocks.push({ ...block, key: `orphans#${block.key}`, orphan: true })
     row += rowsOf(block)
   }
 

@@ -75,9 +75,16 @@ describe('hunkLabelOf', () => {
     expect(hunkLabelOf(hunk(header), 'LICENSE')).toBe('L3–8')
   })
 
-  test('a one-line hunk or a deletion-only hunk is a one-line range', () => {
+  test('a one-line hunk is a one-line range', () => {
     expect(hunkLabelOf(hunk('@@ -5 +5 @@'), 'a.ts')).toBe('L5–5')
-    expect(hunkLabelOf(hunk('@@ -5,2 +5,0 @@'), 'a.ts')).toBe('L5–5')
+  })
+
+  test('a hunk with an empty new side reads as the old lines it removed', () => {
+    expect(hunkLabelOf(hunk('@@ -5,2 +5,0 @@'), 'a.ts')).toBe('L5–6')
+    expect(hunkLabelOf(hunk('@@ -10,3 +9,0 @@'), 'a.ts')).toBe('L10–12')
+    // A deleted file: its whole old range, not the meaningless `L0–0`.
+    expect(hunkLabelOf(hunk('@@ -1,16 +0,0 @@'), 'a.ts')).toBe('L1–16')
+    expect(hunkLabelOf(hunk('@@ -1 +0,0 @@'), 'a.ts')).toBe('L1–1')
   })
 
   test('a header that does not parse has no label', () => {

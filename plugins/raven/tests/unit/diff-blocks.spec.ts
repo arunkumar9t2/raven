@@ -572,6 +572,10 @@ describe('streamOf', () => {
     const hunk = stream.blocks.find(block => block.kind === 'hunk')
     expect(hunk).toMatchObject({ card: file.path })
     expect(byKey.get(`orphans#${ORPHANS_TITLE_KEY}`)).not.toHaveProperty('card')
+    // Orphan rows are told apart by a flag, never by a key prefix a file path could share.
+    expect(byKey.get(`orphans#${ORPHANS_TITLE_KEY}`)).toMatchObject({ orphan: true })
+    expect(byKey.get(`${file.path}#${TITLE_KEY}`)).not.toHaveProperty('orphan')
+    expect(byKey.get('b.ts#sep')).not.toHaveProperty('orphan')
     const flagged = stream.blocks.filter(block => block.kind === 'fixed' && block.title)
     expect(flagged).toHaveLength(2)
   })

@@ -78,6 +78,24 @@ describe('groupRows', () => {
     expect(textsOf(out)).toEqual(['body'])
   })
 
+  test("none has no gutter, so a mark overlays the last row's first cell: nothing moves, nothing narrows", () => {
+    const out = groupRows(kit, styleOf('none'), {
+      color: 'warning',
+      rows: 3,
+      mark: 'suggestion',
+      children: body,
+    }) as Node
+    expect(textsOf(out)).toEqual(['body', '◆'])
+    const mark = findAll(out, n => n.type === 'Text' && n.props.color === 'suggestion')
+    expect(mark).toHaveLength(1)
+    const holder = findAll(out, n => n.props.position === 'absolute')[0]
+    expect(holder?.props.top).toBe(2)
+    expect(holder?.props.left).toBe(0)
+    // The children keep the full width: they are not in a row beside a gutter.
+    expect(out.props.flexDirection).toBe('column')
+    expect(out.props.height).toBe(3)
+  })
+
   test('sharp and rounded close both sides with │', () => {
     for (const name of ['sharp', 'rounded'] as const) {
       const out = groupRows(kit, styleOf(name), { color: 'warning', rows: 2, children: body })
@@ -122,6 +140,26 @@ describe('cardTitle', () => {
     expect(rounded[0]).toBe('╭─ ')
     expect(rounded.at(-1)).toBe('╮')
     expect(sharp).toContain(iconText(NOTE_GLYPH, 'note'))
+  })
+
+  test('the frame glyphs never shrink, whatever the title and chips need', () => {
+    for (const name of ['sharp', 'rounded'] as const) {
+      const out = cardTitle(kit, styleOf(name), props)
+      const glyphs = findAll(
+        out,
+        n => n.type === 'Text' && /^[┌╭┐╮]/.test(textUnder(n.props.children)),
+      )
+      expect(glyphs.length).toBe(2)
+      for (const glyph of glyphs) {
+        const holder = findAll(
+          out,
+          n => n.type === 'Box' && flatten(n.props.children).includes(glyph),
+        )[0]
+        expect(holder?.props.flexShrink).toBe(0)
+      }
+      const spaces = findAll(out, n => n.type === 'Box' && n.props.flexShrink === 0)
+      expect(spaces.length).toBeGreaterThanOrEqual(3)
+    }
   })
 
   test('chips are optional', () => {

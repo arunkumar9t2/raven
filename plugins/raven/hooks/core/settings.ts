@@ -46,8 +46,11 @@ const autoOpenColumnsOf = (value: unknown): number =>
     ? value
     : DEFAULT_SETTINGS.autoOpenColumns
 
-const cardStyleOf = (value: unknown): CardStyle =>
-  isCardStyle(value) ? value : DEFAULT_SETTINGS.cardStyle
+/** Trimmed like `paneBackground`: a stray space around the value in a settings file is not a typo. */
+const cardStyleOf = (value: unknown): CardStyle => {
+  const text = typeof value === 'string' ? value.trim() : value
+  return isCardStyle(text) ? text : DEFAULT_SETTINGS.cardStyle
+}
 
 const splitColumnsOf = (value: unknown): number =>
   typeof value === 'number' && Number.isFinite(value) && value > 0
@@ -64,7 +67,12 @@ const isColor = (text: string): boolean => {
   return rgb?.slice(1).every(part => Number(part) <= 255) ?? false
 }
 
-/** A hex, `rgb(r, g, b)` or theme-key colour, trimmed; anything else is `''` (the engine's own). */
+/**
+ * A hex, `rgb(r, g, b)` or theme-key colour, trimmed; anything else is `''` (the engine's own).
+ * Any identifier passes as a theme key on purpose: the engine's theme keys are open-ended (and
+ * `COLORS` lists only the ones Raven draws with), so an unknown key like `banana` is the engine's to
+ * resolve, not Raven's to second-guess.
+ */
 const paneBackgroundOf = (value: unknown): string => {
   if (typeof value !== 'string') return DEFAULT_SETTINGS.paneBackground
   const text = value.trim()

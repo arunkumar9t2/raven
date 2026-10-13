@@ -54,7 +54,7 @@ export function isProsePath(path: string): boolean {
 }
 
 /**
- * A hunk's label: its function context and new-side line range (`ƒ handleRequest  L2–8`), or the
+ * A hunk's label: its function context and new-side line range (the old side when the new side is empty) (`ƒ handleRequest  L2–8`), or the
  * bare range when git gives no context or the file is prose. A trailing `{`/`(` off a long suffix is
  * dropped. D10 point 3.
  *
@@ -65,7 +65,11 @@ export function isProsePath(path: string): boolean {
 export function hunkLabelOf(hunk: Hunk, path: string): string {
   const parsed = parseHeader(hunk.header)
   if (!parsed) return ''
-  const range = `L${parsed.newStart}–${parsed.newStart + Math.max(0, parsed.newCount - 1)}`
+  // A hunk with nothing on the new side (a deleted file, a pure deletion) has no new lines to
+  // name: it reads as the old-side lines it removed.
+  const [start, count] =
+    parsed.newCount === 0 ? [parsed.oldStart, parsed.oldCount] : [parsed.newStart, parsed.newCount]
+  const range = `L${start}–${start + Math.max(0, count - 1)}`
   if (isProsePath(path)) return range
   const suffix = parsed.suffix
     .trim()

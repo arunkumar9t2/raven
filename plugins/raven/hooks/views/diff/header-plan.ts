@@ -113,6 +113,21 @@ const ITEM_GAP = 2
 const SOURCE_CHROME_CELLS = 9
 /** The most cells of a source label the width estimate counts. */
 const SOURCE_LABEL_MAX = 24
+/**
+ * The source label as the picker draws it: cut to `SOURCE_LABEL_MAX` cells with a trailing `…`.
+ * The width estimate and the drawn `Select` both use this, so a long turn label cannot be wider
+ * on screen than it was counted.
+ */
+export function sourceLabelOf(label: string): string {
+  if (widthOf(label) <= SOURCE_LABEL_MAX) return label
+  let cut = ''
+  for (const char of label) {
+    if (widthOf(`${cut}${char}`) > SOURCE_LABEL_MAX - 1) break
+    cut += char
+  }
+  return `${cut}…`
+}
+
 /** A surface without a `Select` draws HEAD / session start / branch point as plain buttons. */
 const SOURCE_BUTTONS_CELLS = 40
 
@@ -148,7 +163,7 @@ const statCellsOf = (adds: number, dels: number): number =>
 
 function leftCellsOf(input: HeaderPlanInput, mapCells: number, notesText: string): number {
   const source = input.canPick
-    ? SOURCE_CHROME_CELLS + Math.min(widthOf(input.sourceLabel), SOURCE_LABEL_MAX)
+    ? SOURCE_CHROME_CELLS + widthOf(sourceLabelOf(input.sourceLabel))
     : SOURCE_BUTTONS_CELLS
   const items = [
     GIT_ICON_CELLS,
@@ -174,6 +189,7 @@ export function headerPlanOf(input: HeaderPlanInput): HeaderPlan {
     confirmingClear: input.confirmingClear,
     includeRefresh: true,
   })
+  // A forceWords chip (the armed clear) never shrinks, so the floor counts it at its words.
   const floor = chipsIconsWidthOf(chips)
   const fits = (left: number) => left + ITEM_GAP + floor <= input.columns
 

@@ -1,4 +1,5 @@
 import { describe, expect, test } from 'bun:test'
+import { chipsLayout, chipText, pillWidthOf } from '../../hooks/ui/chips'
 import { ICON_GAP, iconText, NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { widthOf } from '../../hooks/ui/wrap'
 import {
@@ -6,6 +7,7 @@ import {
   headerChipsOf,
   headerPlanOf,
   MIN_MAP_CELLS,
+  sourceLabelOf,
 } from '../../hooks/views/diff/header-plan'
 
 const input = (patch: Partial<HeaderPlanInput> = {}): HeaderPlanInput => ({
@@ -101,5 +103,62 @@ describe('headerPlanOf', () => {
       rows: 1,
       mapCells: 0,
     })
+  })
+})
+
+describe('headerPlanOf with an armed clear', () => {
+  const armed = (columns: number) =>
+    input({ columns, fileCount: 5, pending: 1, confirmingClear: true })
+
+  test('the armed "clear all?" pill keeps its words, so the one-row floor counts it at that width', () => {
+    // edit & send and send stay as bare icons (`<note glyph>`, `➤ 1`); the armed clear keeps its words.
+    const floor = pillWidthOf(NOTE_GLYPH) + 1 + pillWidthOf('➤ 1') + 1 + pillWidthOf('⌫ clear all?')
+    const first = Array.from({ length: 171 }, (_, i) => i + 30).find(
+      columns => headerPlanOf(armed(columns)).rows === 1,
+    )
+    expect(first).toBeDefined()
+    const plan = headerPlanOf(armed(first ?? 0))
+    if (plan.rows !== 1) throw new Error('expected one row')
+    expect(first).toBe(plan.leftCells + 2 + floor)
+    expect(headerPlanOf(armed((first ?? 0) - 1)).rows).toBe(2)
+  })
+
+  test('whenever the plan is one row, the chips fit the room the left cluster leaves', () => {
+    for (const pending of [0, 1, 12, 123]) {
+      for (const sourceLabel of ['HEAD', `turn 12: ${'x'.repeat(51)}`]) {
+        for (let columns = 30; columns <= 200; columns++) {
+          const plan = headerPlanOf(
+            input({ columns, pending, sourceLabel, confirmingClear: true, adds: 0, dels: 0 }),
+          )
+          if (plan.rows !== 1) continue
+          const chips = headerChipsOf({ pending, confirmingClear: true, includeRefresh: true })
+          const room = Math.max(0, columns - plan.leftCells - 2)
+          const modes = chipsLayout(chips, room)
+          const width =
+            chips.reduce(
+              (sum, chip, i) => sum + pillWidthOf(chipText(chip, modes[i] ?? 'icons')),
+              0,
+            ) +
+            chips.length -
+            1
+          expect(width).toBeLessThanOrEqual(room)
+        }
+      }
+    }
+  })
+})
+
+describe('sourceLabelOf', () => {
+  test('a label within 24 cells is drawn as it is', () => {
+    expect(sourceLabelOf('HEAD')).toBe('HEAD')
+    expect(sourceLabelOf('x'.repeat(24))).toBe('x'.repeat(24))
+  })
+
+  test('a longer label is cut to 24 cells with a trailing ellipsis, so the drawn width is the counted width', () => {
+    const cut = sourceLabelOf(`turn 12: ${'Refactor the authentication middleware '.repeat(2)}`)
+    expect(widthOf(cut)).toBe(24)
+    expect(cut.endsWith('…')).toBe(true)
+    // Wide characters never overshoot the cap.
+    expect(widthOf(sourceLabelOf('漢'.repeat(40)))).toBeLessThanOrEqual(24)
   })
 })

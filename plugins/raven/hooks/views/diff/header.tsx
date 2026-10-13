@@ -19,6 +19,7 @@ import {
   headerChipsOf,
   headerPlanOf,
   MIN_MAP_CELLS,
+  sourceLabelOf,
 } from './header-plan'
 
 /** The Nerd Font git mark (nf-md-git) leading the header, in `COLORS.git`. */
@@ -105,7 +106,11 @@ function sourceControl(kit: Kit, props: HeaderProps): RenderElement {
     <Select
       key={SOURCE_SELECT_KEY}
       label="source"
-      options={props.sourceOptions}
+      options={props.sourceOptions.map(option =>
+        option.value === props.sourceValue && option.label !== undefined
+          ? { ...option, label: sourceLabelOf(option.label) }
+          : option,
+      )}
       value={props.sourceValue}
       onSelect={props.onSourceChange}
     />
@@ -151,7 +156,7 @@ function oneRow(
         <Text bold wrap="truncate-end">
           {countOf(files.length, 'file')}
         </Text>
-        {diffStat(kit, adds, dels)}
+        {adds + dels > 0 ? diffStat(kit, adds, dels) : null}
         {plan.mapCells > 0 ? changeMap(kit, files, props.edited, plan.mapCells) : null}
         <Text dimColor wrap="truncate-end">
           ·
@@ -180,7 +185,7 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
       <Text bold wrap="truncate-end">
         {countOf(files.length, 'file')}
       </Text>
-      {diffStat(kit, adds, dels)}
+      {adds + dels > 0 ? diffStat(kit, adds, dels) : null}
       <Text dimColor wrap="truncate-end">
         ·
       </Text>

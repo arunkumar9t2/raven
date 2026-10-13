@@ -1,5 +1,11 @@
 import { describe, expect, test } from 'bun:test'
-import { type Chip, chipsFit, chipsIconsWidthOf, chipsLayout } from '../../hooks/ui/chips'
+import {
+  type Chip,
+  chipsFit,
+  chipsIconsWidthOf,
+  chipsLayout,
+  pillWidthOf,
+} from '../../hooks/ui/chips'
 import { NOTE_GLYPH } from '../../hooks/ui/icon-text'
 
 const noop = () => {}
@@ -100,5 +106,11 @@ describe('chipsIconsWidthOf', () => {
     expect(chipsIconsWidthOf([])).toBe(0)
     expect(chipsIconsWidthOf([{ icon: NOTE_GLYPH }])).toBe(3)
     expect(chipsIconsWidthOf([{ icon: NOTE_GLYPH }, { icon: '➤', short: '➤ 2' }])).toBe(3 + 1 + 5)
+  })
+
+  test('a forceWords chip never shrinks, so it counts at its words width', () => {
+    const armed = { icon: '⌫', label: 'clear all?', forceWords: true }
+    expect(chipsIconsWidthOf([armed])).toBe(pillWidthOf('⌫ clear all?'))
+    expect(chipsIconsWidthOf([{ icon: '↑' }, armed])).toBe(3 + 1 + pillWidthOf('⌫ clear all?'))
   })
 })

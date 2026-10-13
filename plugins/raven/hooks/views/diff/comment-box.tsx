@@ -176,13 +176,14 @@ export function note(
   const word =
     comment.status === 'addressed' ? STATUS_WORDS.addressed : `● ${STATUS_WORDS[comment.status]}`
   const title = (
-    <Box key={scope} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-      <Text color={color} wrap="truncate-end">
-        {word}
+    // One truncating Text, not two siblings in a row: the header is always one row, however narrow.
+    <Box key={scope} overflow="hidden">
+      <Text wrap="truncate-end">
+        <Text color={color}>{word}</Text>
+        <Text
+          dimColor
+        >{` · ${[lineLabel, ageOf(comment.createdAt, now)].filter(Boolean).join(' · ')}`}</Text>
       </Text>
-      <Text
-        dimColor
-      >{` · ${[lineLabel, ageOf(comment.createdAt, now)].filter(Boolean).join(' · ')}`}</Text>
     </Box>
   )
   return noteCard(kit, {

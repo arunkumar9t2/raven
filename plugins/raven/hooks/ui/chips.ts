@@ -72,13 +72,16 @@ export function chipsWidthOf(chips: readonly Pick<Chip, 'label' | 'icon'>[]): nu
 
 /**
  * The cells a row of chips takes with every chip bare-iconed (`short` when given, else `icon`), one
- * gap between: the floor `chipsLayout` can shrink a row to. A `forceWords` chip is not special here.
+ * gap between: the floor `chipsLayout` can shrink a row to. A `forceWords` chip never shrinks, so
+ * it counts at its words width.
  */
-export function chipsIconsWidthOf(chips: readonly Pick<Chip, 'icon' | 'short'>[]): number {
+export function chipsIconsWidthOf(
+  chips: readonly (Pick<Chip, 'icon' | 'short'> & Partial<Pick<Chip, 'label' | 'forceWords'>>)[],
+): number {
   if (chips.length === 0) return 0
-  return (
-    chips.reduce((sum, chip) => sum + pillWidthOf(chip.short ?? chip.icon), 0) + (chips.length - 1)
-  )
+  const textOf = (chip: (typeof chips)[number]) =>
+    chip.forceWords ? wordsOf(chip.icon, chip.label ?? '') : (chip.short ?? chip.icon)
+  return chips.reduce((sum, chip) => sum + pillWidthOf(textOf(chip)), 0) + (chips.length - 1)
 }
 
 /**

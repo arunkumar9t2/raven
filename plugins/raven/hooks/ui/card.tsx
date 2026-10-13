@@ -67,15 +67,27 @@ export function ruleRow(kit: UiKit, props: RuleRowProps): RenderElement {
   const { color } = props
   return (
     <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-      <Text color={color}>{props.start}</Text>
+      <Box flexShrink={0}>
+        <Text color={color}>{props.start}</Text>
+      </Box>
       <Box flexShrink={1} overflow="hidden">
         {props.left}
       </Box>
-      <Text> </Text>
+      <Box flexShrink={0}>
+        <Text> </Text>
+      </Box>
       {fill(kit, color)}
-      {props.right ? <Text> </Text> : null}
+      {props.right ? (
+        <Box flexShrink={0}>
+          <Text> </Text>
+        </Box>
+      ) : null}
       {props.right ?? null}
-      {props.end ? <Text color={color}>{props.end}</Text> : null}
+      {props.end ? (
+        <Box flexShrink={0}>
+          <Text color={color}>{props.end}</Text>
+        </Box>
+      ) : null}
     </Box>
   )
 }
@@ -182,7 +194,10 @@ export type GroupProps = {
   color: string
   /** The exact height of `children`: the rails are stacked glyphs this many rows tall. */
   rows: number
-  /** A colour turns the last row's left cell into `◆ `: the line a note hangs under. No rail, no mark. */
+  /**
+   * A colour marks the line a note hangs under: the last row's left cell becomes `◆ `. `none` has
+   * no gutter, so there the `◆` overlays the first cell of that row (nothing moves or narrows).
+   */
   mark?: string
   children: RenderElement | RenderElement[]
 }
@@ -200,7 +215,17 @@ export function groupRows(kit: UiKit, style: Style, props: GroupProps): RenderEl
       {props.children}
     </Box>
   )
-  if (left === null) return content
+  if (left === null) {
+    if (mark === undefined) return content
+    return (
+      <Box flexDirection="column" height={rows} overflow="hidden">
+        {content}
+        <Box position="absolute" top={Math.max(0, rows - 1)} left={0}>
+          <Text color={mark}>◆</Text>
+        </Box>
+      </Box>
+    )
+  }
   return (
     <Box flexDirection="row" height={rows} overflow="hidden" flexWrap="nowrap">
       {mark === undefined ? (

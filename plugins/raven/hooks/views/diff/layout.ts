@@ -15,6 +15,8 @@ export type Block<T = unknown> =
       title?: boolean
       /** The file whose card this block belongs to; absent on the rows between cards and on the trailing groups. */
       card?: string
+      /** True on the trailing "Not in this diff" group's blocks: routed by this flag, never by key. */
+      orphan?: boolean
     }
   | {
       kind: 'hunk'
@@ -30,6 +32,8 @@ export type Block<T = unknown> =
       whole?: WholeSide
       /** The file whose card this block belongs to. */
       card?: string
+      /** See the fixed variant: set on the trailing orphans group's blocks. */
+      orphan?: boolean
     }
 
 /** A fixed block: one with a declared row count. */
@@ -156,9 +160,41 @@ export function sliceHunk(hunk: Hunk, from: number, to: number): Hunk {
   return hunkFrom(`@@ -${oldStart},${oldCount} +${newStart},${newCount} @@${parsed.suffix}`, slice)
 }
 
-/** Keeps `top` within [0, max(0, contentRows - rows)]. */
-export function clampTop(top: number, contentRows: number, rows: number): number {
-  const max = Math.max(0, contentRows - rows)
+/** Whether the view at `top` draws the stream's last row. */
+function showsEnd<T>(blocks: readonly Block<T>[], top: number, rows: number): boolean {
+  const last = blocks[blocks.length - 1]
+  if (!last) return true
+  return viewOf(blocks, top, rows).placed.some(p => p.block === last && p.to === rowsOf(last))
+}
+
+/**
+ * The largest `top` that can be scrolled to. Normally `contentRows - rows`. A pinned block (the
+ * compose box) straddling that top is drawn whole and takes its above-window rows out of the
+ * window's bottom, so the stream's last rows would never be drawn while it stays mounted; the max
+ * then moves down to the first `top` whose view shows the last row (the box's own end at the
+ * latest, where it unmounts).
+ */
+export function maxTopOf<T>(blocks: readonly Block<T>[], rows: number): number {
+  const content = contentRowsOf(blocks)
+  const base = Math.max(0, content - rows)
+  if (showsEnd(blocks, base, rows)) return base
+  for (let top = base + 1; top < content; top++) {
+    if (showsEnd(blocks, top, rows)) return top
+  }
+  return base
+}
+
+/**
+ * Keeps `top` within [0, max(0, contentRows - rows)]; with `blocks`, within `maxTopOf` instead, so
+ * a pinned compose box cannot hide the stream's tail.
+ */
+export function clampTop(
+  top: number,
+  contentRows: number,
+  rows: number,
+  blocks?: readonly Block[],
+): number {
+  const max = blocks ? maxTopOf(blocks, rows) : Math.max(0, contentRows - rows)
   return Math.max(0, Math.min(top, max))
 }
 

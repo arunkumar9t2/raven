@@ -6,6 +6,13 @@ import { NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { styleOf } from '../../hooks/ui/style'
 import { widthOf } from '../../hooks/ui/wrap'
 import { cancelKeyOf, commentButtonKeyOf, inputKeyOf } from '../../hooks/views/diff/anchor'
+import { note } from '../../hooks/views/diff/comment-box'
+import {
+  type HeaderProps,
+  header,
+  headerPlanFor,
+  SOURCE_SELECT_KEY,
+} from '../../hooks/views/diff/header'
 import { createDiffView, type DiffActions } from '../../hooks/views/diff-view'
 import { fakeHost } from './fake-host'
 
@@ -340,6 +347,136 @@ describe('file cards as drawn at a narrow pane', () => {
           name === 'sharp' || name === 'rounded',
         )
       }
+    }
+  })
+})
+
+describe('rows the review found miscounted or misrouted', () => {
+  const wideKit = (columns: number, name: (typeof STYLES)[number] = 'bar') =>
+    ({
+      ...KIT,
+      ui: { ...KIT.ui, Select: () => null },
+      columns,
+      rows: 60,
+      style: styleOf(name),
+    }) as unknown as Kit
+
+  async function viewOver(run: Run) {
+    const host = fakeHost({ run })
+    const view = createDiffView(
+      host,
+      createReview(host, () => 0),
+      NO_ACTIONS,
+      () => 0,
+    )
+    await view.refresh()
+    return view
+  }
+
+  test('M1: a file literally named `orphans` draws its title and hunk, not zero-height orphan rows', async () => {
+    const run = worldOf({
+      status: ' M orphans\0',
+      numstat: '1\t1\torphans\x00',
+      diff: sectionOf('orphans'),
+    })
+    for (const name of STYLES) {
+      const tree = (await viewOver(run)).render(wideKit(80, name))
+      expect(drawnOf(findByKey(tree, 'orphans#title'))).toContain('orphans')
+      expect(findAll(tree, n => n.type === Code).length).toBeGreaterThan(0)
+    }
+  })
+
+  test('M5: a title shows only the non-zero counts', async () => {
+    const run = worldOf({
+      status: ' M new.ts\0 M bin.dat\0',
+      numstat: '3\t0\tnew.ts\x00-\t-\tbin.dat\x00',
+    })
+    const tree = (await viewOver(run)).render(wideKit(80))
+    const added = drawnOf(findByKey(tree, 'new.ts#title'))
+    expect(added).toContain('+3')
+    expect(added).not.toContain('−0')
+    const binary = drawnOf(findByKey(tree, 'bin.dat#title'))
+    expect(binary).not.toContain('+0')
+    expect(binary).not.toContain('−0')
+  })
+
+  test('M3: the whole-file `\\ No newline` tail truncates, so it is always one row', async () => {
+    const run = worldOf({
+      status: 'A  n.ts\0',
+      numstat: '1\t0\tn.ts\x00',
+      diff: 'diff --git a/n.ts b/n.ts\nnew file mode 100644\n--- /dev/null\n+++ b/n.ts\n@@ -0,0 +1 @@\n+x\n\\ No newline at end of file\n',
+    })
+    const tree = (await viewOver(run)).render(wideKit(80, 'none'))
+    const tails = findAll(tree, n => n.type === Text && drawnOf(n).startsWith('\\ No newline'))
+    expect(tails.length).toBeGreaterThan(0)
+    for (const tail of tails) expect(tail.props.wrap).toBe('truncate-end')
+  })
+
+  test('M6: with no added or deleted lines the header draws no empty stat element', async () => {
+    const run = worldOf({ status: ' M pic.png\0', numstat: '-\t-\tpic.png\x00', diff: '' })
+    const tree = (await viewOver(run)).render(wideKit(120))
+    const row = findByKey(tree, 'header:row')
+    const cluster = flatten(row?.props.children)[0] as Node
+    const empty = flatten(cluster.props.children).filter(
+      n => (n as Node).type === Text && drawnOf(n) === '',
+    )
+    expect(empty).toEqual([])
+  })
+
+  test('I2: the source picker draws a long selected turn label cut to the cap the plan counts', () => {
+    const label = `turn 12: ${'Refactor the authentication middleware '.repeat(2)}`
+    const kit = wideKit(200)
+    const props: HeaderProps = {
+      files: [],
+      edited: new Set(),
+      pending: 0,
+      confirmingClear: false,
+      sourceValue: 'turn:12',
+      sourceOptions: [
+        { value: 'head', label: 'HEAD' },
+        { value: 'turn:12', label },
+      ],
+      onSourceChange() {},
+      onRefresh() {},
+      onSend() {},
+      onEditSend() {},
+      onPrevious() {},
+      onNext() {},
+      onClear() {},
+    }
+    const plan = headerPlanFor(kit, props)
+    const select = findByKey(header(kit, props, plan), SOURCE_SELECT_KEY)
+    const options = select?.props.options as { value: string; label?: string }[]
+    const shown = options.find(option => option.value === 'turn:12')?.label ?? ''
+    expect(widthOf(shown)).toBeLessThanOrEqual(24)
+    expect(shown.endsWith('…')).toBe(true)
+    // The other options keep their full labels in the list.
+    expect(options.find(option => option.value === 'head')?.label).toBe('HEAD')
+  })
+
+  test('M8: a note header is one truncating Text, so it cannot wrap at a narrow pane', () => {
+    const comment = {
+      id: 'c1',
+      path: 'a.ts',
+      line: { number: 3 },
+      text: 'hello',
+      status: 'open',
+      createdAt: 0,
+    } as unknown as Parameters<typeof note>[1]
+    for (const status of ['pending', 'open', 'addressed'] as const) {
+      const tree = note(
+        wideKit(30),
+        { ...comment, status },
+        ['hello'],
+        60_000,
+        () => {},
+        () => {},
+      )
+      const header = findAll(
+        tree,
+        n => n.type === Text && n.props.wrap === 'truncate-end' && drawnOf(n).includes(' · '),
+      )
+      expect(header.length).toBe(1)
     }
   })
 })

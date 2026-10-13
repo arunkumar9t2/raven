@@ -53,6 +53,7 @@ import {
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { type HeaderProps, header, headerPlanFor } from './diff/header'
 import {
+  type Block,
   clampTop,
   type FixedBlock,
   type Placed,
@@ -180,7 +181,7 @@ function wholeCodeOf(kit: Kit, path: string, whole: WholeSource): RenderElement 
           ))
         : null}
       {whole.tail.map((line, index) => (
-        <Text key={`tail:${index}`} dimColor>
+        <Text key={`tail:${index}`} dimColor wrap="truncate-end">
           {line}
         </Text>
       ))}
@@ -223,6 +224,7 @@ export function createDiffView(
   let lastBodyRows = 0
   let lastTitleRows: ReadonlyMap<string, number> = new Map()
   let lastContentRows = 0
+  let lastBlocks: readonly Block<BodyItem>[] = []
 
   // The last streamOf() result, valid while its inputs are reference-equal to these.
   let cache: {
@@ -610,8 +612,8 @@ export function createDiffView(
         <Text color={icon.color}>{icon.glyph}</Text>
         <Text bold>{`${ICON_GAP}${item.file.path}`}</Text>
         <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
-        <Text color={COLORS.added}>{` +${item.file.adds}`}</Text>
-        <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text>
+        {item.file.adds > 0 ? <Text color={COLORS.added}>{` +${item.file.adds}`}</Text> : null}
+        {item.file.dels > 0 ? <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text> : null}
         {tag ? <Text dimColor>{`  ${tag}`}</Text> : null}
       </Text>
     )
@@ -655,8 +657,8 @@ export function createDiffView(
         return <Text> </Text>
       case 'outdated-title':
         return outdatedHeading(kit)
-      // The orphans group's own rows never pass through here: `placedRowOf` dispatches any key
-      // prefixed `orphans#` to `orphanRowOf` before a file is ever looked up for `bodyRowOf`.
+      // The orphans group's own rows never pass through here: `placedRowOf` dispatches any block
+      // flagged `orphan` to `orphanRowOf` before a file is ever looked up for `bodyRowOf`.
       case 'orphans-title':
       case 'orphan-path':
         return <Box />
@@ -783,7 +785,7 @@ export function createDiffView(
    * title, the frame's closing row and the blank row between files span the whole width and carry
    * no rail. D10 point 2: the file being edited this turn draws its rail (or frame) in the accent
    * instead, so the live feed is visible from across the room. The trailing orphans group
-   * (`orphans#` prefixed keys) has no file at all, so it is dispatched to `orphanRowOf` first.
+   * (blocks flagged `orphan`) has no file at all, so it is dispatched to `orphanRowOf` first.
    */
   function placedRowOf(
     kit: Kit,
@@ -793,7 +795,7 @@ export function createDiffView(
     const { Box, Code, Text } = kit.ui
     const { style } = kit
     const { block } = placed
-    if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
+    if (block.kind === 'fixed' && block.orphan) return orphanRowOf(kit, placed)
     const path = block.card ?? sepPathOf(block.key) ?? ''
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
@@ -921,6 +923,7 @@ export function createDiffView(
 
     lastTitleRows = stream.titleRows
     lastContentRows = stream.contentRows
+    lastBlocks = stream.blocks
 
     // A `reveal` for a file not yet in the last stream (a refresh still in flight when it was
     // called) lands here once `streamFor` finally places it.
@@ -952,7 +955,7 @@ export function createDiffView(
     const headerPlan = headerPlanFor(kit, headerProps)
     const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS, headerPlan.rows))
     lastBodyRows = bodyRows
-    const top = clampTop(model.top, stream.contentRows, bodyRows)
+    const top = clampTop(model.top, stream.contentRows, bodyRows, stream.blocks)
     if (top !== model.top) model = { ...model, top }
 
     const view = viewOf(stream.blocks, top, bodyRows)
@@ -978,7 +981,7 @@ export function createDiffView(
     // A wheel tick or arrow asks for a row or two; scale it to a readable step, as the terminal's
     // own scrollable views do. A page or Home/End key already asks for a step this size or more.
     const step = size >= bodyRows ? size : size * WHEEL_ROWS
-    const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows)
+    const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows, lastBlocks)
     if (top !== model.top) {
       update({
         top,
