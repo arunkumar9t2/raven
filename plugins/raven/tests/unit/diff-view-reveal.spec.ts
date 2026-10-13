@@ -6,7 +6,7 @@ import { NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { styleOf } from '../../hooks/ui/style'
 import { widthOf } from '../../hooks/ui/wrap'
 import { cancelKeyOf, commentButtonKeyOf, inputKeyOf } from '../../hooks/views/diff/anchor'
-import { note, orphanPathRow } from '../../hooks/views/diff/comment-box'
+import { note, orphanPathRow, truncate } from '../../hooks/views/diff/comment-box'
 import {
   type HeaderProps,
   header,
@@ -185,6 +185,41 @@ describe('createDiffView', () => {
       cancel?.()
       expect(focused.includes(commentButtonKeyOf(anchor))).toBe(!canClient)
     }
+  })
+
+  test('a typed note comes back as the Input value after its box scrolls away and is drawn again', async () => {
+    const kit = {
+      ...KIT,
+      rows: 7,
+      ui: { ...KIT.ui, Input: () => null, Select: () => null },
+    } as unknown as Kit
+    const host = fakeHost({ run: runOf() })
+    const view = createDiffView(
+      host,
+      createReview(host, () => 0),
+      NO_ACTIONS,
+      () => 0,
+    )
+    await view.refresh()
+    const anchor = { path: 'a.ts' }
+    const inputOf = () => findByKey(view.render(kit), inputKeyOf(anchor))
+    const press = (key: string) =>
+      (findByKey(view.render(kit), key)?.props.onPress as (() => void) | undefined)?.()
+    press(commentButtonKeyOf(anchor))
+    const first = inputOf()
+    expect(first?.props.value).toBeUndefined()
+    ;(first?.props.onInput as ((text: string) => void) | undefined)?.('a long note')
+
+    // The box scrolls fully out of the window: its Input unmounts.
+    view.scroll?.(30)
+    expect(inputOf()).toBeUndefined()
+    view.scroll?.(-30)
+    expect(inputOf()?.props.value).toBe('a long note')
+
+    // Cancel clears the draft, so the next box starts empty.
+    press(cancelKeyOf(anchor))
+    press(commentButtonKeyOf(anchor))
+    expect(inputOf()?.props.value).toBeUndefined()
   })
 
   test('a frame style closes each card with a close row; bar and none draw none', async () => {
@@ -502,5 +537,26 @@ describe('rows the review found miscounted or misrouted', () => {
     expect(goneHolder.length).toBe(1)
     const pathHolder = findAll(tree, n => n.type === Box && n.props.flexShrink === 1)
     expect(pathHolder.length).toBe(1)
+  })
+})
+
+describe('truncate (the line picker label)', () => {
+  test('cuts by display width: wide characters count two cells', () => {
+    const cut = truncate('日本語日本語日本語', 9)
+    expect(widthOf(cut)).toBeLessThanOrEqual(9)
+    expect(cut.endsWith('…')).toBe(true)
+    expect(truncate('abc', 3)).toBe('abc')
+    expect(truncate('日本', 4)).toBe('日本')
+  })
+
+  test('never splits a surrogate pair', () => {
+    const text = NOTE_GLYPH.repeat(10)
+    for (let max = 1; max < 12; max++) {
+      const cut = truncate(text, max)
+      expect(cut).not.toMatch(
+        /[\ud800-\udbff](?![\udc00-\udfff])|(?<![\ud800-\udbff])[\udc00-\udfff]/,
+      )
+      expect(widthOf(cut)).toBeLessThanOrEqual(max)
+    }
   })
 })

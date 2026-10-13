@@ -116,7 +116,11 @@ and draws at most two rows, taking the second as the typed text outgrows the fir
 - A doc section's box has no picker and always sizes its Input at two rows, so it is 4 rows from 47
   cells and 5 below.
 
-The box is never clipped at the top of a scrolled window, so its Input stays mounted. On a
+The box is never clipped at the top of a scrolled window, so its Input stays mounted while any of
+the box shows. The Input can still unmount (the box scrolled fully out of the window, a doc reload
+that moves the composed section, a pane resize across the side-by-side threshold), so each view
+keeps the typed text and draws the Input again with it as its `value`: a note being typed survives
+all three. A submit, a cancel, or opening the box on another anchor clears it. On a
 side-by-side hunk its picker offers new-side lines only, see
 [`diff-pane.md`](./diff-pane.md#side-by-side). In the diff stream the box sits at the code's left
 edge under `bar` and `none` (the rail does not run through its rows) and inside the card's sides

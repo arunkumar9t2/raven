@@ -195,3 +195,25 @@ describe('the split chip', () => {
     expect(splitChip(wide)?.props.label).toContain('unified')
   })
 })
+
+describe('toggling split with no compose box and no selected file in the stream', () => {
+  test('top follows the file that was in view, not a stale row index', async () => {
+    const rows = 14
+    const { view } = await viewOf(100)
+    // b.ts at the top of the window, then select a file that is not in the stream.
+    view.render(kitOf(200, rows))
+    view.reveal?.('/work/b.ts')
+    view.render(kitOf(200, rows))
+    view.reveal?.('/work/missing.ts')
+    let tree = view.render(kitOf(200, rows))
+    expect(byKey(tree, 'b.ts#title')).toBeDefined()
+
+    // Unified is taller above b.ts, so a held row index would land back in a.ts.
+    press(splitChip(tree))
+    tree = view.render(kitOf(200, rows))
+    expect(byKey(tree, 'b.ts#title')).toBeDefined()
+    // Nothing of a.ts remains in the window, not even its title pinned above b.ts's.
+    expect(byKey(tree, 'a.ts#title')).toBeUndefined()
+    expect(byKey(tree, 'a.ts#pinned')).toBeUndefined()
+  })
+})

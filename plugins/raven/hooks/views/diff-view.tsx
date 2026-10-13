@@ -91,8 +91,12 @@ type Model = {
   composing: Anchor | null
   /** The line picked in the composing anchor's Select; null is "whole hunk". */
   composingLine: CommentLine | null
-  /** The length of the text typed into the open compose box; sizes its Input rows. */
-  composingChars: number
+  /**
+   * The text typed into the open compose box: sizes its Input rows, and is handed back to the
+   * Input as its `value` so a note survives the box unmounting (scrolled away, resized across the
+   * split threshold) and drawing again.
+   */
+  composingText: string
   top: number
   /** Staged hunk headers per file path, cleared for a path when its hunks no longer carry them. */
   stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
@@ -212,7 +216,7 @@ export function createDiffView(
     hunks: new Map(),
     composing: null,
     composingLine: null,
-    composingChars: 0,
+    composingText: '',
     top: 0,
     stagedHunks: new Map(),
     confirming: null,
@@ -463,13 +467,13 @@ export function createDiffView(
   let isClient = false
 
   function startComposing(anchor: Anchor) {
-    update({ composing: anchor, composingLine: null, composingChars: 0 })
+    update({ composing: anchor, composingLine: null, composingText: '' })
     actions.focus(inputKeyOf(anchor))
   }
 
   /** Closes the compose box and hands the keyboard back to its anchor's comment button. */
   function stopComposing(anchor: Anchor) {
-    update({ composing: null, composingLine: null, composingChars: 0 })
+    update({ composing: null, composingLine: null, composingText: '' })
     if (!isClient) actions.focus(commentButtonKeyOf(anchor))
   }
 
@@ -547,7 +551,7 @@ export function createDiffView(
     const comments = review.comments()
     const composeInputRows: 1 | 2 = model.composing
       ? composeInputRowsOf(
-          model.composingChars,
+          model.composingText.length,
           model.composing.hunk !== undefined && capabilities.canPick,
           Math.max(1, width - BOXED_CELLS),
         )
@@ -695,14 +699,15 @@ export function createDiffView(
           hasPicker: item.hasPicker,
           isSplit: item.isSplit,
           inputRows: composeInputRowsOf(
-            model.composingChars,
+            model.composingText.length,
             item.hasPicker,
             Math.max(1, contentWidth - BOXED_CELLS),
           ),
+          draft: model.composingText,
           line: effectiveLineOf(model.composingLine, item.isSplit ?? false),
           columns: contentWidth,
           onInput: text => {
-            if (text.length !== model.composingChars) update({ composingChars: text.length })
+            if (text !== model.composingText) update({ composingText: text })
           },
           onLineChange: line => update({ composingLine: line }),
           onSubmit: text => submitComment(item.anchor, text, item.isSplit ?? false),
@@ -935,12 +940,16 @@ export function createDiffView(
 
   /**
    * Flips the layout and keeps the person where they were: the stream's rows change with it, so
-   * `top` is re-anchored (to the open compose box, whose Input must stay mounted, else to the
-   * selected file's title) in the stream the new layout draws. A picked line survives unless the
-   * new layout does not offer it (an old-side line in split).
+   * `top` is re-anchored in the stream the new layout draws: to the open compose box (its Input
+   * must stay mounted), else to the selected file's title, else to the title of the file that was
+   * at `top`. A picked line survives unless the new layout does not offer it (an old-side line in
+   * split).
    */
   function toggleSplit(kit: Kit, bodyWidth: number) {
     if (!splitMode.canSplit(bodyWidth)) return
+    // The file the old layout shows at `top`, read before the layout flips: with no compose box and
+    // no selected file in the stream, the new layout keeps the person at that file's title.
+    const heldFile = fileAtRow(lastTitleRows, model.top)
     splitMode.toggle(kit.columns)
     const isSplit = isSplitAt(kit.columns, bodyWidth)
     const stream = streamFor(kit.capabilities, bodyWidth, kit.style, isSplit)
@@ -948,7 +957,8 @@ export function createDiffView(
       ? rowOfKey(stream.blocks, `${model.composing.path}#${commentBoxKeyOf(model.composing)}`)
       : null
     const titleRow = model.selected === null ? undefined : stream.titleRows.get(model.selected)
-    const top = boxRow ?? titleRow ?? model.top
+    const heldRow = heldFile === null ? undefined : stream.titleRows.get(heldFile)
+    const top = boxRow ?? titleRow ?? heldRow ?? model.top
     update({
       top,
       selected: fileAtRow(stream.titleRows, top) ?? model.selected,

@@ -13,6 +13,7 @@ import { type Chip, chipsFit } from '../../ui/chips'
 import { BOXED_CELLS } from '../../ui/chrome'
 import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { pillRow } from '../../ui/strip'
+import { widthOf } from '../../ui/wrap'
 import {
   type Anchor,
   addressedKeyOf,
@@ -43,9 +44,21 @@ function lineOfValue(value: string, lines: readonly CommentLine[]): CommentLine 
   return lines.find(line => lineValueOf(line) === value) ?? null
 }
 
-/** Cuts `text` to at most `max` chars, marking the cut with an ellipsis. */
-function truncate(text: string, max: number): string {
-  return text.length <= max ? text : `${text.slice(0, Math.max(0, max - 1))}…`
+/**
+ * Cuts `text` to at most `max` terminal cells, marking the cut with an ellipsis. It cuts between
+ * characters (never inside a surrogate pair) and counts a wide character as its display width.
+ */
+export function truncate(text: string, max: number): string {
+  if (widthOf(text) <= max) return text
+  let out = ''
+  let used = 0
+  for (const char of Array.from(text)) {
+    const w = widthOf(char)
+    if (used + w > max - 1) break
+    out += char
+    used += w
+  }
+  return `${out}…`
 }
 
 export type CommentBoxProps = {
@@ -66,7 +79,9 @@ export type CommentBoxProps = {
   line: CommentLine | null
   /** The box's own width, frame included: what `composeLayoutOf` lays out against. */
   columns: number
-  /** Runs on every change of the Input's text; the view tracks its length for `inputRows`. */
+  /** The text typed so far, drawn into the Input again when the box remounts; empty when none. */
+  draft?: string
+  /** Runs on every change of the Input's text; the view keeps it as `draft` and sizes `inputRows` by it. */
   onInput?: (text: string) => void
   onLineChange: (line: CommentLine | null) => void
   onSubmit: (text: string) => void
@@ -120,6 +135,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
         key={props.inputKey}
         autoFocus
         placeholder="Your comment for Claude…"
+        value={props.draft || undefined}
         submitLabel="add"
         onInput={text => props.onInput?.(text)}
         onSubmit={text => props.onSubmit(text)}

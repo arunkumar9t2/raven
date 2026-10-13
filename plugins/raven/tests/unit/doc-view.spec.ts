@@ -140,6 +140,36 @@ describe('doc view: composing across a reload', () => {
   })
 })
 
+describe('doc view: a typed note survives its Input remounting', () => {
+  const before = '# Alpha\n\na\n\n# Beta\n\nb\n'
+  const inputOf = (tree: unknown) => findAll(tree, n => n.type === 'Input')[0] as Node
+
+  test('a reload that moves the composed section hands the typed text back as the value', async () => {
+    const files = { [PATH]: before }
+    const { view, review } = await setup(files)
+    pressNote(view.render(kitOf()), 1) // Beta
+    const first = inputOf(view.render(kitOf()))
+    expect(first.props.value).toBeUndefined()
+    ;(first.props.onInput as (text: string) => void)('half a note')
+    files[PATH] = '# Alpha\n\na\n\n# Inserted\n\nnew\n\n# Beta\n\nb\n'
+    await view.reload(PATH)
+    const moved = inputOf(view.render(kitOf()))
+    expect(moved.props.key).toBe(`input:${PATH}|§2`)
+    expect(moved.props.value).toBe('half a note')
+    ;(moved.props.onSubmit as (text: string) => void)('half a note')
+    expect(review.comments()).toHaveLength(1)
+  })
+
+  test('the draft is cleared by a submit and by opening another section', async () => {
+    const { view } = await setup({ [PATH]: before })
+    pressNote(view.render(kitOf()), 0)
+    ;(inputOf(view.render(kitOf())).props.onInput as (text: string) => void)('draft')
+    ;(inputOf(view.render(kitOf())).props.onSubmit as (text: string) => void)('draft')
+    pressNote(view.render(kitOf()), 1)
+    expect(inputOf(view.render(kitOf())).props.value).toBeUndefined()
+  })
+})
+
 describe('doc view: the top section row', () => {
   const prose = 'Intro prose.\n\n# H\n\nx'
 

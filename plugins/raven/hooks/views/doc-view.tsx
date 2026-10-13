@@ -100,7 +100,8 @@ const sectionAnchorOf = (path: string, index: number): Anchor => ({ path, hunk: 
 
 /** The open compose box: its anchor plus the heading and which of the equal headings it is on, so a
  * reload can follow the section the person opened rather than whatever now sits at its index. */
-type Composing = { anchor: Anchor; heading: string; occurrence: number }
+/** `text` is the note typed so far: drawn into the Input again when its box remounts (a reload moved the section). */
+type Composing = { anchor: Anchor; heading: string; occurrence: number; text: string }
 
 /** How many sections before `index` carry the same heading. */
 const occurrenceOf = (sections: readonly { section: DocSection }[], index: number): number =>
@@ -415,7 +416,12 @@ export function createDocView(
       const canNote = kit.capabilities.canType && !isComposing
       const chip = canNote
         ? noteChip(anchor, () =>
-            startComposing({ anchor, heading, occurrence: occurrenceOf(sections, index) }),
+            startComposing({
+              anchor,
+              heading,
+              occurrence: occurrenceOf(sections, index),
+              text: '',
+            }),
           )
         : null
 
@@ -519,6 +525,12 @@ export function createDocView(
                     inputRows: 2,
                     line: null,
                     columns: kit.columns,
+                    draft: composing?.text,
+                    onInput: typed => {
+                      // The next render hands it back as the Input's value; no redraw is needed.
+                      if (composing !== null && composing.anchor.hunk === anchor.hunk)
+                        composing = { ...composing, text: typed }
+                    },
                     onLineChange: () => {},
                     onSubmit: submitted => submitComment(submitted),
                     onCancel: () => stopComposing(anchor),
