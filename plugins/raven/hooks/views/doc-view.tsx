@@ -16,8 +16,8 @@ import { BORDER_CELLS, RULE_START, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP, iconText } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
+import type { Style } from '../ui/style'
 import { table } from '../ui/table'
-import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
 import { widthOf } from '../ui/wrap'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
@@ -26,8 +26,9 @@ import { docLinksOf, resolveDocLink } from './doc-links'
 import { TITLE_EDGE_CELLS, titlePathOf } from './doc-path'
 import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName, iconOf } from './icons'
-import { type DocBlock, docBlocksOf, markdownChunksOf, type TableBlock } from './markdown-chunks'
+import { type DocBlock, docBlocksOf, markdownChunksOf } from './markdown-chunks'
 import { selectButtons } from './select-buttons'
+import { createTableCache } from './table-cache'
 
 /** A document the pane can show: a file read from disk, or markdown handed over inline. */
 export type Doc =
@@ -183,7 +184,7 @@ export function createDocView(
   // not per frame.
   const chunksByShown = new WeakMap<Shown, readonly Chunk[]>()
   const sectionsByShown = new WeakMap<Shown, readonly SectionView[]>()
-  const tableRows = new WeakMap<TableBlock, { width: number; rows: DrawnLine[] }>()
+  const tables = createTableCache()
 
   function chunksOf(shown: Shown, text: string): readonly Chunk[] {
     const cached = chunksByShown.get(shown)
@@ -279,17 +280,8 @@ export function createDocView(
     host.redraw()
   }
 
-  /** A table block's drawn rows at `width`, laid out once per width, not every frame. */
-  function tableRowsOf(block: TableBlock, width: number): DrawnLine[] {
-    const cached = tableRows.get(block)
-    if (cached && cached.width === width) return cached.rows
-    const rows = drawnRowsOf(layoutTable(block, Math.max(1, width)))
-    tableRows.set(block, { width, rows })
-    return rows
-  }
-
   /** An upper bound on the rows `chunks` draw at `width` (tables at their laid-out height). */
-  function chunksRowsBoundOf(chunks: readonly Chunk[], width: number): number {
+  function chunksRowsBoundOf(chunks: readonly Chunk[], width: number, style: Style): number {
     return chunks.reduce(
       (sum, chunk) =>
         sum +
@@ -298,7 +290,7 @@ export function createDocView(
             inner +
             2 +
             (block.kind === 'table'
-              ? tableRowsOf(block, width - 1).length
+              ? tables.rowsOf(block, width - 1, style).length
               : rowsBoundOf(block.text, width)),
           0,
         ),
@@ -323,7 +315,7 @@ export function createDocView(
           return table(kit, {
             key: `${keyPrefix}table:${i}:${j}`,
             // One cell short of the pane, so a full-width line never loses its last cell.
-            rows: tableRowsOf(block, kit.columns - 1),
+            rows: tables.rowsOf(block, kit.columns - 1, kit.style),
             // A blank row either side, like a Markdown block's own gap: none at the very start
             // or end of the section.
             gapTop: i > 0 || j > 0,
@@ -417,7 +409,7 @@ export function createDocView(
 
       const sectionRows =
         1 +
-        chunksRowsBoundOf(sv.chunks, kit.columns) +
+        chunksRowsBoundOf(sv.chunks, kit.columns, kit.style) +
         (addressed.length > 0 ? 1 : 0) +
         visible.length * (NOTE_MAX_LINES + 3) +
         (isComposing ? NOTE_MAX_LINES + 4 : 0)
@@ -561,7 +553,7 @@ export function createDocView(
       return railed(
         kit,
         'doc-body',
-        chunksRowsBoundOf(chunks, inner.columns),
+        chunksRowsBoundOf(chunks, inner.columns, inner.style),
         <Box flexDirection="column">{chunkElementsOf(inner, chunks, shown.doc, '')}</Box>,
       )
     }
