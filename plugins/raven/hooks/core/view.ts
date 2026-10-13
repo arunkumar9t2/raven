@@ -1,5 +1,6 @@
 import type { Elements, RenderElement, RenderSurface } from 'claude-code'
 import type { PaneSubcommand } from '../names'
+import type { Style } from '../ui/style'
 
 /**
  * The elements a view draws with; Raven draws on the terminal surface, mobile among them. The
@@ -71,6 +72,8 @@ export type Kit = {
   columns: number
   rows: number
   capabilities: Capabilities
+  /** The border style (`cardStyle` setting), resolved once in `register.ts`; every pane frames through it. */
+  style: Style
   /**
    * Registers the handler a pill's `{ press: id }` post runs, for the pane this render draws; the
    * controller clears the pane's registrations before each of its renders (`core/presses.ts`).

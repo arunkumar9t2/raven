@@ -10,6 +10,7 @@ import { progressBar } from '../hooks/ui/progress-bar'
 import { sectionHeader } from '../hooks/ui/section-header'
 import { statBar } from '../hooks/ui/stat-bar'
 import { pillRow } from '../hooks/ui/strip'
+import { styleOf } from '../hooks/ui/style'
 import { baseWorld, SESSION } from './helpers'
 
 tier('user')
@@ -34,6 +35,7 @@ async function mountKit($: Engine, on: On, draw: (kit: Kit) => RenderElement) {
       columns: 40,
       rows: 20,
       capabilities: KEYBOARD,
+      style: styleOf('bar'),
       press: () => {},
     }
     return draw(kit)

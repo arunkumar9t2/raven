@@ -17,6 +17,7 @@ import {
   TOOL_NAME,
   toolNameOf,
 } from './names'
+import { styleOf } from './ui/style'
 import { commandOutputRow } from './views/band'
 
 // The plugin's own name is only known once `$` binds, so the tool's full name cannot be a static
@@ -82,6 +83,7 @@ const TOOL_INPUT_SCHEMA = {
  */
 export function register(on: On, options: PluginOptions) {
   const settings = settingsOf(options)
+  const style = styleOf(settings.cardStyle)
   let raven: Raven | null = null
 
   /**
@@ -109,6 +111,7 @@ export function register(on: On, options: PluginOptions) {
       columns,
       rows,
       capabilities: capabilitiesOf(surface, settings.keyboardControls),
+      style,
       press: (id, onPress) => raven?.registerPress(requestId, id, onPress),
     }
   }

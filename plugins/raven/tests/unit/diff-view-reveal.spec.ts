@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Kit } from '../../hooks/core/view'
 import type { Run } from '../../hooks/git/load'
 import { createReview } from '../../hooks/review/review'
+import { styleOf } from '../../hooks/ui/style'
 import { cancelKeyOf, commentButtonKeyOf, inputKeyOf } from '../../hooks/views/diff/anchor'
 import { createDiffView, type DiffActions } from '../../hooks/views/diff-view'
 import { fakeHost } from './fake-host'
@@ -39,6 +40,7 @@ const KIT = {
   columns: 100,
   rows: 7,
   capabilities: { canType: true, canPick: true, canShowImage: true, canClient: false },
+  style: styleOf('bar'),
   press: () => {},
 } as unknown as Kit
 
