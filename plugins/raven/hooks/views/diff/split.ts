@@ -1,4 +1,5 @@
 import { bodyLinesOf, type Hunk, lineKindOf, parseHeader } from '../../git/hunks'
+import type { CommentLine } from '../../review/comments'
 
 /** One side of a split row: the line number on that side, its text without the diff prefix, and its mark. */
 export type SideLine = { n: number; text: string; mark: ' ' | '+' | '-' }
@@ -89,3 +90,28 @@ export const splitHunkOf = (hunk: Hunk, gutter: number = gutterWidthOf(hunk)): S
   rows: splitRowsOfHunk(hunk),
   gutter,
 })
+
+/**
+ * The exclusive end, in body rows, of the run body row `at` belongs to: for a removed or added
+ * line the end of its change run, for a context line the line itself; a `\ No newline` marker
+ * after either stays with the line above it. A note on a changed line draws under this row.
+ */
+export function runEndOf(body: readonly string[], at: number): number {
+  const kind = lineKindOf(body[at] ?? '')
+  let to = at + 1
+  if (kind === 'add' || kind === 'del') {
+    while (to < body.length) {
+      const next = body[to] ?? ''
+      const nextKind = lineKindOf(next)
+      if (nextKind === 'add' || nextKind === 'del' || next.startsWith('\\')) to += 1
+      else break
+    }
+  } else {
+    while (body[to]?.startsWith('\\')) to += 1
+  }
+  return to
+}
+
+/** The lines a note may be put on: both sides in unified, the new side only in split. */
+export const pickableLinesOf = (lines: readonly CommentLine[], isSplit: boolean): CommentLine[] =>
+  isSplit ? lines.filter(line => line.side === 'new') : [...lines]

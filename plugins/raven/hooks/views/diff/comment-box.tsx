@@ -33,6 +33,7 @@ import {
   noteRowsOf,
   STATUS_WORDS,
 } from './note-layout'
+import { pickableLinesOf } from './split'
 
 const WHOLE_HUNK = 'whole'
 
@@ -57,6 +58,8 @@ export type CommentBoxProps = {
    * the row count and the drawing never disagree.
    */
   hasPicker: boolean
+  /** The hunk draws side by side: the line picker offers new-side lines only. */
+  isSplit?: boolean
   /** The Input's rows (`composeInputRowsOf`): 2 once its text has outgrown one row. */
   inputRows: 1 | 2
   /** The line chosen in the picker; null means "whole hunk". */
@@ -85,7 +88,9 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const innerWidth = Math.max(1, props.columns - BOXED_CELLS)
   const layout = composeLayoutOf(props.hasPicker, innerWidth, props.inputRows)
 
-  const lines = props.hunk ? changedLinesOf(props.hunk) : []
+  const lines = props.hunk
+    ? pickableLinesOf(changedLinesOf(props.hunk), props.isSplit ?? false)
+    : []
   // Inline, the selected label must stay inside the picker's cells; on its own row it may use the room.
   const maxLabelLen = layout.pickerRow ? Math.max(8, innerWidth - 12) : COMPOSE_PICKER_CELLS - 4
   const options = [

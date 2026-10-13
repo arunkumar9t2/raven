@@ -684,6 +684,7 @@ export function createDiffView(
           inputKey: inputKeyOf(item.anchor),
           hunk: item.hunk,
           hasPicker: item.hasPicker,
+          isSplit: item.isSplit,
           inputRows: composeInputRowsOf(
             model.composingChars,
             item.hasPicker,

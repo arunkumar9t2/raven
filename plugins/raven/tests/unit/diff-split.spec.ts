@@ -2,6 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import { hunkFrom } from '../../hooks/git/hunks'
 import {
   gutterWidthOf,
+  pickableLinesOf,
+  runEndOf,
   type SideLine,
   splitHunkOf,
   splitRowsOf,
@@ -119,5 +121,54 @@ describe('splitRowsOfHunk / splitHunkOf / gutterWidthOf', () => {
     expect(splitHunkOf(hunk).gutter).toBe(2)
     expect(splitHunkOf(hunk, 4).gutter).toBe(4)
     expect(splitHunkOf(hunk).rows).toBe(splitRowsOfHunk(hunk))
+  })
+})
+
+describe('runEndOf', () => {
+  const lines = [' ctx0', '-old1', '-old2', '+new1', '+new2', '+new3', ' ctx6']
+
+  test('a context line ends at itself', () => {
+    expect(runEndOf(lines, 0)).toBe(1)
+    expect(runEndOf(lines, 6)).toBe(7)
+  })
+
+  test('any line of a change run ends at the end of that run', () => {
+    for (const at of [1, 2, 3, 4, 5]) expect(runEndOf(lines, at)).toBe(6)
+  })
+
+  test('a "No newline" marker stays with the line above it, inside a run or after context', () => {
+    const marked = [
+      ' a',
+      '-b',
+      '\\ No newline at end of file',
+      '+B',
+      '\\ No newline at end of file',
+      ' c',
+    ]
+    expect(runEndOf(marked, 1)).toBe(5)
+    expect(runEndOf(marked, 3)).toBe(5)
+    const ctxMarked = [' a', '\\ No newline at end of file', ' b']
+    expect(runEndOf(ctxMarked, 0)).toBe(2)
+  })
+
+  test('the last line of the body ends at the body length', () => {
+    expect(runEndOf(['+a', '+b'], 0)).toBe(2)
+    expect(runEndOf(['+a', '+b'], 1)).toBe(2)
+  })
+})
+
+describe('pickableLinesOf', () => {
+  const lines = [
+    { number: 2, side: 'old' as const, text: 'old1' },
+    { number: 2, side: 'new' as const, text: 'new1' },
+  ]
+
+  test('unified offers both sides', () => {
+    expect(pickableLinesOf(lines, false)).toEqual(lines)
+  })
+
+  test('split offers the new side only; a removed-only hunk offers none', () => {
+    expect(pickableLinesOf(lines, true)).toEqual(lines.slice(1))
+    expect(pickableLinesOf([lines[0] as (typeof lines)[number]], true)).toEqual([])
   })
 })

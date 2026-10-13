@@ -23,7 +23,7 @@ import {
 import type { Block } from './layout'
 import { rowsOf, sliceHunk } from './layout'
 import { composeRowsOf, noteLinesOf, noteRowsOf } from './note-layout'
-import { gutterWidthOf, splitHunkOf } from './split'
+import { gutterWidthOf, runEndOf, splitHunkOf } from './split'
 import { type WholeSide, wholeSideOf } from './whole-file'
 
 export const TITLE_KEY = 'title'
@@ -92,7 +92,7 @@ export type BodyItem =
   | { kind: 'note'; comment: Comment; lines: string[] }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
-  | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean }
+  | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean; isSplit?: boolean }
   | { kind: 'hunk-header'; anchor: Anchor; hunk: Hunk; canNote: boolean; isReadOnly: boolean }
   | { kind: 'gap' }
   | { kind: 'blank' }
@@ -131,7 +131,9 @@ function splitInline(hunk: Hunk, notes: Comments): { inline: InlineNotes[]; rest
  * A hunk as blocks: whole when nothing sits under one of its lines, else a segment per commented
  * line: the lines up to and including it (its rail cell marked with the first note's status),
  * then that line's cards, and a last segment for the rest. Row-exact: the segments' lines and
- * the cards' rows add up to the hunk plus the notes.
+ * the cards' rows add up to the hunk plus the notes. Side by side the cut moves to the end of the
+ * line's change run (notes on one run share it), so the segments' split rows concatenate to the
+ * whole hunk's split rows.
  */
 function hunkSegmentsOf(
   index: number,
@@ -161,12 +163,27 @@ function hunkSegmentsOf(
     blockOf(from === 0 ? key : `${key}~${from}`, sliceHunk(hunk, from, to), mark)
   const body = bodyLinesOf(hunk)
   const total = body.length
-  const blocks: Block<BodyItem>[] = []
-  let from = 0
-  for (const { at, notes } of inline) {
+  // Where the segment holding a commented row ends: right under it in unified; in split, under
+  // the end of the change run it belongs to, so the segments partition the hunk's split rows
+  // exactly (a cut inside a run would re-pair its lines). A context line still ends at itself.
+  const cutOf = (at: number): number => {
+    if (isSplit && !whole) return runEndOf(body, at)
     // A `\ No newline` marker belongs to the line above it: the segment takes it along.
     let to = at + 1
     while (body[to]?.startsWith('\\')) to += 1
+    return to
+  }
+  const cuts: { to: number; notes: Comment[] }[] = []
+  for (const { at, notes } of inline) {
+    const to = cutOf(at)
+    const last = cuts.at(-1)
+    if (last && last.to === to) last.notes.push(...notes)
+    else cuts.push({ to, notes: [...notes] })
+  }
+
+  const blocks: Block<BodyItem>[] = []
+  let from = 0
+  for (const { to, notes } of cuts) {
     blocks.push(segmentOf(from, to, notes[0]?.status))
     blocks.push(...notesBlocksOf(notes, { path: notes[0]?.path ?? '' }, width))
     from = to
@@ -221,6 +238,7 @@ function anchorBlocksOf(
   width: number,
   inputRows: 1 | 2,
   hunk?: Hunk,
+  isSplit = false,
 ): Block<BodyItem>[] {
   const notesBlocks = notesBlocksOf(notes, anchor, width)
   if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
@@ -235,7 +253,7 @@ function anchorBlocksOf(
       rows,
       // The Input must stay mounted (its text would be lost), so it is never clipped at the top.
       pinned: true,
-      item: { kind: 'comment-box', anchor, hunk, hasPicker },
+      item: { kind: 'comment-box', anchor, hunk, hasPicker, ...(isSplit ? { isSplit: true } : {}) },
     },
   ]
 }
@@ -396,7 +414,18 @@ export function blocksOf(
     }
     const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
     blocks.push(...hunkSegmentsOf(index, hunk, inline, width, whole, isSplit))
-    blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, inputRows, hunk))
+    blocks.push(
+      ...anchorBlocksOf(
+        rest,
+        anchor,
+        composing,
+        capabilities,
+        width,
+        inputRows,
+        hunk,
+        isSplit && !whole,
+      ),
+    )
   })
 
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated, width))
