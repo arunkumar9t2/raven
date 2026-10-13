@@ -372,8 +372,10 @@ export function createDocView(
 
       const look = headingLookOf(kit.style, sv.section.level)
       const markCells = headingMarkCellsOf(look)
+      // Prose above the first heading has no heading to show: its row is only the note chip.
+      const isTop = sv.section.level === 0
       const mode = chip
-        ? headingChipModeOf(kit.columns, markCells, widthOf(heading), chip)
+        ? headingChipModeOf(kit.columns, markCells, isTop ? 0 : widthOf(heading), chip)
         : 'words'
       const blocks = chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)
       const hasNotes = addressed.length > 0 || visible.length > 0 || isComposing
@@ -384,7 +386,7 @@ export function createDocView(
           <Box
             key={`section-head:${index}`}
             flexDirection="column"
-            marginTop={1}
+            marginTop={isTop && index === 0 ? 0 : 1}
             marginBottom={hasBody ? 1 : 0}
           >
             <Box
@@ -394,21 +396,23 @@ export function createDocView(
               flexWrap="nowrap"
               paddingRight={TITLE_EDGE_CELLS}
             >
-              <Box flexShrink={1} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-                {look.mark ? <Text color={COLORS.accent}>{`${look.mark} `}</Text> : null}
-                <Box flexShrink={1} overflow="hidden">
-                  <Text
-                    wrap="truncate-end"
-                    bold
-                    dimColor={look.dim}
-                    color={look.accent ? COLORS.accent : undefined}
-                  >
-                    {heading}
-                  </Text>
+              {isTop ? null : (
+                <Box flexShrink={1} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+                  {look.mark ? <Text color={COLORS.accent}>{`${look.mark} `}</Text> : null}
+                  <Box flexShrink={1} overflow="hidden">
+                    <Text
+                      wrap="truncate-end"
+                      bold
+                      dimColor={look.dim}
+                      color={look.accent ? COLORS.accent : undefined}
+                    >
+                      {heading}
+                    </Text>
+                  </Box>
                 </Box>
-              </Box>
+              )}
               {chip ? (
-                <Box flexShrink={0} marginLeft={HEADING_GAP}>
+                <Box flexShrink={0} marginLeft={isTop ? 0 : HEADING_GAP}>
                   {pillRow(kit, [chip], mode, `${anchorKeyOf(anchor)}:note`)}
                 </Box>
               ) : null}

@@ -8,7 +8,7 @@ export type HeadingLook = {
   mark: string | null
   /** Bold accent text (H1 and H2); false is bold in the default colour. */
   accent: boolean
-  /** The top section's `(top)` row: dim rather than a real heading. */
+  /** The top section (text above the first heading), which draws no heading text, only its chip. */
   dim: boolean
   /** A dim `─` rule row under the heading (every style except `bar`, H1 and H2 only). */
   rule: boolean
@@ -18,7 +18,7 @@ export type HeadingLook = {
  * The heading's look by style and level. H1 and H2 carry the style's group mark and accent text; in
  * a style with no left bar (`none`) or with frames (`sharp`, `rounded`: a doc section cannot be
  * framed, its height is the engine's) they draw a dim rule under the heading instead. H3 and
- * deeper are bold only. Level 0 (text above the first heading) is a plain dim row.
+ * deeper are bold only. Level 0 (text above the first heading) draws no heading at all.
  */
 export function headingLookOf(style: Style, level: number): HeadingLook {
   if (level === 0) return { mark: null, accent: false, dim: true, rule: false }
