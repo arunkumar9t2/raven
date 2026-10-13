@@ -638,6 +638,96 @@ describe('options: watched doc paths, defaults', () => {
     expect((await ui.find({ key: 'section:0' }))?.text).not.toContain('only on the second one')
   })
 
+  test('a note in the doc is a ┃ bar card with no frame, wrapped inside the pane less its bar', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc', bodyColumns: 50 },
+      requestId: DOC_PANE.id,
+    })
+    const section = { path: DOC_PATH, hunk: '§0' }
+    await pressPill(ui, commentButtonKeyOf(section))
+    await ui.input({ key: inputKeyOf(section), text: Array(30).fill('word').join(' ') })
+
+    const texts = (await ui.findAll({ type: 'Text' })).map(each => each.text)
+    expect(texts.some(text => text.startsWith('┃'))).toBe(true)
+    expect(texts.some(text => /^[╭╰]/.test(text))).toBe(false)
+    const wrapped = texts.filter(text => /^word/.test(text) && !text.includes('\n'))
+    expect(wrapped.length).toBeGreaterThan(1)
+    for (const line of wrapped) expect([...line].length).toBeLessThanOrEqual(50 - NOTE_CELLS)
+  })
+
+  test('a note sits a blank row below the blocks it follows', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const section = { path: DOC_PATH, hunk: '§0' }
+    await pressPill(ui, commentButtonKeyOf(section))
+    await ui.input({ key: inputKeyOf(section), text: 'spaced' })
+    expect((await ui.find({ key: 'section-notes:0' }))?.props.marginTop).toBe(1)
+  })
+
+  test('a heading chip sits right after its heading and drops to its icon before it would be cut off', async ($, on) => {
+    const longHeading = 'Long heading '.repeat(6).trim()
+    openWorld(on, { [DOC_PATH]: `# Plan\n\n## ${longHeading}\n\ntext\n\n## Short\n\ntext\n` })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc', bodyColumns: 24 },
+      requestId: DOC_PANE.id,
+    })
+    // Sections: Plan (0), the long heading (1), Short (2).
+    const long = await pillOf(ui, commentButtonKeyOf({ path: DOC_PATH, hunk: '§1' }))
+    const short = await pillOf(ui, commentButtonKeyOf({ path: DOC_PATH, hunk: '§2' }))
+    expect(long?.t).toBeDefined()
+    expect(long?.t).not.toContain('note')
+    expect(short?.t).toContain('note')
+    // The chip is a sibling of the heading text inside the heading row, not a right-pinned column.
+    const row = await ui.find({
+      key: `section-note:${anchorKeyOf({ path: DOC_PATH, hunk: '§2' })}`,
+    })
+    expect(row?.props.paddingRight).toBe(1)
+  })
+
+  test('prose above the first heading draws no (top) label, only its note chip, which composes on that section', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: 'Just a preface.\n\n# Plan\n\nIntro\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    expect(await ui.find({ text: /\(top\)/ })).toBeUndefined()
+    // The top section is §0; no blank row between the title row and its chip row.
+    const top = { path: DOC_PATH, hunk: '§0' }
+    expect((await ui.find({ key: 'section-head:0' }))?.props.marginTop).toBe(0)
+    expect((await ui.find({ key: 'section-head:1' }))?.props.marginTop).toBe(1)
+    await pressPill(ui, commentButtonKeyOf(top))
+    await ui.input({ key: inputKeyOf(top), text: 'on the preface' })
+    expect((await ui.find({ key: 'section:0' }))?.text).toContain('on the preface')
+  })
+
   test('a doc comment whose section is gone draws under an Outdated row', async ($, on) => {
     let text = '# Gone\n\nold topic\n'
     openWorld(on, path => (path === DOC_PATH ? text : ''))
