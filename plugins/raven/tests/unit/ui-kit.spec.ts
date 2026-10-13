@@ -42,7 +42,7 @@ describe('ageOf', () => {
 })
 
 describe('statBarCells', () => {
-  // The rounding rule (see stat-bar.tsx's doc comment): floor each side's proportional share,
+  // The rounding rule (see stat-bar.ts's doc comment): floor each side's proportional share,
   // then hand the one possible leftover cell first to a non-zero side that floored to nothing,
   // else to the larger fractional remainder, ties favouring added.
   test('an even split with a leftover cell goes to added (3,3,5 -> 3/2/0)', () => {

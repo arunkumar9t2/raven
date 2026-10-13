@@ -16,7 +16,7 @@ export type HeaderHandlers = {
 }
 
 const NOTHING = () => {}
-export const NO_HANDLERS: HeaderHandlers = {
+const NO_HANDLERS: HeaderHandlers = {
   onPrevious: NOTHING,
   onNext: NOTHING,
   onRefresh: NOTHING,
@@ -112,7 +112,7 @@ export function headerChipsOf(args: HeaderChipArgs, on: HeaderHandlers = NO_HAND
 /** The reserved minimum the change map keeps at the narrowest docked body (rulings R28, R30). */
 export const MIN_MAP_CELLS = 2
 /** The most cells the one-row header gives the change map. */
-export const ONE_ROW_MAP_CELLS = 12
+const ONE_ROW_MAP_CELLS = 12
 
 const GIT_ICON_CELLS = 1
 const DOT_CELLS = 1

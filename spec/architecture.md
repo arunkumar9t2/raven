@@ -49,7 +49,7 @@ flowchart TB
     raven --> views["hooks/views/*\nDiff · Doc · Files · Tasks"]
     views --> sourcectl["views/diff/source-controller.ts\nwhich base the diff compares against"]
     views --> review["review/*\ncomments, resolve, turns"]
-    views --> uikit["hooks/ui/*\ndot · badge · meta · diffStat · statBar\nprogressBar · sectionHeader · row · accentBar\nchips · changeMap, COLORS-keyed only"]
+    views --> uikit["hooks/ui/*\ndot · badge · meta · diffStat · statBarCells\nprogressBar · sectionHeader · row · accentBar\nchips · changeMap, COLORS-keyed only"]
 
     raven --> renderout["RenderElement"]
     renderout --> Q["$ (engine)"]

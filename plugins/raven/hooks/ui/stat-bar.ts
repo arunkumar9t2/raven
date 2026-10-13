@@ -1,11 +1,3 @@
-/* @jsxRuntime classic */
-/* @jsx h */
-/* @jsxFrag Fragment */
-import type { RenderElement } from 'claude-code'
-
-import { COLORS } from '../core/colors'
-import type { UiKit } from '../core/view'
-
 export type StatBarCells = { added: number; removed: number; rest: number }
 
 /**
@@ -67,24 +59,4 @@ export function statBarCells(
     removed: removedCells,
     rest: Math.max(0, safeCells - addedCells - removedCells),
   }
-}
-
-/** `■■■□□`: added cells in the added colour, removed in the removed colour, the rest inactive. */
-export function statBar(
-  kit: UiKit,
-  added: number,
-  removed: number,
-  cells = 5,
-  max?: number,
-): RenderElement {
-  const { Text } = kit.ui
-  const bar = statBarCells(added, removed, cells, max)
-
-  return (
-    <Text wrap="truncate-end">
-      {bar.added > 0 ? <Text color={COLORS.added}>{'■'.repeat(bar.added)}</Text> : ''}
-      {bar.removed > 0 ? <Text color={COLORS.removed}>{'■'.repeat(bar.removed)}</Text> : ''}
-      {bar.rest > 0 ? <Text color={COLORS.inactive}>{'□'.repeat(bar.rest)}</Text> : ''}
-    </Text>
-  )
 }

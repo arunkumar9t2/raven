@@ -3,7 +3,7 @@ import { widthOf } from '../ui/wrap'
 /** Cells the Doc view's title and heading rows keep free at the pane's right edge. */
 export const TITLE_EDGE_CELLS = 1
 /** Cells between the title and its dimmed path. */
-export const TITLE_GAP = 2
+const TITLE_GAP = 2
 
 const ELLIPSIS = '…'
 /** The least a shortened path can usefully say: `….md`. Below this the path is dropped. */

@@ -28,7 +28,7 @@ export const fileRowIdOf = (path: string) => `file:${path}`
 /**
  * The changed-files list: one row per file, with status/kind marks and an add/del count, capped
  * at `MAX_ROWS`; beyond that, the rows around the selected file plus a dim "… N more" row. Each
- * row's `statBar` scales against the largest change in the whole list (not just the visible
+ * row's stat bar scales against the largest change in the whole list (not just the visible
  * window), mirroring `changeMapOf`'s own scaling, so a tiny rename and a big edit read apart.
  * The rows are one `strip` (`ui/strip.tsx`): a Client where the surface has one (hover on the
  * user-message tint, the selected file's row on the selection tint, a click anywhere on a row

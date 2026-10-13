@@ -36,9 +36,9 @@ export const TITLE_GAP_KEY = 'title-gap'
 export const FILE_GAP_KEY = 'file-gap'
 /** The blank row before hunk `index`, for every hunk but the first. */
 export const hunkGapKeyOf = (index: number) => `hunk-gap:${index}`
-export const OUTDATED_GAP_KEY = 'outdated-gap'
+const OUTDATED_GAP_KEY = 'outdated-gap'
 export const OUTDATED_TITLE_KEY = 'outdated-title'
-export const ORPHANS_GAP_KEY = 'orphans-gap'
+const ORPHANS_GAP_KEY = 'orphans-gap'
 export const ORPHANS_TITLE_KEY = 'orphans-title'
 /** The block key of an orphaned path's own heading row, inside the `orphans#` group. */
 export const orphanPathKeyOf = (path: string) => `orphan-path:${path}`
@@ -446,7 +446,7 @@ export type Stream = {
 const SEP_SUFFIX = '#sep'
 
 /** The key of the gap row `streamOf` puts before `path`'s card (it carries no `card`). */
-export const sepKeyOf = (path: string): string => `${path}${SEP_SUFFIX}`
+const sepKeyOf = (path: string): string => `${path}${SEP_SUFFIX}`
 
 /** The path a `sepKeyOf` key was made for, or undefined for any other key. */
 export const sepPathOf = (key: string): string | undefined =>

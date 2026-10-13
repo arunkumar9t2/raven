@@ -178,7 +178,7 @@ function showsEnd<T>(blocks: readonly Block<T>[], top: number, rows: number): bo
  * then moves down to the first `top` whose view shows the last row (the box's own end at the
  * latest, where it unmounts).
  */
-export function maxTopOf<T>(blocks: readonly Block<T>[], rows: number): number {
+function maxTopOf<T>(blocks: readonly Block<T>[], rows: number): number {
   const content = contentRowsOf(blocks)
   const base = Math.max(0, content - rows)
   if (showsEnd(blocks, base, rows)) return base

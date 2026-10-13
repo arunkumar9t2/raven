@@ -9,18 +9,18 @@ export type ForcedMode = 'split' | 'unified' | null
 export const SPLIT_MIN_COLUMNS = 40
 
 /** Whether a body `bodyColumns` wide is wide enough to split at all. */
-export const canSplitIn = (bodyColumns: number): boolean => bodyColumns >= SPLIT_MIN_COLUMNS
+const canSplitIn = (bodyColumns: number): boolean => bodyColumns >= SPLIT_MIN_COLUMNS
 
-/** Whether the diff draws side by side in a body `bodyColumns` wide. */
+/** Whether the diff draws side by side in a pane `paneColumns` wide. */
 export function splitModeOf(
-  bodyColumns: number,
+  paneColumns: number,
   splitColumns: number,
   forced: ForcedMode,
 ): boolean {
-  if (!canSplitIn(bodyColumns)) return false
+  if (!canSplitIn(paneColumns)) return false
   if (forced === 'split') return true
   if (forced === 'unified') return false
-  return bodyColumns >= splitColumns
+  return paneColumns >= splitColumns
 }
 
 /** A stored value as a forced mode; anything but the two words is "by width". */
@@ -31,12 +31,12 @@ export const forcedOf = (value: unknown): ForcedMode =>
 export type SplitMode = {
   /** Reads the persisted mode for `toplevel`; a no-op while the repository is unchanged. */
   resolveStored: (toplevel: string | null) => Promise<void>
-  /** Whether a body `bodyColumns` wide draws side by side. */
-  isSplit: (bodyColumns: number) => boolean
+  /** Whether a pane `paneColumns` wide draws side by side. */
+  isSplit: (paneColumns: number) => boolean
   /** Whether a body `bodyColumns` wide is wide enough to split at all (else there is nothing to toggle). */
   canSplit: (bodyColumns: number) => boolean
-  /** Forces the opposite of what a body `bodyColumns` wide draws now, and persists it; a no-op below the minimum. */
-  toggle: (bodyColumns: number) => void
+  /** Forces the opposite of what a pane `paneColumns` wide draws now, and persists it; a no-op below the minimum. */
+  toggle: (paneColumns: number) => void
 }
 
 export function createSplitMode(host: Host, splitColumns: number): SplitMode {
@@ -61,14 +61,14 @@ export function createSplitMode(host: Host, splitColumns: number): SplitMode {
     forced = forcedOf(stored)
   }
 
-  const isSplit = (bodyColumns: number) => splitModeOf(bodyColumns, splitColumns, forced)
+  const isSplit = (paneColumns: number) => splitModeOf(paneColumns, splitColumns, forced)
 
-  function toggle(bodyColumns: number): void {
+  function toggle(paneColumns: number): void {
     // Below the minimum nothing can split, so a press would only store a choice that changes
     // nothing now and surprises the person once the pane grows.
-    if (!canSplitIn(bodyColumns)) return
+    if (!canSplitIn(paneColumns)) return
     toggles += 1
-    forced = isSplit(bodyColumns) ? 'unified' : 'split'
+    forced = isSplit(paneColumns) ? 'unified' : 'split'
     if (toplevel === null) return
     void host
       .storeSet(splitStoreKeyOf(toplevel), forced)

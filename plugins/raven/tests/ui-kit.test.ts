@@ -9,7 +9,6 @@ import { dot } from '../hooks/ui/dot'
 import { NOTE_GLYPH } from '../hooks/ui/icon-text'
 import { progressBar } from '../hooks/ui/progress-bar'
 import { sectionHeader } from '../hooks/ui/section-header'
-import { statBar } from '../hooks/ui/stat-bar'
 import { pillRow } from '../hooks/ui/strip'
 import { styleOf } from '../hooks/ui/style'
 import { baseWorld, SESSION } from './helpers'
@@ -74,7 +73,6 @@ describe('the UI kit draws on the terminal surface', () => {
             dot(kit, COLORS.accent),
             badge(kit, 6, COLORS.accent),
             diffStat(kit, 15, 12),
-            statBar(kit, 3, 3, 5),
             progressBar(kit, 3, 5, 5),
             sectionHeader(kit, {
               dot: COLORS.added,
