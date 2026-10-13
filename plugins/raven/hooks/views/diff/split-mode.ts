@@ -30,7 +30,9 @@ export type SplitMode = {
   resolveStored: (toplevel: string | null) => Promise<void>
   /** Whether a body `bodyColumns` wide draws side by side. */
   isSplit: (bodyColumns: number) => boolean
-  /** Forces the opposite of what a body `bodyColumns` wide draws now, and persists it. */
+  /** Whether a body `bodyColumns` wide is wide enough to split at all (else there is nothing to toggle). */
+  canSplit: (bodyColumns: number) => boolean
+  /** Forces the opposite of what a body `bodyColumns` wide draws now, and persists it; a no-op below the minimum. */
   toggle: (bodyColumns: number) => void
 }
 
@@ -58,7 +60,12 @@ export function createSplitMode(host: Host, splitColumns: number): SplitMode {
 
   const isSplit = (bodyColumns: number) => splitModeOf(bodyColumns, splitColumns, forced)
 
+  const canSplit = (bodyColumns: number) => bodyColumns >= SPLIT_MIN_COLUMNS
+
   function toggle(bodyColumns: number): void {
+    // Below the minimum nothing can split, so a press would only store a choice that changes
+    // nothing now and surprises the person once the pane grows.
+    if (!canSplit(bodyColumns)) return
     toggles += 1
     forced = isSplit(bodyColumns) ? 'unified' : 'split'
     if (toplevel === null) return
@@ -67,7 +74,7 @@ export function createSplitMode(host: Host, splitColumns: number): SplitMode {
       .catch(loggedAs(host, 'saving the split mode', undefined))
   }
 
-  return { resolveStored, isSplit, toggle }
+  return { resolveStored, isSplit, canSplit, toggle }
 }
 
 /** The `chipsLayout` priority of the split chip: between refresh (1) and clear (2), so it gives way right after refresh. */

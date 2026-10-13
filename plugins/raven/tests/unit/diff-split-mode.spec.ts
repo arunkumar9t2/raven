@@ -121,6 +121,19 @@ describe('createSplitMode', () => {
     expect(store.get(splitStoreKeyOf('/repo'))).toBe('unified')
   })
 
+  test('a toggle below the minimum body width changes and stores nothing', async () => {
+    const { host, store } = storeHost({})
+    const mode = createSplitMode(host, 160)
+    await mode.resolveStored('/repo')
+    expect(mode.canSplit(SPLIT_MIN_COLUMNS - 1)).toBe(false)
+    expect(mode.canSplit(SPLIT_MIN_COLUMNS)).toBe(true)
+    mode.toggle(SPLIT_MIN_COLUMNS - 1)
+    await Promise.resolve()
+    expect(store.has(splitStoreKeyOf('/repo'))).toBe(false)
+    // Widened later, the pane still goes by its width: the dead press left no forced split behind.
+    expect(mode.isSplit(100)).toBe(false)
+  })
+
   test('a repository switch rereads; no repository keeps the choice in memory only', async () => {
     const { host, store } = storeHost({ [splitStoreKeyOf('/b')]: 'split' })
     const mode = createSplitMode(host, 160)
@@ -177,7 +190,13 @@ describe('splitChipOf', () => {
   })
 
   const chips = (): Chip[] =>
-    headerChipsOf({ pending: 2, confirmingClear: false, includeRefresh: true, isSplit: false })
+    headerChipsOf({
+      pending: 2,
+      confirmingClear: false,
+      includeRefresh: true,
+      isSplit: false,
+      canSplit: true,
+    })
 
   test('every chip keeps its words when the row has room', () => {
     expect(chipsLayout(chips(), 66)).toEqual(Array(7).fill('words'))

@@ -47,6 +47,8 @@ export type HeaderProps = {
   onRefresh: () => void
   /** Whether the body draws side by side now; the chip offers the other layout. */
   isSplit: boolean
+  /** Whether the body is wide enough to split; the chip is hidden below that. */
+  canSplit: boolean
   onToggleSplit: () => void
   onSend: () => void
   onEditSend: () => void
@@ -145,6 +147,7 @@ function oneRow(
       confirmingClear: props.confirmingClear,
       includeRefresh: true,
       isSplit: props.isSplit,
+      canSplit: props.canSplit,
     },
     handlersOf(props),
   )
@@ -225,7 +228,13 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
       : ''
   const compactNotesText = !confirmingClear && pending > 0 ? NOTE_GLYPH : ''
   const fullChips = headerChipsOf(
-    { pending, confirmingClear, includeRefresh: true, isSplit: props.isSplit },
+    {
+      pending,
+      confirmingClear,
+      includeRefresh: true,
+      isSplit: props.isSplit,
+      canSplit: props.canSplit,
+    },
     handlers,
   )
   const fullMapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
@@ -237,7 +246,13 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
   const chips = ample
     ? fullChips
     : headerChipsOf(
-        { pending, confirmingClear, includeRefresh: false, isSplit: props.isSplit },
+        {
+          pending,
+          confirmingClear,
+          includeRefresh: false,
+          isSplit: props.isSplit,
+          canSplit: props.canSplit,
+        },
         handlers,
       )
   const room = Math.max(0, kit.columns - fullLeftWidth - 2)

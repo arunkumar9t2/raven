@@ -28,7 +28,13 @@ import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
 import type { Style } from '../ui/style'
-import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
+import {
+  type Anchor,
+  anchorKeyOf,
+  commentBoxKeyOf,
+  commentButtonKeyOf,
+  inputKeyOf,
+} from './diff/anchor'
 import {
   type BodyItem,
   contentWidthOf,
@@ -57,6 +63,7 @@ import {
   clampTop,
   type FixedBlock,
   type Placed,
+  rowOfKey,
   rowsOf,
   sliceHunk,
   stepFileIndexOf,
@@ -917,6 +924,33 @@ export function createDiffView(
     )
   }
 
+  /** Whether the diff draws side by side in a pane `columns` wide whose body is `bodyWidth` wide. */
+  const isSplitAt = (columns: number, bodyWidth: number) =>
+    splitMode.canSplit(bodyWidth) && splitMode.isSplit(columns)
+
+  /**
+   * Flips the layout and keeps the person where they were: the stream's rows change with it, so
+   * `top` is re-anchored (to the open compose box, whose Input must stay mounted, else to the
+   * selected file's title) in the stream the new layout draws. A picked line survives unless the
+   * new layout does not offer it (an old-side line in split).
+   */
+  function toggleSplit(kit: Kit, bodyWidth: number) {
+    if (!splitMode.canSplit(bodyWidth)) return
+    splitMode.toggle(kit.columns)
+    const isSplit = isSplitAt(kit.columns, bodyWidth)
+    const stream = streamFor(kit.capabilities, bodyWidth, kit.style, isSplit)
+    const boxRow = model.composing
+      ? rowOfKey(stream.blocks, `${model.composing.path}#${commentBoxKeyOf(model.composing)}`)
+      : null
+    const titleRow = model.selected === null ? undefined : stream.titleRows.get(model.selected)
+    const top = boxRow ?? titleRow ?? model.top
+    update({
+      top,
+      selected: fileAtRow(stream.titleRows, top) ?? model.selected,
+      composingLine: effectiveLineOf(model.composingLine, isSplit),
+    })
+  }
+
   function render(kit: Kit): RenderElement {
     const { Box, Text } = kit.ui
     isClient = kit.capabilities.canClient
@@ -932,14 +966,11 @@ export function createDiffView(
       )
 
     const files = filesOf()
-    // The body and the header chip decide split from the same width, so the chip always matches.
-    const isSplit = splitMode.isSplit(kit.columns)
-    const stream = streamFor(
-      kit.capabilities,
-      contentWidthOf(kit.columns, kit.style),
-      kit.style,
-      isSplit,
-    )
+    // The body and the header chip decide split from the same widths. The threshold reads the
+    // pane's columns; the minimum reads the body's, which is what the renderer lays two sides in.
+    const bodyWidth = contentWidthOf(kit.columns, kit.style)
+    const isSplit = isSplitAt(kit.columns, bodyWidth)
+    const stream = streamFor(kit.capabilities, bodyWidth, kit.style, isSplit)
     // A comment whose file left the diff still has to draw somewhere (R32 part 2's orphans
     // group): the empty-state text only wins when the stream is truly empty, not just the file
     // list.
@@ -973,11 +1004,8 @@ export function createDiffView(
       onSourceChange: selectSource,
       onRefresh: () => void refresh(),
       isSplit,
-      onToggleSplit: () => {
-        splitMode.toggle(kit.columns)
-        // The picked line may be one the other mode does not offer.
-        update({ composingLine: null })
-      },
+      canSplit: splitMode.canSplit(bodyWidth),
+      onToggleSplit: () => toggleSplit(kit, bodyWidth),
       onSend: () => {
         resetConfirm()
         actions.send()

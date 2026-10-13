@@ -29,6 +29,7 @@ describe('headerChipsOf', () => {
       confirmingClear: false,
       includeRefresh: true,
       isSplit: false,
+      canSplit: true,
     })
     expect(chips.map(chip => chip.key)).toEqual([
       'previous',
@@ -48,14 +49,40 @@ describe('headerChipsOf', () => {
     expect(priorityOf('send')).toBe(4)
   })
 
-  test('with nothing pending there is no send; refresh can be left out', () => {
+  test('with nothing pending there is no send; refresh can be left out but the split chip stays', () => {
     const chips = headerChipsOf({
       pending: 0,
       confirmingClear: false,
       includeRefresh: false,
       isSplit: false,
+      canSplit: true,
     })
-    expect(chips.map(chip => chip.key)).toEqual(['previous', 'next', 'clear'])
+    expect(chips.map(chip => chip.key)).toEqual(['previous', 'next', 'split', 'clear'])
+  })
+
+  test('the split chip survives the two-row fallback that drops refresh, pending notes or not', () => {
+    for (const pending of [0, 3]) {
+      const chips = headerChipsOf({
+        pending,
+        confirmingClear: false,
+        includeRefresh: false,
+        isSplit: true,
+        canSplit: true,
+      })
+      expect(chips.map(chip => chip.key)).toContain('split')
+      expect(chips.map(chip => chip.key)).not.toContain('refresh')
+    }
+  })
+
+  test('a body too narrow to split offers no split chip', () => {
+    const chips = headerChipsOf({
+      pending: 0,
+      confirmingClear: false,
+      includeRefresh: true,
+      isSplit: false,
+      canSplit: false,
+    })
+    expect(chips.map(chip => chip.key)).not.toContain('split')
   })
 
   test('an armed clear drops nav and refresh and keeps its own words', () => {
@@ -64,6 +91,7 @@ describe('headerChipsOf', () => {
       confirmingClear: true,
       includeRefresh: true,
       isSplit: false,
+      canSplit: true,
     })
     expect(chips.map(chip => chip.key)).toEqual(['clear'])
     expect(chips[0]).toMatchObject({ label: 'clear all?', kind: 'armed', forceWords: true })
@@ -75,6 +103,7 @@ describe('headerChipsOf', () => {
       confirmingClear: false,
       includeRefresh: true,
       isSplit: false,
+      canSplit: true,
     })
     expect(chips.find(chip => chip.key === 'send')?.short).toBe(iconText('➤', '3'))
   })
@@ -158,6 +187,7 @@ describe('headerPlanOf with an armed clear', () => {
             confirmingClear: true,
             includeRefresh: true,
             isSplit: false,
+            canSplit: true,
           })
           const room = Math.max(0, columns - plan.leftCells - 2)
           const modes = chipsLayout(chips, room)

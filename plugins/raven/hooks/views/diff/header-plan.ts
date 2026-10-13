@@ -33,6 +33,8 @@ export type HeaderChipArgs = {
   includeRefresh: boolean
   /** Whether the body draws side by side now; the split chip offers the other layout. */
   isSplit: boolean
+  /** Whether the body is wide enough to split; below that the chip is not offered. */
+  canSplit: boolean
 }
 
 /**
@@ -64,17 +66,16 @@ export function headerChipsOf(args: HeaderChipArgs, on: HeaderHandlers = NO_HAND
       },
     )
     if (args.includeRefresh) {
-      chips.push(
-        {
-          key: 'refresh',
-          icon: '↻',
-          label: 'refresh',
-          priority: 1,
-          onPress: on.onRefresh,
-        },
-        splitChipOf(args.isSplit, on.onToggleSplit),
-      )
+      chips.push({
+        key: 'refresh',
+        icon: '↻',
+        label: 'refresh',
+        priority: 1,
+        onPress: on.onRefresh,
+      })
     }
+    // Outside the refresh block: the two-row fallback drops refresh, never the way back from split.
+    if (args.canSplit) chips.push(splitChipOf(args.isSplit, on.onToggleSplit))
   }
   if (pending > 0) {
     chips.push(
@@ -197,6 +198,7 @@ export function headerPlanOf(input: HeaderPlanInput): HeaderPlan {
     confirmingClear: input.confirmingClear,
     includeRefresh: true,
     isSplit: false,
+    canSplit: true,
   })
   // A forceWords chip (the armed clear) never shrinks, so the floor counts it at its words.
   const floor = chipsIconsWidthOf(chips)
