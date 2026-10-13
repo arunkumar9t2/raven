@@ -140,6 +140,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       focus: key => void focusIn(diff, key),
     },
     now,
+    { splitColumns: settings.splitColumns },
   )
   const doc = createDocView(host, review, { focus: key => void focusIn(doc, key) }, now)
   const tree = createTreeView(host, { open: path => void showDoc({ kind: 'file', path }) })

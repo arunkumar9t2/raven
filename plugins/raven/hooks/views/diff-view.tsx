@@ -5,6 +5,7 @@ import type { RenderElement } from 'claude-code'
 
 import { COLORS, NOTE_STATE_COLORS } from '../core/colors'
 import { type Host, loggedAs } from '../core/host'
+import { DEFAULT_SETTINGS } from '../core/settings'
 import type { Capabilities, Kit, View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
@@ -52,6 +53,7 @@ import { clampTop, type Placed, rowsOf, sliceHunk, stepFileIndexOf, windowOf } f
 import { railOf } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
+import { createSplitMode } from './diff/split-mode'
 import { iconOf, statusMarkOf } from './icons'
 
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
@@ -136,11 +138,18 @@ export type DiffView = View & {
   toplevel: () => string | null
 }
 
+/** What the diff view takes from the person's settings. */
+export type DiffOptions = {
+  /** The body width, in columns, at which the diff goes side by side unless forced. */
+  splitColumns: number
+}
+
 export function createDiffView(
   host: Host,
   review: Review,
   actions: DiffActions,
   now: () => number,
+  options: DiffOptions = { splitColumns: DEFAULT_SETTINGS.splitColumns },
 ): DiffView {
   let model: Model = {
     repository: null,
@@ -161,6 +170,8 @@ export function createDiffView(
   }
 
   const sourceController = createSourceController(host)
+  const splitMode = createSplitMode(host, options.splitColumns)
+  void splitMode
 
   // The body rows and the title rows/content-row count of the most recent render computed, so
   // `scroll` and `select` (which have no kit) can clamp/jump without recomputing them.
@@ -267,6 +278,7 @@ export function createDiffView(
     if (started !== generation) return
 
     await sourceController.refresh(repository)
+    await splitMode.resolveStored(repository?.toplevel ?? null)
     // Resolving the sources can move the base (the branch point is known only now): read again.
     if (refOf(sourceController.base()) !== baseRead) repository = await read()
     if (started !== generation) return
