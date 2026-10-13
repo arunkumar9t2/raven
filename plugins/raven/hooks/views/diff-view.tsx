@@ -67,6 +67,7 @@ import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { effectiveLineOf } from './diff/split'
 import { createSplitMode } from './diff/split-mode'
+import { SPLIT_RENDER, splitHunk } from './diff/split-view'
 import { fileTagOf, type WholeSource, wholePiecesOf, wholeSourceOf } from './diff/whole-file'
 import { iconOf, statusMarkOf } from './icons'
 
@@ -831,6 +832,16 @@ export function createDiffView(
             mark,
             children: whole ? (
               wholeCodeOf(kit, file.path, whole)
+            ) : block.split ? (
+              splitHunk(kit, {
+                key: `split:${block.key}`,
+                split: block.split,
+                from: placed.from,
+                to: placed.to,
+                width: contentWidth,
+                path: file.path,
+                render: SPLIT_RENDER,
+              })
             ) : (
               <Code source={sliced.text} format="diff" path={file.path} wrap="truncate-end" />
             ),
@@ -921,7 +932,14 @@ export function createDiffView(
       )
 
     const files = filesOf()
-    const stream = streamFor(kit.capabilities, contentWidthOf(kit.columns, kit.style), kit.style)
+    // The body and the header chip decide split from the same width, so the chip always matches.
+    const isSplit = splitMode.isSplit(kit.columns)
+    const stream = streamFor(
+      kit.capabilities,
+      contentWidthOf(kit.columns, kit.style),
+      kit.style,
+      isSplit,
+    )
     // A comment whose file left the diff still has to draw somewhere (R32 part 2's orphans
     // group): the empty-state text only wins when the stream is truly empty, not just the file
     // list.
@@ -954,7 +972,7 @@ export function createDiffView(
       sourceOptions: sourceController.options(),
       onSourceChange: selectSource,
       onRefresh: () => void refresh(),
-      isSplit: splitMode.isSplit(kit.columns),
+      isSplit,
       onToggleSplit: () => {
         splitMode.toggle(kit.columns)
         // The picked line may be one the other mode does not offer.

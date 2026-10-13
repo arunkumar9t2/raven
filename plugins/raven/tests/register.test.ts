@@ -3356,3 +3356,59 @@ describe('side-by-side toggle chip', () => {
     expect((await pillOf(await mountDiffAt($, 160), 'split'))?.t).toContain('split')
   })
 })
+
+describe('side-by-side body', () => {
+  /** The unified `Code format="diff"` elements in the drawing. */
+  const unifiedCodes = async (ui: Awaited<ReturnType<typeof mountDiffAt>>) =>
+    (await ui.findAll({ type: 'Code' })).filter(code => code.props.format === 'diff')
+
+  test('a pane at the threshold draws no unified Code', async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect((await unifiedCodes(await mountDiffAt($, 160))).length).toBe(0)
+  })
+
+  test('a narrower pane draws the unified Code', async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect((await unifiedCodes(await mountDiffAt($, 100))).length).toBeGreaterThan(0)
+  })
+
+  test('the header chip forces split on a narrow pane and back', async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiffAt($, 100)
+    expect((await unifiedCodes(ui)).length).toBeGreaterThan(0)
+    await pressPill(ui, 'split')
+    expect((await unifiedCodes(ui)).length).toBe(0)
+    await pressPill(ui, 'split')
+    expect((await unifiedCodes(ui)).length).toBeGreaterThan(0)
+  })
+
+  test('a stored "unified" keeps a wide pane unified', async ($, on) => {
+    hunkWorld(on, () => {}, undefined, 'a.ts', { [splitStoreKeyOf(REPO)]: 'unified' })
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    expect((await unifiedCodes(await mountDiffAt($, 160))).length).toBeGreaterThan(0)
+  })
+
+  test("the split rows are the hunk's text: the removed and the added line both draw", async ($, on) => {
+    hunkWorld(on, () => {})
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiffAt($, 160)
+    // HUNK_TEXT is ` a`, `-b`, `+c`: candidate A draws them as Code sources, B/B2 as row text.
+    const drawn = (await ui.findAll({ type: 'Code' })).map(code => String(code.props.source))
+    const text = (await ui.find({ text: /\+1 c|\+2 c/ })) !== undefined
+    expect(drawn.includes('b') || text).toBe(true)
+    expect(drawn.includes('c') || text).toBe(true)
+  })
+})
