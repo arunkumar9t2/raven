@@ -5,7 +5,7 @@ import type { RenderElement } from 'claude-code'
 
 import { COLORS, NOTE_STATE_COLORS } from '../../core/colors'
 import type { Kit } from '../../core/view'
-import { type Hunk, parseHeader } from '../../git/hunks'
+import type { Hunk } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../../review/comments'
 import { ageOf } from '../../ui/age'
 import { boxedCard, ruleRow } from '../../ui/card'
@@ -24,6 +24,7 @@ import {
   selectKeyOf,
   stageKeyOf,
 } from './anchor'
+import { hunkLabelOf } from './hunk-label'
 import { composeInnerRowsOf, noteChipsOf, STATUS_WORDS } from './note-layout'
 
 const WHOLE_HUNK = 'whole'
@@ -194,6 +195,8 @@ export function noteChip(anchor: Anchor, onStart: (anchor: Anchor) => void): Chi
 
 export type HunkToolbarProps = {
   anchor: Anchor
+  /** The file's path: prose files show no function context. */
+  path: string
   hunk: Hunk
   /** Whether the "✎ note" chip draws: the surface can type and this hunk isn't being composed. */
   canNote: boolean
@@ -218,26 +221,6 @@ export type HunkToolbarProps = {
 export const HEADER_MIN = 12
 
 /**
- * A hunk's function context and its new-side line range: `ƒ handleRequest  L2–8`, or the bare
- * range when git gives no context (a trailing `{`/`(` off a long suffix is dropped). D10 point 3.
- *
- * The strip is unconditional, not gated on the suffix's length: git only ever puts one context
- * line there, so a trailing brace/paren is always the same kind of artefact (an opening brace a
- * function/block signature got cut on) regardless of how long that line happens to be; there is
- * no length past which it stops being one.
- */
-function hunkLabelOf(hunk: Hunk): string {
-  const parsed = parseHeader(hunk.header)
-  if (!parsed) return ''
-  const range = `L${parsed.newStart}–${parsed.newStart + Math.max(0, parsed.newCount - 1)}`
-  const suffix = parsed.suffix
-    .trim()
-    .replace(/[{(]+$/, '')
-    .trim()
-  return suffix === '' ? range : `ƒ ${suffix}  ${range}`
-}
-
-/**
  * A hunk's toolbar row, `├─ ƒ name  L1–7 ─────── pills`: the border in the file card's `color`,
  * the header label, a fill, then (unless read-only) the note (when it can draw), stage and
  * revert pills at the right. Staging is a no-op once staged (the pill reads "staged", kind on);
@@ -247,7 +230,7 @@ function hunkLabelOf(hunk: Hunk): string {
 export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
   const { Text } = kit.ui
   const { anchor, color } = props
-  const label = hunkLabelOf(props.hunk)
+  const label = hunkLabelOf(props.hunk, props.path)
   const key = hunkHeaderKeyOf(anchor)
   const left = (
     <Text wrap="truncate-end" key={key}>

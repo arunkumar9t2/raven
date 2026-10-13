@@ -615,6 +615,7 @@ export function createDiffView(
             <Box flexGrow={1} overflow="hidden">
               {hunkToolbar(kit, {
                 anchor: item.anchor,
+                path: file.path,
                 hunk: item.hunk,
                 canNote: item.canNote,
                 isReadOnly: item.isReadOnly,
