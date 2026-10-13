@@ -2,7 +2,8 @@ import { describe, expect, test } from 'bun:test'
 import type { ChangedFile } from '../../hooks/git/changes'
 import { hunkFrom } from '../../hooks/git/hunks'
 import type { Comment } from '../../hooks/review/comments'
-import { type BodyItem, blocksOf, hunkKeyOf } from '../../hooks/views/diff/blocks'
+import { hunkOfChange } from '../../hooks/review/turns'
+import { type BodyItem, blocksOf, hunkKeyOf, streamOf } from '../../hooks/views/diff/blocks'
 import { type Block, contentRowsOf, rowsOf, windowOf } from '../../hooks/views/diff/layout'
 
 const FILE: ChangedFile = {
@@ -262,5 +263,41 @@ describe('notes in a split hunk: more shapes', () => {
       block => block.kind === 'fixed' && (block.item as BodyItem).kind === 'comment-box',
     )
     expect(box && 'isSplit' in (box as { item: object }).item).toBe(false)
+  })
+})
+
+describe('a read-only turn hunk', () => {
+  const edit = hunkOfChange(
+    'keep\nold one\nold two\ntail',
+    'keep\nnew one\nnew two\nnew three\ntail',
+  )
+
+  test('splits into paired rows like a git hunk: six body lines become five rows', () => {
+    const blocks = blocksOf(FILE, [edit], [], null, { width: 100, readOnly: true, split: true })
+    const [hunk] = hunkBlocks(blocks)
+    // keep | (old one,new one) (old two,new two) (-,new three) | tail
+    expect(hunk && rowsOf(hunk)).toBe(5)
+    expect(hunk?.kind === 'hunk' && hunk.split?.rows.map(row => row.kind)).toEqual([
+      'context',
+      'change',
+      'change',
+      'change',
+      'context',
+    ])
+  })
+
+  test('the turn stream carries the split hunks and totals their rows', () => {
+    const stream = streamOf([FILE], () => [edit], [], null, {
+      width: 100,
+      readOnly: true,
+      split: true,
+    })
+    const unified = streamOf([FILE], () => [edit], [], null, { width: 100, readOnly: true })
+    expect(unified.contentRows - stream.contentRows).toBe(2)
+  })
+
+  test('with split off the turn hunk is unchanged', () => {
+    const [hunk] = hunkBlocks(blocksOf(FILE, [edit], [], null, { width: 100, readOnly: true }))
+    expect(hunk && 'split' in hunk).toBe(false)
   })
 })

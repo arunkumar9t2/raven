@@ -3412,3 +3412,128 @@ describe('side-by-side body', () => {
     expect(drawn.includes('c') || text).toBe(true)
   })
 })
+
+describe('split body with a line note and a scroll', () => {
+  type Drawn = { n: number; text: string }
+  type Mounted = Awaited<ReturnType<typeof mountDiffAt>>
+
+  /**
+   * Every source line the body draws, with its line number, in either candidate: the `Code`
+   * sources (A, numbered by `startLine`) or the filled row cells (B, B2, numbered in the gutter).
+   */
+  const drawnOf = async (ui: Mounted): Promise<Drawn[]> => {
+    const codes = (await ui.findAll({ type: 'Code' })).filter(
+      code => code.props.format === 'source',
+    )
+    if (codes.length > 0) {
+      return codes.flatMap(code =>
+        String(code.props.source)
+          .split('\n')
+          .map((line, index) => ({ n: Number(code.props.startLine) + index, text: line })),
+      )
+    }
+    const rows = (await ui.findAll({ text: /│/ })).filter(el => el.key?.startsWith('row:'))
+    return rows.flatMap(row =>
+      row.text.split('│').flatMap(cell => {
+        const match = /^[-+ ]\s*(\d+) (.*?)\s*$/.exec(cell)
+        return match ? [{ n: Number(match[1]), text: match[2] ?? '' }] : []
+      }),
+    )
+  }
+  const countOf = (drawn: readonly Drawn[], text: string) =>
+    drawn.filter(line => line.text === text).map(line => line.n)
+
+  const ctx = (from: number, to: number) =>
+    Array.from({ length: to - from + 1 }, (_, i) => ` c${from + i}`).join('\n')
+
+  test('line numbers continue across a note and no row draws twice', async ($, on) => {
+    const header = '@@ -1,8 +1,9 @@'
+    // Two lines added for one removed, so the right side runs one ahead of the left after the change.
+    const text = `${header}\n l1\n l2\n l3\n l4\n l5\n-old6\n+new6a\n+new6b\n l7\n l8\n`
+    const note = {
+      id: 'c1',
+      path: 'a.ts',
+      hunk: header,
+      line: { number: 7, side: 'new', text: 'new6b' },
+      text: 'inline remark',
+      status: 'pending',
+      createdAt: 0,
+    }
+    hunkWorld(
+      on,
+      () => {},
+      () => text,
+      'a.ts',
+      { [commentsStoreKeyOf(REPO)]: [note] },
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiffAt($, 160)
+
+    expect(await ui.find({ text: /inline remark/ })).toBeDefined()
+    const drawn = await drawnOf(ui)
+    // Each unchanged line draws once per side, numbered by that side; the note does not skew either.
+    expect(countOf(drawn, 'l1')).toEqual([1, 1])
+    expect(countOf(drawn, 'l5')).toEqual([5, 5])
+    expect(countOf(drawn, 'l7').sort()).toEqual([7, 8])
+    expect(countOf(drawn, 'l8').sort()).toEqual([8, 9])
+    // A changed line draws once, on its own side.
+    expect(countOf(drawn, 'old6')).toEqual([6])
+    expect(countOf(drawn, 'new6a')).toEqual([6])
+    expect(countOf(drawn, 'new6b')).toEqual([7])
+    expect(drawn.length).toBe(2 * 7 + 3)
+  })
+
+  test('a window that cuts a split hunk draws the same rows as the unified one', async ($, on) => {
+    const header = '@@ -1,24 +1,24 @@'
+    const text = `${header}\n${ctx(1, 20)}\n-old21\n+new21\n${ctx(22, 24)}\n`
+    hunkWorld(
+      on,
+      () => {},
+      () => text,
+    )
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const mountAt = (bodyColumns: number) =>
+      $.ui.mount({
+        plugin: NAME,
+        surface: 'terminal',
+        component: 'Pane',
+        props: { ...PANE_PROPS, bodyColumns, scroll: { offset: 0, bodyRows: 10 } },
+        requestId: DIFF_PANE.id,
+      })
+    const scrollBy = (by: number) =>
+      $.ui.scroll({
+        component: 'Pane',
+        requestId: DIFF_PANE.id,
+        offset: 0,
+        by,
+        bodyRows: 10,
+        contentRows: 33,
+        origin: { kind: 'person' },
+      })
+
+    // The same scroll in the unified pane is the oracle for which hunk rows are visible.
+    const unified = await mountAt(100)
+    await scrollBy(7)
+    const unifiedText = (await unified.findAll({ type: 'Code' }))
+      .filter(code => code.props.format === 'diff')
+      .map(code => String(code.props.source))
+      .join('\n')
+    const visible = unifiedText.match(/\bc\d+\b/g) ?? []
+    await unified.unmount()
+
+    // The scroll position belongs to the pane's state, so it carries over to the remount.
+    const split = await mountAt(160)
+    const drawn = await drawnOf(split)
+    // The window begins and ends inside the hunk, so it is a true mid-way cut.
+    expect(visible.length).toBeGreaterThan(1)
+    expect(visible[0]).not.toBe('c1')
+    expect(visible[visible.length - 1]).not.toBe('c24')
+    // Both sides draw exactly those rows: each once, numbered by its own line.
+    expect(drawn.map(line => line.text).sort()).toEqual([...visible, ...visible].sort())
+    for (const name of visible) {
+      expect(countOf(drawn, name)).toEqual([Number(name.slice(1)), Number(name.slice(1))])
+    }
+  })
+})
