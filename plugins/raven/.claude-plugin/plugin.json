@@ -36,6 +36,20 @@
       "description": "Skip auto-open below this terminal width, in columns.",
       "required": false,
       "default": 144
+    },
+    "cardStyle": {
+      "type": "string",
+      "title": "Card style",
+      "description": "How files, doc sections, the compose box and tables are framed: bar (default), none, sharp or rounded.",
+      "required": false,
+      "default": "bar"
+    },
+    "splitColumns": {
+      "type": "number",
+      "title": "Side-by-side minimum width",
+      "description": "Show the diff side by side at or above this body width, in columns, unless the header chip forced a mode.",
+      "required": false,
+      "default": 160
     }
   }
 }
