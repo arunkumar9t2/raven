@@ -545,6 +545,20 @@ describe('blocksOf for a turn source', () => {
 describe('streamOf', () => {
   const b = { ...file, path: 'b.ts' }
 
+  test('every block of a file carries its card and only the title block is flagged; the sep and the orphans carry none', () => {
+    const orphan = commentOf({ id: 'o1', path: 'gone.ts' })
+    const stream = streamOf([file, b], () => [hunkA], [orphan], null)
+    const byKey = new Map(stream.blocks.map(block => [block.key, block]))
+    expect(byKey.get(`${file.path}#${TITLE_KEY}`)).toMatchObject({ title: true, card: file.path })
+    expect(byKey.get(`b.ts#${TITLE_KEY}`)).toMatchObject({ title: true, card: 'b.ts' })
+    expect(byKey.get('b.ts#sep')).not.toHaveProperty('card')
+    const hunk = stream.blocks.find(block => block.kind === 'hunk')
+    expect(hunk).toMatchObject({ card: file.path })
+    expect(byKey.get(`orphans#${ORPHANS_TITLE_KEY}`)).not.toHaveProperty('card')
+    const flagged = stream.blocks.filter(block => block.kind === 'fixed' && block.title)
+    expect(flagged).toHaveLength(2)
+  })
+
   test('lays the files out one after another with path-prefixed keys', () => {
     const stream = streamOf([file, b], () => [hunkA], [], null)
     const keys = stream.blocks.map(block => block.key)

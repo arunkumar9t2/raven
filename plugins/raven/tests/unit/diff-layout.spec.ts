@@ -5,10 +5,12 @@ import {
   clampTop,
   contentRowsOf,
   fileWindowOf,
+  pinnedTitleOf,
   rowOfKey,
   rowsOf,
   sliceHunk,
   stepFileIndexOf,
+  viewOf,
   windowOf,
 } from '../../hooks/views/diff/layout'
 
@@ -240,5 +242,155 @@ describe('rowOfKey', () => {
 
   test('returns null for an absent key', () => {
     expect(rowOfKey(blocks, 'missing')).toBeNull()
+  })
+})
+
+/**
+ * Two cards and an orphan row:
+ *   a: title [0,1), gap [1,2), body [2,6)            (6 rows)
+ *   sep [6,7)                                        (no card)
+ *   b: title [7,8), gap [8,9), body [9,12)           (5 rows)
+ *   orphan [12,13)                                   (no card)
+ */
+const titleOf = (key: string, card: string, rows = 1): Block => ({
+  kind: 'fixed',
+  key,
+  rows,
+  item: null,
+  title: true,
+  card,
+})
+const inCard = (key: string, card: string, rows: number): Block => ({
+  kind: 'fixed',
+  key,
+  rows,
+  item: null,
+  card,
+})
+const plain = (key: string, rows = 1): Block => ({ kind: 'fixed', key, rows, item: null })
+const cards: Block[] = [
+  titleOf('a#title', 'a'),
+  inCard('a#gap', 'a', 1),
+  inCard('a#body', 'a', 4),
+  plain('b#sep'),
+  titleOf('b#title', 'b'),
+  inCard('b#gap', 'b', 1),
+  inCard('b#body', 'b', 3),
+  plain('orphans#row'),
+]
+
+describe('pinnedTitleOf', () => {
+  test('the top of the stream pins nothing', () => {
+    expect(pinnedTitleOf(cards, 0)).toBeNull()
+  })
+
+  test('a top exactly on a title is the title itself: no pin', () => {
+    expect(pinnedTitleOf(cards, 7)).toBeNull()
+  })
+
+  test("a top in the middle of a card pins that card's title", () => {
+    for (const top of [1, 3, 5]) expect(pinnedTitleOf(cards, top)?.key).toBe('a#title')
+    for (const top of [8, 10, 11]) expect(pinnedTitleOf(cards, top)?.key).toBe('b#title')
+  })
+
+  test('the blank row between two files pins nothing: the next title is the next row', () => {
+    expect(pinnedTitleOf(cards, 6)).toBeNull()
+  })
+
+  test('the trailing group pins nothing, even below the last card', () => {
+    expect(pinnedTitleOf(cards, 12)).toBeNull()
+  })
+
+  test('a single-file stream pins its title once scrolled past it', () => {
+    const single = [titleOf('a#title', 'a'), inCard('a#body', 'a', 6)]
+    expect(pinnedTitleOf(single, 0)).toBeNull()
+    expect(pinnedTitleOf(single, 1)?.key).toBe('a#title')
+    expect(pinnedTitleOf(single, 6)?.key).toBe('a#title')
+    expect(pinnedTitleOf(single, 7)).toBeNull()
+  })
+
+  test('the last file pins its own title, not the previous one', () => {
+    expect(pinnedTitleOf(cards.slice(0, -1), 11)?.key).toBe('b#title')
+  })
+
+  test('a two-row title (the none style) pins from its rule row on', () => {
+    const none = [titleOf('a#title', 'a', 2), inCard('a#body', 'a', 5)]
+    expect(pinnedTitleOf(none, 0)).toBeNull()
+    expect(pinnedTitleOf(none, 1)?.key).toBe('a#title')
+    expect(pinnedTitleOf(none, 3)?.key).toBe('a#title')
+  })
+
+  test('a framed card (sharp) pins through its close row, and the sep after it pins nothing', () => {
+    const framed = [
+      titleOf('a#title', 'a'),
+      inCard('a#body', 'a', 4),
+      inCard('a#close', 'a', 1),
+      plain('b#sep'),
+      titleOf('b#title', 'b'),
+      inCard('b#close', 'b', 1),
+    ]
+    expect(pinnedTitleOf(framed, 5)?.key).toBe('a#title')
+    expect(pinnedTitleOf(framed, 6)).toBeNull()
+    expect(pinnedTitleOf(framed, 7)).toBeNull()
+    expect(pinnedTitleOf(framed, 8)?.key).toBe('b#title')
+  })
+
+  test('a hunk block carries its card too', () => {
+    const hunk = hunkOf('@@ -1,3 +1,3 @@', [' a', ' b', ' c'])
+    const blocks: Block[] = [
+      titleOf('a#title', 'a'),
+      { kind: 'hunk', key: 'a#hunk', hunk, card: 'a' },
+    ]
+    expect(pinnedTitleOf(blocks, 2)?.key).toBe('a#title')
+  })
+})
+
+describe('viewOf', () => {
+  const drawnRows = (placed: ReturnType<typeof viewOf>['placed']) =>
+    placed.reduce((sum, p) => sum + (p.to - p.from), 0)
+
+  test('without a pin it is windowOf', () => {
+    expect(viewOf(cards, 0, 5)).toEqual({ pinned: null, placed: windowOf(cards, 0, 5) })
+    expect(viewOf(cards, 7, 5)).toEqual({ pinned: null, placed: windowOf(cards, 7, 5) })
+  })
+
+  test('with a pin the window starts one row lower and one row shorter', () => {
+    const view = viewOf(cards, 3, 5)
+    expect(view.pinned?.key).toBe('a#title')
+    expect(view.placed).toEqual(windowOf(cards, 4, 4))
+    expect(drawnRows(view.placed)).toBeLessThanOrEqual(4)
+  })
+
+  test('the title block itself is not placed while it is pinned', () => {
+    const view = viewOf(cards, 1, 4)
+    expect(view.placed.some(p => p.block.key === 'a#title')).toBe(false)
+    const none = [titleOf('a#title', 'a', 2), inCard('a#body', 'a', 5)]
+    const noneView = viewOf(none, 1, 4)
+    expect(noneView.pinned?.key).toBe('a#title')
+    expect(noneView.placed.some(p => p.block.key === 'a#title')).toBe(false)
+  })
+
+  test('the last stream row is still drawn at the maximum scroll', () => {
+    const top = clampTop(1000, contentRowsOf(cards), 6)
+    expect(viewOf(cards, top, 6).placed.at(-1)?.block.key).toBe('orphans#row')
+    const ends = [titleOf('a#title', 'a'), inCard('a#body', 'a', 9)]
+    const maxTop = clampTop(1000, contentRowsOf(ends), 5)
+    const view = viewOf(ends, maxTop, 5)
+    expect(view.pinned?.key).toBe('a#title')
+    expect(view.placed.at(-1)?.block.key).toBe('a#body')
+    expect(maxTop + 1 + (5 - 1)).toBe(contentRowsOf(ends))
+  })
+
+  test('a pinned compose box straddling the top is still placed whole beside the pinned title', () => {
+    const box: Block = { kind: 'fixed', key: 'a#box', rows: 3, item: null, pinned: true, card: 'a' }
+    const blocks = [titleOf('a#title', 'a'), inCard('a#gap', 'a', 1), box, inCard('a#tail', 'a', 4)]
+    const view = viewOf(blocks, 3, 6)
+    expect(view.pinned?.key).toBe('a#title')
+    expect(view.placed.find(p => p.block.key === 'a#box')).toEqual({ block: box, from: 0, to: 3 })
+  })
+
+  test('fewer than two body rows never pin: the body keeps its single row', () => {
+    expect(viewOf(cards, 3, 1).pinned).toBeNull()
+    expect(viewOf(cards, 3, 0).pinned).toBeNull()
   })
 })

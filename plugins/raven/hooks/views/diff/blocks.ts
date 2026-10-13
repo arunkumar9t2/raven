@@ -345,6 +345,7 @@ export function blocksOf(
       key: TITLE_KEY,
       rows: titleRowsOf(style),
       item: { kind: 'title', file, canNote: canNoteFile },
+      title: true,
     },
     blankBlock(TITLE_GAP_KEY),
   ]
@@ -425,7 +426,7 @@ export function streamOf(
     }
     titleRows.set(each.path, row)
     for (const block of blocksOf(each, hunksFor(each), comments, composing, options)) {
-      blocks.push({ ...block, key: `${each.path}#${block.key}` })
+      blocks.push({ ...block, key: `${each.path}#${block.key}`, card: each.path })
       row += rowsOf(block)
     }
   })

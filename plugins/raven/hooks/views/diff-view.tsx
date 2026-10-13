@@ -51,7 +51,15 @@ import {
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { type HeaderProps, header, headerRowsOf } from './diff/header'
-import { clampTop, type Placed, rowsOf, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
+import {
+  clampTop,
+  type FixedBlock,
+  type Placed,
+  rowsOf,
+  sliceHunk,
+  stepFileIndexOf,
+  viewOf,
+} from './diff/layout'
 import { railedRows } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
@@ -834,6 +842,30 @@ export function createDiffView(
     )
   }
 
+  /**
+   * The pinned title: the scrolled card's title as the body's first row, drawn as the title line
+   * alone (no rule under `none`) under its own key, so `<path>#title` is still absent deep in a
+   * scroll. Its chips are the real title's (same keys and press ids): the real title is not placed
+   * while this is. Frame styles draw the title line as the card kit does.
+   */
+  function pinnedRowOf(
+    kit: Kit,
+    block: FixedBlock<BodyItem>,
+    filesByPath: ReadonlyMap<string, ChangedFile>,
+  ): RenderElement {
+    const { Box } = kit.ui
+    const path = block.key.slice(0, block.key.indexOf('#'))
+    const file = filesByPath.get(path)
+    const { item } = block
+    if (!file || item.kind !== 'title') return <Box key={`${path}#pinned`} />
+    const color = model.edited.has(file.path) ? COLORS.accent : statusMarkOf(file.status).color
+    return (
+      <Box key={`${path}#pinned`}>
+        {titleRowOf(kit, item, color, { ...kit.style, titleRule: false })}
+      </Box>
+    )
+  }
+
   function render(kit: Kit): RenderElement {
     const { Box, Text } = kit.ui
     isClient = kit.capabilities.canClient
@@ -901,7 +933,7 @@ export function createDiffView(
     const top = clampTop(model.top, stream.contentRows, bodyRows)
     if (top !== model.top) model = { ...model, top }
 
-    const placed = windowOf(stream.blocks, top, bodyRows)
+    const view = viewOf(stream.blocks, top, bodyRows)
     const filesByPath = new Map(files.map(file => [file.path, file]))
 
     return (
@@ -910,7 +942,8 @@ export function createDiffView(
         {fileList(kit, { files, selected: model.selected, edited: model.edited, onSelect: select })}
         {/* One short of the full width so the rule never wraps onto a row of its own. */}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
-        {placed.map(p => placedRowOf(kit, p, filesByPath))}
+        {view.pinned ? pinnedRowOf(kit, view.pinned, filesByPath) : null}
+        {view.placed.map(p => placedRowOf(kit, p, filesByPath))}
       </Box>
     )
   }

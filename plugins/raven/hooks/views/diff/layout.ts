@@ -11,6 +11,10 @@ export type Block<T = unknown> =
       item: T
       /** Placed whole even when it straddles the window's top (an Input must stay mounted). */
       pinned?: boolean
+      /** True on a file card's title block: `viewOf` pins it to the body's top while the card scrolls. */
+      title?: boolean
+      /** The file whose card this block belongs to; absent on the rows between cards and on the trailing groups. */
+      card?: string
     }
   | {
       kind: 'hunk'
@@ -24,7 +28,12 @@ export type Block<T = unknown> =
        * Never split side by side: one column would be blank.
        */
       whole?: WholeSide
+      /** The file whose card this block belongs to. */
+      card?: string
     }
+
+/** A fixed block: one with a declared row count. */
+export type FixedBlock<T = unknown> = Extract<Block<T>, { kind: 'fixed' }>
 
 /** A block placed in the window: rows [from, to) of it are visible. */
 export type Placed<T = unknown> = { block: Block<T>; from: number; to: number }
@@ -68,6 +77,47 @@ export function windowOf<T>(blocks: readonly Block<T>[], top: number, rows: numb
   }
 
   return placed
+}
+
+/**
+ * The title block to pin at the body's top for a window starting at row `top`: the title of the
+ * card that holds row `top`, when that title starts above it. Null when `top` is 0, on a title's
+ * first row, on a row between cards, or past the last card (the blocks there carry no `card`).
+ */
+export function pinnedTitleOf<T>(blocks: readonly Block<T>[], top: number): FixedBlock<T> | null {
+  if (top <= 0) return null
+  let offset = 0
+  let title: FixedBlock<T> | null = null
+  let titleStart = -1
+  for (const block of blocks) {
+    const start = offset
+    offset += rowsOf(block)
+    if (block.kind === 'fixed' && block.title && block.card !== undefined) {
+      title = block
+      titleStart = start
+    }
+    if (top < offset) {
+      if (block.card === undefined || title === null || title.card !== block.card) return null
+      return titleStart < top ? title : null
+    }
+  }
+  return null
+}
+
+/**
+ * The window the body draws: the pinned title (if any) in the first row and the blocks from
+ * `top + 1` for `rows - 1` rows beneath it, else `windowOf(blocks, top, rows)`. The pin overlays
+ * the row at `top`, so the stream's final row is still reachable at the maximum scroll without
+ * `clampTop` knowing about the pin. Fewer than two rows never pin.
+ */
+export function viewOf<T>(
+  blocks: readonly Block<T>[],
+  top: number,
+  rows: number,
+): { pinned: FixedBlock<T> | null; placed: Placed<T>[] } {
+  const pinned = rows >= 2 ? pinnedTitleOf(blocks, top) : null
+  if (pinned === null) return { pinned: null, placed: windowOf(blocks, top, rows) }
+  return { pinned, placed: windowOf(blocks, top + 1, rows - 1) }
 }
 
 /**

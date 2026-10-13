@@ -1283,7 +1283,7 @@ describe('review stream', () => {
     expect((await ui.find({ key: 'b.ts#title' }))?.text).toContain('b.ts')
   })
 
-  test("a file's card keeps its left border deep into a scroll, past its own title and most of its hunk", async ($, on) => {
+  test("a file's card keeps its rail deep into a scroll and its title pinned above the code", async ($, on) => {
     hunkWorld(on, () => {})
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
@@ -1309,6 +1309,8 @@ describe('review stream', () => {
     })
 
     expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
+    // The title has scrolled out, so it is pinned to the body's top under its own key.
+    expect((await ui.find({ key: 'a.ts#pinned' }))?.text).toContain('a.ts')
     // What is left is the hunk's code block, still carrying the rail.
     const hunkCode = await ui.find({ key: `a.ts#hunk:0:${HUNK_HEADER}` })
     expect(hunkCode?.text.startsWith('▌')).toBe(true)
