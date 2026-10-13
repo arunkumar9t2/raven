@@ -1,4 +1,4 @@
-import { closesFence } from './markdown-chunks'
+import { closesFence, trimBlankLines } from './markdown-chunks'
 
 /**
  * One commentable section of a markdown doc: its heading (TOP_SECTION before the first), the
@@ -24,8 +24,9 @@ export function docSectionsOf(markdown: string): DocSection[] {
   let fence: string | null = null
 
   const flush = () => {
-    const text = lines.join('\n').trim()
-    if (text !== '') sections.push({ heading, level, text })
+    // Blank lines go from both ends, but not a first line's indent (an indented code block).
+    const text = trimBlankLines(lines.join('\n'))
+    if (text.trim() !== '') sections.push({ heading, level, text })
     lines = []
   }
 
@@ -39,7 +40,7 @@ export function docSectionsOf(markdown: string): DocSection[] {
     const match = fence === null ? HEADING.exec(line) : null
     if (match && !marker) {
       flush()
-      heading = match[2]?.trim() || TOP_SECTION
+      heading = match[2]?.trim() ?? ''
       level = match[1]?.length ?? 1
     }
     lines.push(line)

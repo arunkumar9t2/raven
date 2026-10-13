@@ -24,7 +24,7 @@ import { docLinksOf, resolveDocLink } from './doc-links'
 import { TITLE_EDGE_CELLS, titlePathOf } from './doc-path'
 import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName, iconOf } from './icons'
-import { type DocBlock, docBlocksOf, markdownChunksOf } from './markdown-chunks'
+import { type DocBlock, docBlocksOf, markdownChunksOf, trimBlankLines } from './markdown-chunks'
 import { selectButtons } from './select-buttons'
 import { createTableCache } from './table-cache'
 
@@ -69,7 +69,7 @@ const BODY_TOP = 1
 /** A note doc's title icon (a document), where a file's is its type icon. */
 const NOTE_ICON = '\u{f0219}' // nf-md-file_document
 
-const HEADING_LINE = /^ {0,3}#{1,6}\s/
+const HEADING_LINE = /^ {0,3}#{1,6}(?:\s|$)/
 
 /**
  * A section's text without its own heading line: its heading is drawn by the section's own heading row,
@@ -77,7 +77,8 @@ const HEADING_LINE = /^ {0,3}#{1,6}\s/
  */
 function withoutHeading(text: string): string {
   const [first = '', ...rest] = text.split('\n')
-  return HEADING_LINE.test(first) ? rest.join('\n').trim() : text
+  // Only blank lines go: trimming would also eat the indent of a first body line (an indented code block).
+  return HEADING_LINE.test(first) ? trimBlankLines(rest.join('\n')) : text
 }
 
 const isMarkdown = (path: string) => /\.(md|mdx|markdown)$/i.test(path)
@@ -96,6 +97,30 @@ export const labelOf = (path: string, cwd: string) =>
  * sections sharing a heading never share controls. `hunk` only keys the controls; the comment
  * itself stores `section` (the heading) and `sectionIndex` (the index), never this string. */
 const sectionAnchorOf = (path: string, index: number): Anchor => ({ path, hunk: `§${index}` })
+
+/** The open compose box: its anchor plus the heading and which of the equal headings it is on, so a
+ * reload can follow the section the person opened rather than whatever now sits at its index. */
+type Composing = { anchor: Anchor; heading: string; occurrence: number }
+
+/** How many sections before `index` carry the same heading. */
+const occurrenceOf = (sections: readonly { section: DocSection }[], index: number): number =>
+  sections.slice(0, index).filter(sv => sv.section.heading === sections[index]?.section.heading)
+    .length
+
+/** The index of the `occurrence`-th section titled `heading`, or -1. */
+const indexOfHeading = (
+  sections: readonly { section: DocSection }[],
+  heading: string,
+  occurrence: number,
+): number => {
+  let seen = 0
+  for (const [index, sv] of sections.entries()) {
+    if (sv.section.heading !== heading) continue
+    if (seen === occurrence) return index
+    seen += 1
+  }
+  return -1
+}
 
 /**
  * The title row: the file-type icon (a document icon for a note), a gap, the bold name, and (for a
@@ -144,7 +169,7 @@ export function createDocView(
 ): DocView {
   let history: readonly Shown[] = []
   let current: string | null = null
-  let composing: Anchor | null = null
+  let composing: Composing | null = null
   // A Shown is replaced, never mutated, on a reload, so its chunks/sections are computed once,
   // not per frame.
   const chunksByShown = new WeakMap<Shown, readonly Chunk[]>()
@@ -189,10 +214,10 @@ export function createDocView(
   // Whether the last render drew a `Client` strip: its note pill is then no keyed element to focus.
   let isClient = false
 
-  function startComposing(anchor: Anchor) {
-    composing = anchor
+  function startComposing(next: Composing) {
+    composing = next
     host.redraw()
-    actions.focus(inputKeyOf(anchor))
+    actions.focus(inputKeyOf(next.anchor))
   }
 
   function stopComposing(anchor: Anchor) {
@@ -201,11 +226,34 @@ export function createDocView(
     if (!isClient) actions.focus(commentButtonKeyOf(anchor))
   }
 
-  function submitComment(path: string, heading: string, index: number, text: string) {
-    const anchor = sectionAnchorOf(path, index)
+  /** Stores the note under the section the person opened (the live compose box), never one read from
+   * a stale render: a box a reload closed stores nothing. */
+  function submitComment(text: string) {
+    const open = composing
+    if (open === null) return
+    const path = open.anchor.path
+    const index = Number(open.anchor.hunk?.slice(1))
     if (text.trim() !== '')
-      review.add({ path, section: heading, sectionIndex: index, text: text.trim() })
-    stopComposing(anchor)
+      review.add({ path, section: open.heading, sectionIndex: index, text: text.trim() })
+    stopComposing(open.anchor)
+  }
+
+  /** After a reload, the compose box follows its section (by heading and occurrence) to wherever it
+   * now sits, or closes when the section is gone. */
+  function reconcileComposing(shown: Shown) {
+    const open = composing
+    if (open === null || open.anchor.path !== (shown.doc.kind === 'file' ? shown.doc.path : null))
+      return
+    const sections = shown.text === null ? [] : sectionsOf(shown, shown.text)
+    const index = indexOfHeading(sections, open.heading, open.occurrence)
+    if (index < 0) {
+      composing = null
+      return
+    }
+    const anchor = sectionAnchorOf(open.anchor.path, index)
+    if (anchor.hunk === open.anchor.hunk) return
+    composing = { ...open, anchor }
+    actions.focus(inputKeyOf(anchor))
   }
 
   async function read(doc: Doc): Promise<Pick<Shown, 'text' | 'error'>> {
@@ -242,6 +290,7 @@ export function createDocView(
     if (!shown) return
     const next = { ...shown, ...(await read(shown.doc)) }
     history = history.map(each => (each.key === shown.key ? next : each))
+    if (current === next.key) reconcileComposing(next)
     host.redraw()
   }
 
@@ -360,9 +409,15 @@ export function createDocView(
       })
 
       const isComposing =
-        composing !== null && composing.path === anchor.path && composing.hunk === anchor.hunk
+        composing !== null &&
+        composing.anchor.path === anchor.path &&
+        composing.anchor.hunk === anchor.hunk
       const canNote = kit.capabilities.canType && !isComposing
-      const chip = canNote ? noteChip(anchor, startComposing) : null
+      const chip = canNote
+        ? noteChip(anchor, () =>
+            startComposing({ anchor, heading, occurrence: occurrenceOf(sections, index) }),
+          )
+        : null
 
       // Addressed notes collapse to one dim "✓ N addressed" row, same as a diff anchor's own
       // `notesBlocksOf` (`diff/blocks.ts`): one shared split (`splitAddressed`), one component
@@ -380,48 +435,64 @@ export function createDocView(
       const hasNotes = addressed.length > 0 || visible.length > 0 || isComposing
       const hasBody = blocks.length > 0 || hasNotes
 
+      // The top section's row holds only the chip: with none (nothing to type) it draws nothing, not
+      // an empty row with a margin. Composing there keeps the row (one cell tall), so the page stays put.
+      const hasHead = !isTop || chip !== null || isComposing
       return (
         <Box key={`section:${index}`} flexDirection="column">
-          <Box
-            key={`section-head:${index}`}
-            flexDirection="column"
-            marginTop={isTop && index === 0 ? 0 : 1}
-            marginBottom={hasBody ? 1 : 0}
-          >
+          {hasHead ? (
             <Box
-              key={`section-note:${anchorKeyOf(anchor)}`}
-              flexDirection="row"
-              overflow="hidden"
-              flexWrap="nowrap"
-              paddingRight={TITLE_EDGE_CELLS}
+              key={`section-head:${index}`}
+              flexDirection="column"
+              marginTop={isTop && index === 0 ? 0 : 1}
+              marginBottom={hasBody ? 1 : 0}
             >
-              {isTop ? null : (
-                <Box flexShrink={1} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-                  {look.mark ? <Text color={COLORS.accent}>{`${look.mark} `}</Text> : null}
-                  <Box flexShrink={1} overflow="hidden">
-                    <Text
-                      wrap="truncate-end"
-                      bold
-                      dimColor={look.dim}
-                      color={look.accent ? COLORS.accent : undefined}
-                    >
-                      {heading}
-                    </Text>
+              <Box
+                key={`section-note:${anchorKeyOf(anchor)}`}
+                flexDirection="row"
+                overflow="hidden"
+                flexWrap="nowrap"
+                paddingRight={TITLE_EDGE_CELLS}
+                height={isTop ? 1 : undefined}
+              >
+                {isTop ? null : (
+                  <Box flexShrink={1} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+                    {look.mark ? (
+                      <Box flexShrink={0}>
+                        <Text color={COLORS.accent}>{`${look.mark} `}</Text>
+                      </Box>
+                    ) : null}
+                    <Box flexShrink={1} overflow="hidden">
+                      <Text
+                        wrap="truncate-end"
+                        bold
+                        dimColor={look.dim}
+                        color={look.accent ? COLORS.accent : undefined}
+                      >
+                        {heading}
+                      </Text>
+                    </Box>
                   </Box>
-                </Box>
-              )}
-              {chip ? (
-                <Box flexShrink={0} marginLeft={isTop ? 0 : HEADING_GAP}>
-                  {pillRow(kit, [chip], mode, `${anchorKeyOf(anchor)}:note`)}
+                )}
+                {chip ? (
+                  <Box flexShrink={0} marginLeft={isTop ? 0 : HEADING_GAP}>
+                    {pillRow(kit, [chip], mode, `${anchorKeyOf(anchor)}:note`)}
+                  </Box>
+                ) : null}
+              </Box>
+              {look.rule ? (
+                <Box
+                  key={`section-rule:${index}`}
+                  flexDirection="row"
+                  height={1}
+                  overflow="hidden"
+                  paddingRight={TITLE_EDGE_CELLS}
+                >
+                  {fill(kit, RULE_COLOR)}
                 </Box>
               ) : null}
             </Box>
-            {look.rule ? (
-              <Box flexDirection="row" height={1} overflow="hidden">
-                {fill(kit, RULE_COLOR)}
-              </Box>
-            ) : null}
-          </Box>
+          ) : null}
           {blocks}
           {hasNotes ? (
             <Box
@@ -449,7 +520,7 @@ export function createDocView(
                     line: null,
                     columns: kit.columns,
                     onLineChange: () => {},
-                    onSubmit: submitted => submitComment(doc.path, heading, index, submitted),
+                    onSubmit: submitted => submitComment(submitted),
                     onCancel: () => stopComposing(anchor),
                   })
                 : null}
@@ -475,6 +546,11 @@ export function createDocView(
 
     return (
       <Box flexDirection="column">
+        {sections.length === 0 ? (
+          <Box key="doc-empty" flexDirection="column" marginTop={BODY_TOP}>
+            <Text dimColor>Empty file</Text>
+          </Box>
+        ) : null}
         {sectionElements}
         {outdated.length > 0 ? (
           <Box flexDirection="column" marginTop={1}>

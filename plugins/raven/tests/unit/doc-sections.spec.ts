@@ -37,4 +37,14 @@ describe('docSectionsOf', () => {
     const levels = docSectionsOf('# a\n## b\n### c\n#### d\n##### e\n###### f\n').map(s => s.level)
     expect(levels).toEqual([1, 2, 3, 4, 5, 6])
   })
+
+  test('an empty heading is its own section with an empty title, not the top', () => {
+    const sections = docSectionsOf('Intro\n\n# \n\nbody')
+    expect(sections.map(s => s.heading)).toEqual([TOP_SECTION, ''])
+    expect(sections[1]?.level).toBe(1)
+  })
+
+  test('a first line keeps its indent (an indented code block)', () => {
+    expect(docSectionsOf('\n    code\n')[0]?.text).toBe('    code')
+  })
 })
