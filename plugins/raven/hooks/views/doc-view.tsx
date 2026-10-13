@@ -14,7 +14,7 @@ import { closeRow, ruleRow, stackOf } from '../ui/card'
 import { chipsFit } from '../ui/chips'
 import { BORDER_CELLS, RULE_START, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
-import { ICON_GAP } from '../ui/icon-text'
+import { ICON_GAP, iconText } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
 import { table } from '../ui/table'
 import { type DrawnLine, drawnRowsOf, layoutTable } from '../ui/table-layout'
@@ -23,6 +23,7 @@ import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff
 import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
 import { NOTE_MAX_LINES, noteLinesOf } from './diff/note-layout'
 import { docLinksOf, resolveDocLink } from './doc-links'
+import { TITLE_EDGE_CELLS, titlePathOf } from './doc-path'
 import { type DocSection, docSectionsOf } from './doc-sections'
 import { baseName, iconOf } from './icons'
 import { type DocBlock, docBlocksOf, markdownChunksOf, type TableBlock } from './markdown-chunks'
@@ -125,6 +126,46 @@ function railed(kit: Kit, key: string, rows: number, children: RenderElement): R
         <Text color={BORDER_COLOR}>{stackOf('│', rows)}</Text>
       </Box>
       {children}
+    </Box>
+  )
+}
+
+/**
+ * The title row: the file-type icon (a document icon for a note), a gap, the bold name, and (for a
+ * file) the path dimmed, right-aligned and shortened from the left to what the name leaves. A file
+ * with a caller title shows that title, one without shows its basename; a note shows its title.
+ * The pane's last column stays free.
+ */
+function titleRow(kit: Kit, shown: Shown): RenderElement {
+  const { Box, Text } = kit.ui
+  const isFile = shown.doc.kind === 'file'
+  const icon =
+    shown.doc.kind === 'file' ? iconOf(shown.doc.path) : { glyph: NOTE_ICON, color: RAINBOW.blue }
+  const name =
+    shown.doc.kind === 'file' ? (shown.doc.title ?? baseName(shown.doc.path)) : shown.title
+  const path = isFile
+    ? titlePathOf(shown.label, kit.columns, widthOf(iconText(icon.glyph, name)))
+    : ''
+  return (
+    <Box
+      key="doc-title"
+      flexDirection="row"
+      overflow="hidden"
+      flexWrap="nowrap"
+      paddingRight={TITLE_EDGE_CELLS}
+    >
+      <Box flexShrink={1} overflow="hidden">
+        <Text wrap="truncate-end">
+          <Text color={icon.color}>{icon.glyph}</Text>
+          <Text bold>{`${ICON_GAP}${name}`}</Text>
+        </Text>
+      </Box>
+      <Box flexGrow={1} />
+      {path === '' ? null : (
+        <Box flexShrink={0}>
+          <Text dimColor>{`  ${path}`}</Text>
+        </Box>
+      )}
     </Box>
   )
 }
@@ -548,7 +589,7 @@ export function createDocView(
   }
 
   function render(kit: Kit): RenderElement {
-    const { Box, Text, Select } = kit.ui
+    const { Box, Select } = kit.ui
     isClient = kit.capabilities.canClient
     const shown = history.find(each => each.key === current)
 
@@ -573,28 +614,10 @@ export function createDocView(
         historyButtons(kit, shown)
       )
 
-    const icon =
-      shown.doc.kind === 'file' ? iconOf(shown.doc.path) : { glyph: NOTE_ICON, color: RAINBOW.blue }
-    const heading = (
-      <Text wrap="truncate-end">
-        <Text color={icon.color}>{icon.glyph}</Text>
-        {shown.doc.kind === 'file' && shown.doc.title ? (
-          <Text>
-            <Text bold>{`${ICON_GAP}${shown.doc.title}`}</Text>
-            <Text dimColor>{`  ${shown.label}`}</Text>
-          </Text>
-        ) : (
-          <Text bold>{`${ICON_GAP}${shown.label}`}</Text>
-        )}
-      </Text>
-    )
-
     return (
       <Box flexDirection="column">
         {picker}
-        <Box key="doc-title">
-          {ruleRow(kit, { color: BORDER_COLOR, start: RULE_START.open, left: heading })}
-        </Box>
+        {titleRow(kit, shown)}
         <Box key="doc-card" flexDirection="column">
           {body(kit, shown)}
         </Box>

@@ -396,13 +396,55 @@ describe('options: watched doc paths, defaults', () => {
       props: { ...PANE_PROPS, title: 'Doc' },
       requestId: DOC_PANE.id,
     })
-    // One title row: the card's `╭─` rule carries the icon and the path.
-    expect((await ui.find({ key: 'doc-title' }))?.text).toContain(
-      '/work/docs/superpowers/plans/x.md',
-    )
+    // One title row: the icon, the bold name and the dimmed path, no `╭─` rule.
+    const title = (await ui.find({ key: 'doc-title' }))?.text ?? ''
+    expect(title).toContain('/work/docs/superpowers/plans/x.md')
+    expect(title.startsWith('╭')).toBe(false)
     expect(await ui.find({ text: /^\/work\/docs\/superpowers\/plans\/x\.md$/ })).toBeUndefined()
     // The basename alone is no longer a row of its own.
     expect(await ui.find({ text: /^x\.md$/ })).toBeUndefined()
+  })
+
+  test('the title row shortens the path from the left to fit, and keeps the last column free', async ($, on) => {
+    openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call({
+      tool: TOOL,
+      op: 'show',
+      path: '/work/docs/superpowers/plans/x.md',
+      title: 'My plan',
+    })
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc', bodyColumns: 30 },
+      requestId: DOC_PANE.id,
+    })
+    const title = (await ui.find({ key: 'doc-title' }))?.text ?? ''
+    expect(title).toContain('My plan')
+    expect(title).toContain('…/')
+    expect(title).toContain('x.md')
+    expect(title).not.toContain('superpowers')
+    expect([...title].length).toBeLessThanOrEqual(29)
+  })
+
+  test('an untitled file names itself in bold; a note draws its title and no path', async ($, on) => {
+    openWorld(on)
+
+    await $.session.start(SESSION)
+    await $.tool.call({ tool: TOOL, op: 'note', markdown: 'hello', title: 'Scratch' })
+    const ui = await $.ui.mount({
+      plugin: NAME,
+      surface: 'terminal',
+      component: 'Pane',
+      props: { ...PANE_PROPS, title: 'Doc' },
+      requestId: DOC_PANE.id,
+    })
+    const title = (await ui.find({ key: 'doc-title' }))?.text ?? ''
+    expect(title).toContain('Scratch')
+    expect(title).not.toContain('/')
   })
 
   test('the doc body is an open card: a ╭─ title, a │ border column, a ╰ close, the heading drawn once', async ($, on) => {
@@ -417,7 +459,7 @@ describe('options: watched doc paths, defaults', () => {
       props: { ...PANE_PROPS, title: 'Doc' },
       requestId: DOC_PANE.id,
     })
-    expect((await ui.find({ key: 'doc-title' }))?.text).toMatch(/^╭─ .*x\.md/)
+    expect((await ui.find({ key: 'doc-title' }))?.text).toMatch(/x\.md/)
     expect((await ui.find({ key: 'doc-close' }))?.text).toMatch(/^╰/)
     const border = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('│\n│'))
     expect(border?.props.color).toBe('subtle')
