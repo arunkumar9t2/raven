@@ -1826,16 +1826,16 @@ describe('diff header', () => {
     // `MIN_MAP_CELLS` is `2`, not `3` (ruling R30: nav no longer gives way to make room, so one
     // more cell has to): 5 files over that cap draw one bar glyph plus the dim `…` overflow cell.
     expect(mapGlyphs.length).toBeGreaterThanOrEqual(2)
-    // The compact summary is a bare `the note glyph` here, not `the note glyph2` (fix round 2): `send N` right next to it
-    // already carries the count, and at 10+ pending `the note glyph10` was the one character the arithmetic
+    // The compact summary is a bare NOTE_GLYPH here, not NOTE_GLYPH followed by the count "2" (fix round 2): `send N` right next to it
+    // already carries the count, and at 10+ pending NOTE_GLYPH followed by "10" was the one character the arithmetic
     // couldn't afford once nav stopped giving way (ruling R30); see the test below.
     expect(row?.text).toContain(NOTE_GLYPH)
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
-  test('the compact notes summary stays a bare the note glyph at 10+ pending, where a digit would overflow 38 columns', async ($, on) => {
+  test('the compact notes summary stays a bare NOTE_GLYPH at 10+ pending, where a digit would overflow 38 columns', async ($, on) => {
     // Live-measured (fix round 2): with nav never giving way (R30) the row's own floor is tight
-    // enough that `the note glyph10` (2 digits) pushed drawnWidth to 40 before this fix: `send N` already
+    // enough that NOTE_GLYPH followed by "10" (2 digits) pushed drawnWidth to 40 before this fix: `send N` already
     // carries the exact count, so the summary doesn't need to repeat it.
     const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
     const pending = Array.from({ length: 10 }, (_, i) => ({
@@ -1946,7 +1946,7 @@ describe('diff header', () => {
     expect(await iconColorOf('readme.md')).toBe('rainbow_indigo')
   })
 
-  test('the file heading carries a right-aligned "the note glyph note" chip, keyed to its own path', async ($, on) => {
+  test('the file heading carries a right-aligned note-glyph + "note" chip, keyed to its own path', async ($, on) => {
     gitWorld(on, {}, null)
 
     await $.session.start(SESSION)
@@ -2198,7 +2198,7 @@ describe('stage and revert a hunk', () => {
       (await ui.find({ in: PILLS_KEY, type: 'Text', text: '✓ stage' }))?.props.backgroundColor
     expect(await bgOf()).toBe('userMessageBackground')
 
-    // The pills run from the strip's left edge: ` the note glyph note ` (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert `,
+    // The pills run from the strip's left edge: the note-glyph + "note" pill (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert `,
     // so stage spans columns 9..17.
     await ui.pointer({ type: 'move', x: 12, y: 0, in: PILLS_KEY })
     expect(await bgOf()).toBe('selectionBg')
@@ -2591,7 +2591,7 @@ describe('the AbovePrompt status band', () => {
     expect(await ui.find({ text: /pending/ })).toBeUndefined()
   })
 
-  test('draws a coloured mark, the the note glyph N pending summary in the suggestion colour, and open/send as pills, send primary', async ($, on) => {
+  test('draws a coloured mark, the note glyph and N pending summary in the suggestion colour, and open/send as pills, send primary', async ($, on) => {
     const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
 
@@ -2915,7 +2915,7 @@ describe('a note is a card (R38)', () => {
     expect(await ui.find({ text: /pending/ })).toBeDefined()
   })
 
-  test('the compose box is the same card in the accent: ╭─ the note glyph comment for Claude, the Input, ⏎ add and cancel, ╰ ╯', async ($, on) => {
+  test('the compose box is the same card in the accent: ╭─ note glyph + comment for Claude, the Input, ⏎ add and cancel, ╰ ╯', async ($, on) => {
     gitWorld(on, {}, null)
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))

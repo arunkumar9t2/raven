@@ -127,7 +127,7 @@ describe('surface safety', () => {
 
     await expect(ui.drawn()).resolves.toBeDefined()
     expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
-    // Goals is section index 1 (Plan is 0): no "note" chip control on a surface with no typing.
+    // Goals is section index 1 (Plan is 0): no note chip (glyph + "note") control on a surface with no typing.
     expect(
       await ui.find({ key: commentButtonKeyOf({ path: '/work/plan.md', hunk: '§1' }) }),
     ).toBeUndefined()
