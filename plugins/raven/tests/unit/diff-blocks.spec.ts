@@ -87,30 +87,31 @@ describe("a note block's rows", () => {
       block => block.key === noteKeyOf('n1'),
     )
 
-  test('a short note is one text line between its top and bottom border: three rows', () => {
-    expect(noteRows(100, 'looks off')).toMatchObject({ rows: 3 })
+  test('a short note is a header row and one text line: two rows', () => {
+    expect(noteRows(100, 'looks off')).toMatchObject({ rows: 2 })
   })
 
-  test("a long note's rows are its wrapped line count at the width, and change with it", () => {
+  test("a long note's rows are its wrapped line count at the width plus the header row, and change with it", () => {
     const wide = noteRows(100)
     const narrow = noteRows(50)
-    const wideLines = noteLinesOf(commentOf({ id: 'n1', text: long }), 99)
-    const narrowLines = noteLinesOf(commentOf({ id: 'n1', text: long }), 49)
+    const wideLines = noteLinesOf(commentOf({ id: 'n1', text: long }), 100)
+    const narrowLines = noteLinesOf(commentOf({ id: 'n1', text: long }), 50)
     expect(wide).toMatchObject({ rows: noteRowsOf(wideLines.length) })
     expect(narrow).toMatchObject({ rows: noteRowsOf(narrowLines.length) })
+    expect(noteRowsOf(wideLines.length)).toBe(wideLines.length + 1)
     expect(wideLines.length).toBeGreaterThan(1)
     expect(narrowLines.length).toBeGreaterThan(wideLines.length - 1)
     expect(narrowLines.length).toBeLessThanOrEqual(NOTE_MAX_LINES)
   })
 
-  test('the status, line and age live on the top border, so the text starts on the first body row', () => {
+  test('the status, line and age live on the header row, so the text starts on the row below', () => {
     const open = commentOf({
       id: 'n1',
       status: 'open',
       line: { number: 12, side: 'new', text: 'x' },
       text: 'please look at this again',
     })
-    const lines = noteLinesOf(open, 36)
+    const lines = noteLinesOf(open, 37)
     expect(lines[0]).toContain('please look')
     const block = blocksOf(file, [hunkA], [open], null, { width: 37 }).find(
       b => b.key === noteKeyOf('n1'),
@@ -118,9 +119,9 @@ describe("a note block's rows", () => {
     expect(block).toMatchObject({ rows: noteRowsOf(lines.length) })
   })
 
-  test('a note is wrapped to the room between its side borders, four cells narrower than the card', () => {
+  test('a note is wrapped to the room beside its bar, two cells narrower than the card', () => {
     const lines = noteLinesOf(commentOf({ id: 'n1', text: 'word '.repeat(30).trim() }), 40)
-    for (const line of lines) expect(line.length).toBeLessThanOrEqual(36)
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(38)
   })
 
   test('a very long note stops at six rows and ends with an ellipsis', () => {
@@ -683,8 +684,8 @@ describe('streamOf orphan group', () => {
     const comment = commentOf({ path: 'gone.ts' })
     const withOrphan = streamOf([file], () => [hunkA], [comment], null)
     const without = streamOf([file], () => [hunkA], [], null)
-    // blank row + heading row + path row + a note card (1 text line + 2 borders) = 6 extra rows.
-    expect(withOrphan.contentRows).toBe(without.contentRows + 6)
+    // blank row + heading row + path row + a note (a header row and 1 text line) = 5 extra rows.
+    expect(withOrphan.contentRows).toBe(without.contentRows + 5)
   })
 })
 

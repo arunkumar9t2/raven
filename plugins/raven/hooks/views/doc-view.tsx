@@ -412,7 +412,7 @@ export function createDocView(
             note(
               kit,
               comment,
-              noteLinesOf(comment, kit.columns),
+              noteLinesOf(comment, Math.max(1, kit.columns - BORDER_CELLS)),
               now(),
               id => review.remove(id),
               review.resend,
@@ -464,7 +464,7 @@ export function createDocView(
                     note(
                       kit,
                       comment,
-                      noteLinesOf(comment, kit.columns),
+                      noteLinesOf(comment, Math.max(1, kit.columns - BORDER_CELLS)),
                       now(),
                       id => review.remove(id),
                       review.resend,

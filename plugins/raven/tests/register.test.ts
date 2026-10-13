@@ -1,6 +1,11 @@
 import type { On, SessionMessage, TurnCompleteInput } from 'claude-code'
 import { describe, type Engine, expect, mock, test, tier } from 'claude-code/testing'
-import { COLORS, TASK_STATE_COLORS, TASK_STATE_GLYPHS } from '../hooks/core/colors'
+import {
+  COLORS,
+  NOTE_STATE_COLORS,
+  TASK_STATE_COLORS,
+  TASK_STATE_GLYPHS,
+} from '../hooks/core/colors'
 import { DIFF_NOTE, docNoteOf, planNoteOf } from '../hooks/core/raven'
 import {
   commentsStoreKeyOf,
@@ -11,6 +16,7 @@ import {
   TREE_PANE,
   toolNameOf,
 } from '../hooks/names'
+import { BAR_CELLS, NOTE_CELLS } from '../hooks/ui/chrome'
 import { iconText, NOTE_GLYPH } from '../hooks/ui/icon-text'
 import {
   anchorKeyOf,
@@ -2877,15 +2883,16 @@ describe('a note is a card (R38)', () => {
       if (line) lines.push(line.text)
     }
     expect(lines.length).toBeGreaterThan(1)
-    // the pane's 100 columns less the 2-column card border, the 1-cell indent and the note's own
-    // `│ ` and ` │` side borders
-    expect(lines.every(line => line.length <= PANE_PROPS.bodyColumns - 3 - 4)).toBe(true)
+    // the pane's 100 columns less the group rail (BAR_CELLS) and the note's own bar (NOTE_CELLS)
+    expect(
+      lines.every(line => line.length <= PANE_PROPS.bodyColumns - BAR_CELLS - NOTE_CELLS),
+    ).toBe(true)
     const drawn = lines.join(' ')
     // The whole comment fits in six lines here, so every word is drawn.
     for (let i = 0; i < 30; i += 1) expect(drawn).toContain(`word${i}`)
   })
 
-  test('a note is a boxed card: a ╭─ top border carrying status, line, age and the ✕ pill, │ text rows, a ╰ ╯ bottom', async ($, on) => {
+  test('a note is a ┃ bar in its state colour on the subtle fill: a header row with status and the ✕ pill, then the text, no frame', async ($, on) => {
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: [card({ text: 'short remark' })] }, null)
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
@@ -2894,12 +2901,15 @@ describe('a note is a card (R38)', () => {
     const title = await ui.find({ key: noteKeyOf('c1') })
     expect(title?.text).toMatch(/^● pending/)
     expect((await pillOf(ui, dropKeyOf('c1')))?.t).toContain('✕')
-    // the top border opens the card and closes with a corner after the pill
-    expect((await ui.find({ text: /╭─ / }))?.text).toBeDefined()
-    expect(await ui.find({ text: '╮' })).toBeDefined()
     expect((await ui.find({ key: `${noteKeyOf('c1')}:0` }))?.text).toBe('short remark')
-    expect(await ui.find({ text: '╯' })).toBeDefined()
-    expect(await ui.find({ text: '╰' })).toBeDefined()
+    // two rows (header, one text line): the bar is a stacked glyph in the pending colour
+    const bar = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('┃ \n┃'))
+    expect(bar?.props.color).toBe(NOTE_STATE_COLORS.pending)
+    const fills = await ui.findAll({ type: 'Box' })
+    expect(fills.some(box => box.props.backgroundColor === COLORS.userMessage)).toBe(true)
+    for (const corner of ['╭', '╮', '╯', '╰']) {
+      expect(await ui.find({ text: corner })).toBeUndefined()
+    }
   })
 
   test("a note's top border reads status · line · age, a dim ` · ` between every part", async ($, on) => {

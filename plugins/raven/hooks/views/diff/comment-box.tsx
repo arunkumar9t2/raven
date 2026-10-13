@@ -8,7 +8,7 @@ import type { Kit } from '../../core/view'
 import type { Hunk } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../../review/comments'
 import { ageOf } from '../../ui/age'
-import { boxedCard, ruleRow } from '../../ui/card'
+import { boxedCard, noteCard, ruleRow } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
 import { RULE_START } from '../../ui/chrome'
 import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
@@ -26,7 +26,7 @@ import {
   stageKeyOf,
 } from './anchor'
 import { hunkLabelOf } from './hunk-label'
-import { composeInnerRowsOf, noteChipsOf, STATUS_WORDS } from './note-layout'
+import { composeInnerRowsOf, noteChipsOf, noteRowsOf, STATUS_WORDS } from './note-layout'
 
 const WHOLE_HUNK = 'whole'
 
@@ -133,11 +133,10 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
 }
 
 /**
- * A note is a boxed card: `╭─ ● pending · L5 · now ─────── ✕ ─╮` (the status word in its colour,
- * a dim `L<line> · <age>`, and the pills embedded in the top border), then `│ text │` rows (`lines`,
- * from `noteLinesOf`, wrapped once by whoever sized the card) and `╰──╯`. The border is the
- * status colour, the inside the user-message tint. `now` (ms) comes from the view's own clock,
- * never `Date.now()` here.
+ * A note: a `┃ ` bar in the status colour on the user-message fill (`noteCard`), no frame. Its
+ * first row is the header, `● pending · L5 · 2m` with the pills (`resend` when open, `✕`)
+ * right-aligned; the rows below are `lines` (from `noteLinesOf`, wrapped once by whoever sized
+ * the note). `now` (ms) comes from the view's own clock, never `Date.now()` here.
  */
 export function note(
   kit: Kit,
@@ -163,13 +162,20 @@ export function note(
       >{` · ${[lineLabel, ageOf(comment.createdAt, now)].filter(Boolean).join(' · ')}`}</Text>
     </Box>
   )
-  return boxedCard(kit, {
+  return noteCard(kit, {
     color,
-    title,
-    right: pillRow(kit, noteChipsOf(comment, onRemove, onResend), 'words', scope),
-    rows: lines.length,
+    rows: noteRowsOf(lines.length),
     children: (
       <Box flexDirection="column">
+        <Box flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
+          <Box flexShrink={1} overflow="hidden">
+            {title}
+          </Box>
+          <Box flexGrow={1} />
+          <Box flexShrink={0}>
+            {pillRow(kit, noteChipsOf(comment, onRemove, onResend), 'words', scope)}
+          </Box>
+        </Box>
         {lines.map((line, index) => (
           <Box key={`${scope}:${index}`}>
             <Text wrap="truncate-end">{line}</Text>

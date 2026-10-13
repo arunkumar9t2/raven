@@ -574,17 +574,9 @@ export function createDiffView(
     return stream
   }
 
-  /** A note's card, indented one cell after the rail; its lines were wrapped when it was sized. */
+  /** A note's card; its lines were wrapped when it was sized. */
   function noteRowOf(kit: Kit, item: Extract<BodyItem, { kind: 'note' }>): RenderElement {
-    const { Box, Text } = kit.ui
-    return (
-      <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        <Text> </Text>
-        <Box flexGrow={1} overflow="hidden">
-          {note(kit, item.comment, item.lines, now(), id => review.remove(id), review.resend)}
-        </Box>
-      </Box>
-    )
+    return note(kit, item.comment, item.lines, now(), id => review.remove(id), review.resend)
   }
 
   /** A file's title: icon, bold path, status mark, counts, then the inline `<note glyph> note` chip two columns after. */

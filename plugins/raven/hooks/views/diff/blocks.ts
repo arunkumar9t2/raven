@@ -81,16 +81,9 @@ export function fixedRowsOf(fileCount: number, maxListRows: number, headerRows: 
   return headerRows + Math.min(fileCount, maxListRows) + RULE_ROWS
 }
 
-/** The one-cell indent a note card draws after the rail (removed with the note card, Task B7). */
-const NOTE_INDENT = 1
-
 /** A row's room beside the style's group rails (bar 2, none 0, frame 4), for a pane `columns` wide. */
 export const contentWidthOf = (columns: number, style: Style): number =>
   Math.max(1, columns - groupCellsOf(style))
-
-/** A note card's room: the content width less the indent after the rail. */
-export const indentedWidthOf = (contentWidth: number): number =>
-  Math.max(1, contentWidth - NOTE_INDENT)
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
@@ -332,7 +325,7 @@ export function blocksOf(
   const isReadOnly = options.readOnly ?? false
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const style = options.style ?? styleOf('bar')
-  const width = indentedWidthOf(options.width)
+  const width = options.width
   const whole = wholeSideOf(file.status)
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
@@ -435,7 +428,7 @@ export function streamOf(
   // belongs here when its path matches a current file's path or (a rename) oldPath.
   const isOwned = (comment: Comment) => files.some(file => belongsTo(comment, file))
   const orphans = comments.filter(comment => comment.section === undefined && !isOwned(comment))
-  for (const block of orphanBlocksOf(orphans, gonePaths, indentedWidthOf(options.width))) {
+  for (const block of orphanBlocksOf(orphans, gonePaths, options.width)) {
     blocks.push({ ...block, key: `orphans#${block.key}` })
     row += rowsOf(block)
   }

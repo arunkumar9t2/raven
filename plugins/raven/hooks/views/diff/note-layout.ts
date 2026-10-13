@@ -1,13 +1,13 @@
 import type { Comment } from '../../review/comments'
 import type { Chip } from '../../ui/chips'
-import { BOXED_CELLS } from '../../ui/chrome'
+import { NOTE_CELLS } from '../../ui/chrome'
 import { wrapText } from '../../ui/wrap'
 import { dropKeyOf, resendKeyOf } from './anchor'
 
-/** A note card's most text lines; the card is these plus its top and bottom border. */
+/** A note's most text lines. */
 export const NOTE_MAX_LINES = 6
-/** The rows of a card with `lines` text lines: the text between a top and a bottom border. */
-export const noteRowsOf = (lines: number): number => lines + 2
+/** The rows of a note with `lines` text lines: a header row (status, line, age, chips), then the text. */
+export const noteRowsOf = (lines: number): number => lines + 1
 
 /** The status word a card shows, by its comment's status. */
 export const STATUS_WORDS: Record<Comment['status'], string> = {
@@ -45,11 +45,11 @@ export function noteChipsOf(
 }
 
 /**
- * The card's text lines at `width` total cells (side borders included): the status, age and pills
- * live on the top border, so every line is body text, wrapped to the room between the borders.
+ * The note's text lines at `width` total cells (the `┃ ` bar included): the status, age and pills
+ * live on the header row, so every line is body text, wrapped to the room beside the bar.
  */
 export function noteLinesOf(comment: Comment, width: number): string[] {
-  return wrapText(comment.text, Math.max(1, width - BOXED_CELLS), NOTE_MAX_LINES)
+  return wrapText(comment.text, Math.max(1, width - NOTE_CELLS), NOTE_MAX_LINES)
 }
 
 /**
