@@ -64,10 +64,15 @@ const handlersOf = (props: HeaderProps): HeaderHandlers => ({
   onClear: props.onClear,
 })
 
+/** The added and deleted line totals across `files`. */
+const totalsOf = (files: readonly ChangedFile[]) => ({
+  adds: files.reduce((sum, file) => sum + file.adds, 0),
+  dels: files.reduce((sum, file) => sum + file.dels, 0),
+})
+
 /** The plan for `props` at `kit.columns`: one row, or the two-row fallback. */
 export function headerPlanFor(kit: Kit, props: HeaderProps): HeaderPlan {
-  const adds = props.files.reduce((sum, file) => sum + file.adds, 0)
-  const dels = props.files.reduce((sum, file) => sum + file.dels, 0)
+  const { adds, dels } = totalsOf(props.files)
   const sourceLabel =
     props.sourceOptions.find(option => option.value === props.sourceValue)?.label ??
     props.sourceValue
@@ -82,9 +87,6 @@ export function headerPlanFor(kit: Kit, props: HeaderProps): HeaderPlan {
     canPick: kit.capabilities.canPick,
   })
 }
-
-/** How many rows the header takes at `kit.columns`; `diff-view.tsx` sizes the body with it. */
-export const headerRowsOf = (kit: Kit, props: HeaderProps): 1 | 2 => headerPlanFor(kit, props).rows
 
 /** The source options as a row of plain buttons, for a surface without `canPick`. */
 function sourceButtons(kit: Kit, props: HeaderProps): RenderElement {
@@ -127,8 +129,7 @@ function oneRow(
 ): RenderElement {
   const { Box, Text } = kit.ui
   const { files } = props
-  const adds = files.reduce((sum, file) => sum + file.adds, 0)
-  const dels = files.reduce((sum, file) => sum + file.dels, 0)
+  const { adds, dels } = totalsOf(files)
   const chips = headerChipsOf(
     { pending: props.pending, confirmingClear: props.confirmingClear, includeRefresh: true },
     handlersOf(props),
@@ -171,8 +172,7 @@ function oneRow(
 function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
   const { Box, Text } = kit.ui
   const { files } = props
-  const adds = files.reduce((sum, file) => sum + file.adds, 0)
-  const dels = files.reduce((sum, file) => sum + file.dels, 0)
+  const { adds, dels } = totalsOf(files)
 
   return (
     <Box key={SUMMARY_ROW_KEY} flexDirection="row" gap={2} overflow="hidden" flexWrap="nowrap">
@@ -246,12 +246,12 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
 }
 
 /**
- * The header: one row when it fits (`headerPlanOf`), else two. Siblings, not children of a
- * `Fragment`: a `Fragment` draws as its own box and would wrap this column.
+ * The header for `plan` (`headerPlanFor`, which the caller also sizes the body with): one row
+ * when it fits, else two. Siblings, not children of a `Fragment`: a `Fragment` draws as its own
+ * box and would wrap this column.
  */
-export function header(kit: Kit, props: HeaderProps): RenderElement {
+export function header(kit: Kit, props: HeaderProps, plan: HeaderPlan): RenderElement {
   const { Box } = kit.ui
-  const plan = headerPlanFor(kit, props)
   if (plan.rows === 1) return oneRow(kit, props, plan)
   return (
     <Box flexDirection="column">

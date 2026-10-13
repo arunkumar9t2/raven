@@ -21,7 +21,7 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { cardTitle, frameBottom } from '../ui/card'
+import { cardTitle, frameBottom, groupRows } from '../ui/card'
 import { chipsFit } from '../ui/chips'
 import { BOXED_CELLS, groupCellsOf, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
@@ -35,6 +35,7 @@ import {
   fileAtRow,
   fixedRowsOf,
   type Stream,
+  sepPathOf,
   streamOf,
   TITLE_GAP_KEY,
 } from './diff/blocks'
@@ -50,7 +51,7 @@ import {
   outdatedHeading,
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
-import { type HeaderProps, header, headerRowsOf } from './diff/header'
+import { type HeaderProps, header, headerPlanFor } from './diff/header'
 import {
   clampTop,
   type FixedBlock,
@@ -61,7 +62,6 @@ import {
   viewOf,
 } from './diff/layout'
 import { composeInputRowsOf } from './diff/note-layout'
-import { railedRows } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { createSplitMode } from './diff/split-mode'
@@ -69,8 +69,6 @@ import { fileTagOf, type WholeSource, wholePiecesOf, wholeSourceOf } from './dif
 import { iconOf, statusMarkOf } from './icons'
 
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
-/** The key suffix of the gap row `streamOf` puts between two cards (it carries no `card`). */
-const SEP_SUFFIX = '#sep'
 const WHEEL_ROWS = 3
 const EMPTY_STAGED: ReadonlySet<string> = new Set()
 const EMPTY_GONE_PATHS: ReadonlySet<string> = new Set()
@@ -779,7 +777,7 @@ export function createDiffView(
 
   /**
    * A placed block's element; the file it belongs to is found by its key's `path#...` prefix.
-   * Every body row of a file's card draws behind the style's mark (`railedRows`): `▌ ` in the
+   * Every body row of a file's card draws behind the style's mark (`groupRows`): `▌ ` in the
    * file's status colour under `bar`, nothing under `none`, `│ ` and ` │` under a frame. A hunk
    * `Code` slice spans several terminal rows at once, so its rail is that many rows tall. The
    * title, the frame's closing row and the blank row between files span the whole width and carry
@@ -796,8 +794,7 @@ export function createDiffView(
     const { style } = kit
     const { block } = placed
     if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
-    const path =
-      block.card ?? (block.key.endsWith(SEP_SUFFIX) ? block.key.slice(0, -SEP_SUFFIX.length) : '')
+    const path = block.card ?? sepPathOf(block.key) ?? ''
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
 
@@ -812,7 +809,7 @@ export function createDiffView(
       const whole = block.whole ? wholeSourceOf(sliced, block.whole) : null
       return (
         <Box key={block.key}>
-          {railedRows(kit, style, {
+          {groupRows(kit, style, {
             color: railColor,
             rows: placed.to - placed.from,
             mark,
@@ -859,7 +856,7 @@ export function createDiffView(
       kit,
       block.key,
       <Box key={block.key}>
-        {railedRows(kit, style, {
+        {groupRows(kit, style, {
           color: railColor,
           rows: block.rows,
           children: bodyRowOf(kit, item, file, contentWidth, railColor),
@@ -952,10 +949,8 @@ export function createDiffView(
       onNext: () => stepSelection(1),
       onClear: pressClear,
     }
-    const bodyRows = Math.max(
-      0,
-      kit.rows - fixedRowsOf(files.length, MAX_ROWS, headerRowsOf(kit, headerProps)),
-    )
+    const headerPlan = headerPlanFor(kit, headerProps)
+    const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS, headerPlan.rows))
     lastBodyRows = bodyRows
     const top = clampTop(model.top, stream.contentRows, bodyRows)
     if (top !== model.top) model = { ...model, top }
@@ -965,7 +960,7 @@ export function createDiffView(
 
     return (
       <Box flexDirection="column">
-        {header(kit, headerProps)}
+        {header(kit, headerProps, headerPlan)}
         {fileList(kit, { files, selected: model.selected, edited: model.edited, onSelect: select })}
         {/* One short of the full width so the rule never wraps onto a row of its own. */}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>

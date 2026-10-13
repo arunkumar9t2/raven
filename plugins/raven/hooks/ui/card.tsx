@@ -31,8 +31,8 @@ export function fill(kit: UiKit, color: string): RenderElement {
 }
 
 /**
- * A card's closing row: `start` (default `╰`) in `color`, the fill, and `end` (`╯` for a boxed card, none for an
- * open one); the one close every card draws.
+ * A card's closing row: `start` (default `╰`) in `color`, the fill, and `end` (`╯` for a boxed
+ * card, none for an open one); the one close every card draws.
  */
 export function closeRow(kit: UiKit, color: string, end?: string, start = '╰'): RenderElement {
   const { Box, Text } = kit.ui
@@ -95,9 +95,10 @@ export type BoxedCardProps = {
 }
 
 /**
- * The person's own words in a closed frame (`frame`, rounded by default): `╭─ title ──── pills ─╮`, `│ interior │` rows, `╰──────╯`, the
- * border in `color` and the interior on the user-message tint. Rows are `rows + 2`; the width is
- * whatever the parent gives (a text wrapped to `width - BOXED_CELLS` fits exactly).
+ * The person's own words in a closed frame (`frame`, rounded by default): `╭─ title ──── pills ─╮`,
+ * `│ interior │` rows, `╰──────╯`, the border in `color` and the interior on the user-message
+ * tint. Rows are `rows + 2`; the width is whatever the parent gives (a text wrapped to
+ * `width - BOXED_CELLS` fits exactly).
  */
 export function boxedCard(kit: UiKit, props: BoxedCardProps): RenderElement {
   const { Box, Text } = kit.ui
@@ -181,6 +182,8 @@ export type GroupProps = {
   color: string
   /** The exact height of `children`: the rails are stacked glyphs this many rows tall. */
   rows: number
+  /** A colour turns the last row's left cell into `◆ `: the line a note hangs under. No rail, no mark. */
+  mark?: string
   children: RenderElement | RenderElement[]
 }
 
@@ -190,7 +193,7 @@ export type GroupProps = {
  */
 export function groupRows(kit: UiKit, style: Style, props: GroupProps): RenderElement {
   const { Box, Text } = kit.ui
-  const { color, rows } = props
+  const { color, rows, mark } = props
   const left = style.frame ? `${style.frame.v} ` : style.group ? `${style.group} ` : null
   const content = (
     <Box flexDirection="column" flexGrow={1} overflow="hidden">
@@ -200,14 +203,21 @@ export function groupRows(kit: UiKit, style: Style, props: GroupProps): RenderEl
   if (left === null) return content
   return (
     <Box flexDirection="row" height={rows} overflow="hidden" flexWrap="nowrap">
-      <Text color={color}>{stackOf(left, rows)}</Text>
+      {mark === undefined ? (
+        <Text color={color}>{stackOf(left, rows)}</Text>
+      ) : (
+        <Text color={color}>
+          {`${left}\n`.repeat(Math.max(0, rows - 1))}
+          <Text color={mark}>◆ </Text>
+        </Text>
+      )}
       {content}
       {style.frame ? <Text color={color}>{stackOf(` ${style.frame.v}`, rows)}</Text> : null}
     </Box>
   )
 }
 
-/** A frame style's closing row (`└────┘` / `╰────╯`); null for `bar` and `none`, which have no frame. */
+/** A frame style's closing row (`└────┘` / `╰────╯`); null for `bar` and `none` (no frame). */
 export function frameBottom(kit: UiKit, style: Style, color: string): RenderElement | null {
   if (!style.frame) return null
   return closeRow(kit, color, style.frame.br, style.frame.bl)

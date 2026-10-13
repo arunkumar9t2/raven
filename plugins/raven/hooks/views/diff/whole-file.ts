@@ -80,8 +80,7 @@ export function wholePiecesOf(whole: WholeSource, max = ELEMENT_TEXT_LIMIT): Who
   }
   for (const line of whole.source.split('\n')) {
     const text = line.length > max ? line.slice(0, max) : line
-    const added = text.length + (current.length > 0 ? 1 : 0)
-    if (size + added > max) flush()
+    if (size + text.length + (current.length > 0 ? 1 : 0) > max) flush()
     size += text.length + (current.length > 0 ? 1 : 0)
     current.push(text)
   }

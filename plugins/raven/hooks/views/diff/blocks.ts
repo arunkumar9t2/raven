@@ -332,6 +332,7 @@ export function blocksOf(
   const width = options.width
   const inputRows = options.composeInputRows ?? 1
   const whole = wholeSideOf(file.status)
+  const wholeStamp = whole ? { whole } : {}
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
@@ -380,7 +381,7 @@ export function blocksOf(
       },
     })
     if (isReadOnly) {
-      blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk, ...(whole ? { whole } : {}) })
+      blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk, ...wholeStamp })
       return
     }
     const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
@@ -401,6 +402,15 @@ export type Stream = {
   contentRows: number
 }
 
+const SEP_SUFFIX = '#sep'
+
+/** The key of the gap row `streamOf` puts before `path`'s card (it carries no `card`). */
+export const sepKeyOf = (path: string): string => `${path}${SEP_SUFFIX}`
+
+/** The path a `sepKeyOf` key was made for, or undefined for any other key. */
+export const sepPathOf = (key: string): string | undefined =>
+  key.endsWith(SEP_SUFFIX) ? key.slice(0, -SEP_SUFFIX.length) : undefined
+
 /**
  * The files' `blocksOf` (each a card) one after another, a blank gap row between cards; each block's key is
  * prefixed with its file's path so keys stay unique across the stream.
@@ -419,7 +429,7 @@ export function streamOf(
   let row = 0
   files.forEach((each, index) => {
     if (index > 0) {
-      blocks.push({ kind: 'fixed', key: `${each.path}#sep`, rows: 1, item: { kind: 'gap' } })
+      blocks.push({ kind: 'fixed', key: sepKeyOf(each.path), rows: 1, item: { kind: 'gap' } })
       row += 1
     }
     titleRows.set(each.path, row)
