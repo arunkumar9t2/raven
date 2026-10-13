@@ -12,6 +12,10 @@ export const COLORS = {
   added: 'diffAddedWord',
   /** Removed lines/files, the `−N` count, and the `D` status mark. */
   removed: 'diffRemovedWord',
+  /** A diff line's fill in the side-by-side body: the theme's own added-line tint. */
+  lineAdded: 'diffAdded',
+  /** A diff line's fill in the side-by-side body: the theme's own removed-line tint. */
+  lineRemoved: 'diffRemoved',
   /** The `M` (modified) status mark. */
   modified: 'warning',
   /** The `R` (renamed) status mark and an existing review comment's text. */
