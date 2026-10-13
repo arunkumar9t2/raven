@@ -95,6 +95,15 @@ describe('settingsOf', () => {
     expect(settingsOf({ paneBackground: '  #101315  ' }).paneBackground).toBe('#101315')
   })
 
+  test('hex, rgb() and theme-key colours are kept; anything else falls back to empty', () => {
+    for (const good of ['#101315', '#abc', '#ABCDEF', 'rgb(16, 19, 21)', 'userMessageBackground']) {
+      expect(settingsOf({ paneBackground: good }).paneBackground).toBe(good)
+    }
+    for (const bad of ['101315', '#12345', 'blue-ish', 'rgb(300,0,0)']) {
+      expect(settingsOf({ paneBackground: bad }).paneBackground).toBe('')
+    }
+  })
+
   test('a blank or wrong-typed paneBackground falls back to empty', () => {
     for (const bad of ['  ', '', 3, true]) {
       expect(settingsOf({ paneBackground: bad }).paneBackground).toBe('')

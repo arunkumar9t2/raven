@@ -54,8 +54,22 @@ const splitColumnsOf = (value: unknown): number =>
     ? value
     : DEFAULT_SETTINGS.splitColumns
 
-const paneBackgroundOf = (value: unknown): string =>
-  typeof value === 'string' ? value.trim() : DEFAULT_SETTINGS.paneBackground
+const HEX_COLOR = /^#(?:[0-9a-f]{3}|[0-9a-f]{6})$/i
+const RGB_COLOR = /^rgb\(\s*(\d{1,3})\s*,\s*(\d{1,3})\s*,\s*(\d{1,3})\s*\)$/
+const THEME_KEY = /^[A-Za-z][A-Za-z0-9_]*$/
+
+const isColor = (text: string): boolean => {
+  if (HEX_COLOR.test(text) || THEME_KEY.test(text)) return true
+  const rgb = RGB_COLOR.exec(text)
+  return rgb !== null && rgb.slice(1).every(part => Number(part) <= 255)
+}
+
+/** A hex, `rgb(r, g, b)` or theme-key colour, trimmed; anything else is `''` (the engine's own). */
+const paneBackgroundOf = (value: unknown): string => {
+  if (typeof value !== 'string') return DEFAULT_SETTINGS.paneBackground
+  const text = value.trim()
+  return isColor(text) ? text : DEFAULT_SETTINGS.paneBackground
+}
 
 /** Parses `register`'s `options` defensively: a field of the wrong type falls back to its default. */
 export function settingsOf(options: PluginOptions): RavenSettings {

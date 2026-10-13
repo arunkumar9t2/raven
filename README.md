@@ -84,7 +84,7 @@ Open `/config` and look for Raven:
 | `autoOpenColumns` | `144` | Raven only opens by itself when the terminal is at least this many columns wide. |
 | `watchedPaths` | empty | Extra folders, comma-separated, whose Markdown files open rendered as Claude writes them. Plan folders are watched already. |
 | `keyboardControls` | off | Draws plain buttons you can reach with Tab, so every control works from the keyboard. |
-| `paneBackground` | empty | A colour painted behind every Raven pane so it matches your terminal, for example `#101315`. Empty keeps Claude Code's own pane colour. |
+| `paneBackground` | empty | A colour painted behind every Raven pane so it matches your terminal, `#rgb`, `#rrggbb`, `rgb(r, g, b)` or a theme colour name, for example `#101315`. Empty keeps Claude Code's own pane colour. |
 
 Raven cannot read your terminal's background, so set `paneBackground` to the same colour. On Omarchy
 it is `colors.primary.background` in `~/.local/state/omarchy/current/theme/alacritty.toml`.

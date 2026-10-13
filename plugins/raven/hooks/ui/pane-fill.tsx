@@ -14,10 +14,10 @@ export function paneFill(
   color: string,
   drawn: RenderElement,
 ): RenderElement {
-  if (color === '') return drawn
+  if (color === '' || kit.rows < 1) return drawn
   const { Box } = kit.ui
   return (
-    <Box flexDirection="column" backgroundColor={color} height={kit.rows}>
+    <Box flexDirection="column" backgroundColor={color} minHeight={kit.rows}>
       {drawn}
     </Box>
   )

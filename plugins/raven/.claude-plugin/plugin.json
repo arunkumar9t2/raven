@@ -54,7 +54,7 @@
     "paneBackground": {
       "type": "string",
       "title": "Pane background",
-      "description": "A colour painted behind every Raven pane, so the pane matches your terminal (for example #101315). Empty: the engine's own pane colour.",
+      "description": "A colour painted behind every Raven pane, so the pane matches your terminal (#rgb, #rrggbb, rgb(r, g, b) or a theme colour name; for example #101315). Empty: the engine's own pane colour.",
       "required": false,
       "default": ""
     }

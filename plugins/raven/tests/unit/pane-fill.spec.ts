@@ -22,11 +22,15 @@ describe('paneFill', () => {
     expect(paneFill(kit, '', drawn)).toBe(drawn)
   })
 
+  test('a pane with no rows returns the drawing unchanged', () => {
+    expect(paneFill({ ...kit, rows: 0 }, '#101315', drawn)).toBe(drawn)
+  })
+
   test('a colour wraps the drawing in a full-height Box with that background', () => {
     const wrapped = paneFill(kit, '#101315', drawn) as unknown as Node
     expect(wrapped.type).toBe('Box')
     expect(wrapped.props.backgroundColor).toBe('#101315')
-    expect(wrapped.props.height).toBe(30)
+    expect(wrapped.props.minHeight).toBe(30)
     expect(wrapped.props.flexDirection).toBe('column')
     expect(wrapped.props.children).toEqual([drawn])
   })
