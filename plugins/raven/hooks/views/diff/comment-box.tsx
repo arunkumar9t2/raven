@@ -10,7 +10,7 @@ import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../..
 import { ageOf } from '../../ui/age'
 import { boxedCard, ruleRow } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
-import { RULE_START, ruleRoomFor } from '../../ui/chrome'
+import { RULE_START } from '../../ui/chrome'
 import { pillRow } from '../../ui/strip'
 import {
   type Anchor,
@@ -204,10 +204,8 @@ export type HunkToolbarProps = {
   isReadOnly: boolean
   isStaged: boolean
   confirmingRevert: boolean
-  /** The toolbar's own room, after the rail: what `chipsFit` sizes against. */
+  /** The label row's own room, after the rail: what `chipsFit` sizes against. */
   columns: number
-  /** The file card's border colour: status, or the accent while Claude edits the file. */
-  color: string
   onStartNote: (anchor: Anchor) => void
   onStage: () => void
   onRevert: () => void
@@ -215,21 +213,24 @@ export type HunkToolbarProps = {
 
 /**
  * Room `chipsFit` leaves for the header label before shrinking its chips to icons, shared by
- * the hunk toolbar and (via `diff-view.tsx`'s title row) the file heading, so both shrink their
+ * the hunk label row and (via `diff-view.tsx`'s title row) the file title, so both shrink their
  * chips the same way under the same pressure.
  */
 export const HEADER_MIN = 12
 
+/** The cells between a hunk's label and its chips. */
+const LABEL_CHIP_GAP = 2
+
 /**
- * A hunk's toolbar row, `├─ ƒ name  L1–7 ─────── pills`: the border in the file card's `color`,
- * the header label, a fill, then (unless read-only) the note (when it can draw), stage and
- * revert pills at the right. Staging is a no-op once staged (the pill reads "staged", kind on);
- * revert confirms on a second press, keeping its words (`↺ sure?`, kind armed) even when the pills
- * shrink to bare icons to fit. D12 §2–3.
+ * A hunk's label row, `ƒ name  L1–7   ✎ note  ✓ stage  ↺ revert`: a plain row, no rule. The
+ * chips sit two columns after the label (never at the pane's edge); unless the hunk is
+ * read-only they are the note (when it can draw), stage and revert pills. Staging is a no-op once
+ * staged (the pill reads "staged", kind on); revert confirms on a second press, keeping its words
+ * (`↺ sure?`, kind armed) even when the pills shrink to bare icons to fit. D12 §2-3.
  */
 export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
-  const { Text } = kit.ui
-  const { anchor, color } = props
+  const { Box, Text } = kit.ui
+  const { anchor } = props
   const label = hunkLabelOf(props.hunk, props.path)
   const key = hunkHeaderKeyOf(anchor)
   const left = (
@@ -238,7 +239,7 @@ export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
     </Text>
   )
 
-  if (props.isReadOnly) return ruleRow(kit, { color, start: RULE_START.branch, left })
+  if (props.isReadOnly) return left
 
   const chips: Chip[] = []
   if (props.canNote) chips.push(noteChip(anchor, props.onStartNote))
@@ -258,13 +259,15 @@ export function hunkToolbar(kit: Kit, props: HunkToolbarProps): RenderElement {
     onPress: props.onRevert,
   })
 
-  const room = ruleRoomFor(props.columns, HEADER_MIN)
-  return ruleRow(kit, {
-    color,
-    start: RULE_START.branch,
-    left,
-    right: pillRow(kit, chips, chipsFit(chips, room), key),
-  })
+  const room = Math.max(0, props.columns - HEADER_MIN - LABEL_CHIP_GAP)
+  return (
+    <Box flexDirection="row" gap={LABEL_CHIP_GAP} overflow="hidden" flexWrap="nowrap">
+      <Box flexShrink={1} overflow="hidden">
+        {left}
+      </Box>
+      <Box flexShrink={0}>{pillRow(kit, chips, chipsFit(chips, room), key)}</Box>
+    </Box>
+  )
 }
 
 /** The collapsed row for an anchor's addressed comments: "✓ N addressed". */
@@ -292,9 +295,16 @@ export function outdatedTitle(kit: Kit): RenderElement {
   return groupRule(kit, 'Outdated')
 }
 
-/** The rule above the group for comments whose path matches no file in the stream. */
+/** The plain dim heading above the diff's outdated-comments group (the Doc pane keeps `outdatedTitle`'s rule until Part C). */
+export function outdatedHeading(kit: Kit): RenderElement {
+  const { Text } = kit.ui
+  return <Text dimColor>Outdated</Text>
+}
+
+/** The plain dim heading above the group for comments whose path matches no file in the stream. */
 export function orphansTitle(kit: Kit): RenderElement {
-  return groupRule(kit, 'Not in this diff')
+  const { Text } = kit.ui
+  return <Text dimColor>Not in this diff</Text>
 }
 
 /** An orphaned path's own heading row: the path, plus a dim "file gone" when it no longer exists. */

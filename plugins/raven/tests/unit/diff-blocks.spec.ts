@@ -3,6 +3,7 @@ import type { ChangedFile } from '../../hooks/git/changes'
 import { bodyLinesOf, type Hunk } from '../../hooks/git/hunks'
 import type { Comment, Comments } from '../../hooks/review/comments'
 import { lineKeyOf, lineRowsOf } from '../../hooks/review/comments'
+import { styleOf } from '../../hooks/ui/style'
 import {
   addressedKeyOf,
   commentBoxKeyOf,
@@ -13,17 +14,26 @@ import {
   type BlocksOptions,
   blocksOf as blocksOfAt,
   CLOSE_KEY,
+  contentWidthOf,
+  FILE_GAP_KEY,
   fileAtRow,
+  hunkGapKeyOf,
   hunkKeyOf,
   ORPHANS_TITLE_KEY,
   OUTDATED_TITLE_KEY,
   orphanPathKeyOf,
   STATUS_KEY,
   streamOf as streamOfAt,
+  TITLE_GAP_KEY,
   TITLE_KEY,
 } from '../../hooks/views/diff/blocks'
 import { contentRowsOf } from '../../hooks/views/diff/layout'
-import { NOTE_MAX_LINES, noteLinesOf, noteRowsOf } from '../../hooks/views/diff/note-layout'
+import {
+  composeRowsOf,
+  NOTE_MAX_LINES,
+  noteLinesOf,
+  noteRowsOf,
+} from '../../hooks/views/diff/note-layout'
 
 /** The stream's width is a required option; most specs do not care, so 100 unless they say. */
 const blocksOf = (
@@ -192,7 +202,7 @@ describe('inline line threads (R39)', () => {
   test('a line that cannot be found falls back to after the hunk', () => {
     const keys = keysOf([onLine('n1', 99)])
     expect(segmentsOf([onLine('n1', 99)])).toHaveLength(1)
-    expect(keys.at(-2)).toBe(noteKeyOf('n1'))
+    expect(keys.at(-1)).toBe(noteKeyOf('n1'))
   })
 
   test('a line whose text changed since the note was made stays after the hunk', () => {
@@ -202,7 +212,7 @@ describe('inline line threads (R39)', () => {
       line: { number: 2, side: 'new', text: 'something else' },
     })
     expect(segmentsOf([stale])).toHaveLength(1)
-    expect(keysOf([stale]).at(-2)).toBe(noteKeyOf('n1'))
+    expect(keysOf([stale]).at(-1)).toBe(noteKeyOf('n1'))
   })
 
   test('a note on the last line before a "No newline" marker keeps the marker in its segment', () => {
@@ -219,7 +229,7 @@ describe('inline line threads (R39)', () => {
 
   test('hunk-wide notes stay after the hunk', () => {
     const keys = keysOf([commentOf({ id: 'w', hunk: hunkL.header }), onLine('n1', 2)])
-    expect(keys.at(-2)).toBe(noteKeyOf('w'))
+    expect(keys.at(-1)).toBe(noteKeyOf('w'))
   })
 
   test('rows total the unsplit hunk plus the note rows', () => {
@@ -232,16 +242,16 @@ describe('inline line threads (R39)', () => {
   test('the compose box stays after the hunk', () => {
     const anchor = { path: file.path, hunk: hunkL.header }
     const keys = blocksOf(file, [hunkL], [onLine('n1', 2)], anchor).map(b => b.key)
-    expect(keys.at(-2)).toBe(commentBoxKeyOf(anchor))
+    expect(keys.at(-1)).toBe(commentBoxKeyOf(anchor))
   })
 })
 
 describe('blocksOf', () => {
   test('a file with no hunks yet is title, status row; idle draws no comment box', () => {
     const blocks = blocksOf(file, undefined, [], null)
-    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY, CLOSE_KEY])
+    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, TITLE_GAP_KEY, STATUS_KEY])
     expect(blocks[0]).toMatchObject({ item: { kind: 'title', file, canNote: true } })
-    expect(blocks.at(-2)).toMatchObject({ item: { kind: 'status', text: 'Loading…' } })
+    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Loading…' } })
   })
 
   test('an idle file draws no comment-box block; the heading carries the note control', () => {
@@ -273,36 +283,37 @@ describe('blocksOf', () => {
     expect(blocks.find(b => b.key === noteKeyOf('s1'))).toBeUndefined()
   })
 
-  test('order: title, then each hunk preceded by its own toolbar row, no row between two hunks', () => {
+  test('order: title, a blank row, each hunk behind its own label row, a blank row between two hunks', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => b.key)).toEqual([
       TITLE_KEY,
+      TITLE_GAP_KEY,
       hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header }),
       'hunk:0:@@ -1,2 +1,2 @@',
+      hunkGapKeyOf(1),
       hunkHeaderKeyOf({ path: file.path, hunk: hunkB.header }),
       'hunk:1:@@ -10,1 +10,1 @@',
-      CLOSE_KEY,
     ])
   })
 
-  test('order by item kind mirrors the key order, with no block between two hunks', () => {
+  test('order by item kind mirrors the key order', () => {
     const blocks = blocksOf(file, [hunkA, hunkB], [], null)
     expect(blocks.map(b => (b.kind === 'hunk' ? 'hunk' : b.item.kind))).toEqual([
       'title',
+      'blank',
       'hunk-header',
       'hunk',
+      'blank',
       'hunk-header',
       'hunk',
-      'close',
     ])
   })
 
-  test('a file card opens with its title row and closes with one close row, whatever it holds', () => {
+  test('a file card opens with its title row, whatever it holds, and has no close row in the bar style', () => {
     for (const hunks of [undefined, [], [hunkA], [hunkA, hunkB]]) {
       const blocks = blocksOf(file, hunks, [], null)
       expect(blocks[0]?.key).toBe(TITLE_KEY)
-      expect(blocks.at(-1)).toMatchObject({ rows: 1, item: { kind: 'close' } })
-      expect(blocks.filter(b => b.key === CLOSE_KEY)).toHaveLength(1)
+      expect(blocks.some(b => b.key === CLOSE_KEY)).toBe(false)
     }
   })
 
@@ -314,11 +325,12 @@ describe('blocksOf', () => {
     const blocks = blocksOf(file, [hunkA], comments, null)
     expect(blocks.map(b => b.key)).toEqual([
       TITLE_KEY,
+      TITLE_GAP_KEY,
       noteKeyOf('file-note'),
+      FILE_GAP_KEY,
       hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header }),
       'hunk:0:@@ -1,2 +1,2 @@',
       noteKeyOf('hunk-note'),
-      CLOSE_KEY,
     ])
   })
 
@@ -348,28 +360,26 @@ describe('blocksOf', () => {
   test('row total matches title + notes + toolbar + hunk lines', () => {
     const comments: Comments = [commentOf({ id: 'n1' })]
     const blocks = blocksOf(file, [hunkA, hunkB], comments, null)
-    // title(1) + note(3: text between borders) + hunkAheader(1) + hunkA(3 lines) + hunkBheader(1)
-    // + hunkB(2 lines) + close(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 3 + 1 + 3 + 1 + 2 + 1)
+    // title(1) + gap(1) + file note + gap(1) + hunkA label(1) + hunkA(3 lines) + gap(1) + hunkB label(1) + hunkB(2 lines)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + noteRowsOf(1) + 1 + 1 + 3 + 1 + 1 + 2)
   })
 
   test('row total with a note and an active compose box together', () => {
     const comments: Comments = [commentOf({ id: 'n1', hunk: hunkA.header })]
     const blocks = blocksOf(file, [hunkA], comments, { path: file.path, hunk: hunkA.header })
-    // title(1) + hunkAheader(1) + hunkA(3 lines) + note(3) + composebox(6, with the line picker)
-    // + close(1)
-    expect(contentRowsOf(blocks)).toBe(1 + 1 + 3 + 3 + 6 + 1)
+    // title(1) + gap(1) + hunkA label(1) + hunkA(3 lines) + note + composebox (with the line picker)
+    expect(contentRowsOf(blocks)).toBe(1 + 1 + 1 + 3 + noteRowsOf(1) + composeRowsOf(true))
   })
 
   test('an empty, non-binary file with no textual changes gets a status row, no gap or hunk blocks', () => {
     const blocks = blocksOf(file, [], [], null)
-    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, STATUS_KEY, CLOSE_KEY])
-    expect(blocks.at(-2)).toMatchObject({ item: { kind: 'status', text: 'No textual changes' } })
+    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, TITLE_GAP_KEY, STATUS_KEY])
+    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'No textual changes' } })
   })
 
   test('a binary file with no hunks gets a "Binary file" status row', () => {
     const blocks = blocksOf({ ...file, isBinary: true }, [], [], null)
-    expect(blocks.at(-2)).toMatchObject({ item: { kind: 'status', text: 'Binary file' } })
+    expect(blocks.at(-1)).toMatchObject({ item: { kind: 'status', text: 'Binary file' } })
   })
 
   test('a comment anchored to a hunk no longer present renders in an outdated group after the hunks', () => {
@@ -513,7 +523,15 @@ describe('blocksOf for a turn source', () => {
     expect(headerA).toMatchObject({
       item: { kind: 'hunk-header', canNote: false, isReadOnly: true },
     })
-    expect(blocks.map(b => b.kind)).toEqual(['fixed', 'fixed', 'hunk', 'fixed', 'hunk', 'fixed'])
+    expect(blocks.map(b => b.kind)).toEqual([
+      'fixed',
+      'fixed',
+      'fixed',
+      'hunk',
+      'fixed',
+      'fixed',
+      'hunk',
+    ])
   })
 
   test('drops outdated comments too, since a turn has none of its own', () => {
@@ -552,24 +570,22 @@ describe('streamOf', () => {
     expect(stream.contentRows).toBeGreaterThan(bRow)
   })
 
-  test('each card is its rows, a close row, then one blank gap row before the next card', () => {
+  test('each card is its rows, then one blank gap row before the next card', () => {
     const stream = streamOf([file, b], () => [hunkA], [], null)
     const ownRows = contentRowsOf(blocksOf(file, [hunkA], [], null))
-    // a's rows (title ... close), then the gap, then b's title.
     expect(stream.titleRows.get('b.ts')).toBe(ownRows + 1)
     const kinds = stream.blocks.map(block => (block.kind === 'hunk' ? 'hunk' : block.item.kind))
-    const closeAt = kinds.indexOf('close')
-    expect(kinds[closeAt + 1]).toBe('gap')
-    expect(kinds[closeAt + 2]).toBe('title')
-    // no gap after the last card
-    expect(kinds.at(-1)).toBe('close')
+    const gapAt = kinds.indexOf('gap')
+    expect(kinds[gapAt - 1]).toBe('hunk')
+    expect(kinds[gapAt + 1]).toBe('title')
+    expect(kinds.at(-1)).toBe('hunk')
   })
 
-  test('the close and gap rows still belong to the card above, the title row to the next', () => {
+  test('the last row and the gap row still belong to the card above, the title row to the next', () => {
     const stream = streamOf([file, b], () => [hunkA], [], null)
     const bRow = stream.titleRows.get('b.ts') ?? 0
     expect(fileAtRow(stream.titleRows, bRow - 1)).toBe(file.path) // the gap
-    expect(fileAtRow(stream.titleRows, bRow - 2)).toBe(file.path) // the close row
+    expect(fileAtRow(stream.titleRows, bRow - 2)).toBe(file.path) // the last code row
     expect(fileAtRow(stream.titleRows, bRow)).toBe('b.ts')
   })
 
@@ -586,7 +602,7 @@ describe('streamOf', () => {
     const stream = streamOf([file], () => undefined, [], null, {
       unreadText: 'Not read: too many new files',
     })
-    expect(stream.blocks.at(-2)).toMatchObject({
+    expect(stream.blocks.at(-1)).toMatchObject({
       item: { kind: 'status', text: 'Not read: too many new files' },
     })
   })
@@ -653,7 +669,83 @@ describe('streamOf orphan group', () => {
     const comment = commentOf({ path: 'gone.ts' })
     const withOrphan = streamOf([file], () => [hunkA], [comment], null)
     const without = streamOf([file], () => [hunkA], [], null)
-    // heading row + path row + a note card (1 text line + 2 borders) = 5 extra rows.
-    expect(withOrphan.contentRows).toBe(without.contentRows + 5)
+    // blank row + heading row + path row + a note card (1 text line + 2 borders) = 6 extra rows.
+    expect(withOrphan.contentRows).toBe(without.contentRows + 6)
+  })
+})
+
+describe('a card under each style', () => {
+  const keysOf = (name: 'bar' | 'none' | 'sharp' | 'rounded', hunks = [hunkA, hunkB]) =>
+    blocksOf(file, hunks, [], null, { style: styleOf(name) }).map(b => b.key)
+
+  test('bar: title, a blank row, then each hunk behind its label row; no close row', () => {
+    expect(keysOf('bar')).toEqual([
+      TITLE_KEY,
+      TITLE_GAP_KEY,
+      hunkHeaderKeyOf({ path: file.path, hunk: hunkA.header }),
+      'hunk:0:@@ -1,2 +1,2 @@',
+      hunkGapKeyOf(1),
+      hunkHeaderKeyOf({ path: file.path, hunk: hunkB.header }),
+      'hunk:1:@@ -10,1 +10,1 @@',
+    ])
+  })
+
+  test('none: the title is two rows (title and its dim rule); still no close row', () => {
+    const blocks = blocksOf(file, [hunkA], [], null, { style: styleOf('none') })
+    expect(blocks[0]).toMatchObject({ key: TITLE_KEY, rows: 2 })
+    expect(blocks.some(b => b.key === CLOSE_KEY)).toBe(false)
+  })
+
+  test('sharp and rounded close the card with one close row', () => {
+    for (const name of ['sharp', 'rounded'] as const) {
+      const blocks = blocksOf(file, [hunkA], [], null, { style: styleOf(name) })
+      expect(blocks[0]).toMatchObject({ key: TITLE_KEY, rows: 1 })
+      expect(blocks.at(-1)).toMatchObject({ key: CLOSE_KEY, rows: 1, item: { kind: 'close' } })
+      expect(blocks.filter(b => b.key === CLOSE_KEY)).toHaveLength(1)
+    }
+  })
+
+  test('a file with no hunks closes too, under a frame style', () => {
+    const blocks = blocksOf(file, undefined, [], null, { style: styleOf('sharp') })
+    expect(blocks.map(b => b.key)).toEqual([TITLE_KEY, TITLE_GAP_KEY, STATUS_KEY, CLOSE_KEY])
+  })
+
+  test('file-level notes are followed by a blank row before the first hunk', () => {
+    const blocks = blocksOf(file, [hunkA], [commentOf({ id: 'fn' })], null)
+    expect(blocks.map(b => b.key).slice(0, 4)).toEqual([
+      TITLE_KEY,
+      TITLE_GAP_KEY,
+      noteKeyOf('fn'),
+      FILE_GAP_KEY,
+    ])
+  })
+
+  test('the rows add up under every style', () => {
+    const rows = (name: 'bar' | 'none' | 'sharp' | 'rounded') =>
+      contentRowsOf(blocksOf(file, [hunkA, hunkB], [], null, { style: styleOf(name) }))
+    // title + gap + (label + 3 lines) + gap + (label + 2 lines)
+    expect(rows('bar')).toBe(1 + 1 + (1 + 3) + 1 + (1 + 2))
+    expect(rows('none')).toBe(rows('bar') + 1)
+    expect(rows('sharp')).toBe(rows('bar') + 1)
+    expect(rows('rounded')).toBe(rows('sharp'))
+  })
+
+  test('the content width is the pane less the style rails: bar 2, none 0, frames 4', () => {
+    expect(contentWidthOf(100, styleOf('bar'))).toBe(98)
+    expect(contentWidthOf(100, styleOf('none'))).toBe(100)
+    expect(contentWidthOf(100, styleOf('sharp'))).toBe(96)
+    expect(contentWidthOf(100, styleOf('rounded'))).toBe(96)
+    expect(contentWidthOf(1, styleOf('sharp'))).toBe(1)
+  })
+
+  test('the outdated and orphan groups open with a blank row', () => {
+    const stale = commentOf({ id: 'stale', hunk: hunkB.header })
+    const blocks = blocksOf(file, [hunkA], [stale], null)
+    const outdatedAt = blocks.findIndex(b => b.key === OUTDATED_TITLE_KEY)
+    expect(blocks[outdatedAt - 1]).toMatchObject({ item: { kind: 'blank' } })
+
+    const orphan = commentOf({ id: 'o1', path: 'gone.ts' })
+    const keys = streamOf([file], () => [hunkA], [orphan], null).blocks.map(b => b.key)
+    expect(keys[keys.indexOf(`orphans#${ORPHANS_TITLE_KEY}`) - 1]).toBe('orphans#orphans-gap')
   })
 })

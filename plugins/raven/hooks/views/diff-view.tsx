@@ -21,12 +21,13 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { closeRow, ruleRow } from '../ui/card'
+import { cardTitle, frameBottom } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { RULE_START, ruleRoomFor } from '../ui/chrome'
+import { groupCellsOf, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
+import type { Style } from '../ui/style'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import {
   type BodyItem,
@@ -45,12 +46,12 @@ import {
   noteChip,
   orphanPathRow,
   orphansTitle,
-  outdatedTitle,
+  outdatedHeading,
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
 import { type HeaderProps, header, headerRowsOf } from './diff/header'
 import { clampTop, type Placed, rowsOf, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
-import { railOf } from './diff/rail'
+import { railedRows } from './diff/rail'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { createSplitMode } from './diff/split-mode'
@@ -190,6 +191,7 @@ export function createDiffView(
     isLoaded: boolean
     gonePaths: ReadonlySet<string>
     width: number
+    cardStyle: Style['cardStyle']
     stream: Stream
   } | null = null
 
@@ -477,7 +479,7 @@ export function createDiffView(
   }
 
   /** Every changed file's blocks in one stream, cached while its inputs are unchanged. */
-  function streamFor(capabilities: Capabilities, width: number): Stream {
+  function streamFor(capabilities: Capabilities, width: number, style: Style): Stream {
     const files = filesOf()
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
@@ -494,7 +496,8 @@ export function createDiffView(
       cache.capabilities.canPick === capabilities.canPick &&
       cache.isLoaded === model.isLoaded &&
       cache.gonePaths === model.gonePaths &&
-      cache.width === width
+      cache.width === width &&
+      cache.cardStyle === style.cardStyle
     ) {
       return cache.stream
     }
@@ -508,6 +511,7 @@ export function createDiffView(
         readOnly,
         capabilities,
         width,
+        style,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -524,6 +528,7 @@ export function createDiffView(
       isLoaded: model.isLoaded,
       gonePaths: model.gonePaths,
       width,
+      cardStyle: style.cardStyle,
       stream,
     }
     return stream
@@ -542,6 +547,39 @@ export function createDiffView(
     )
   }
 
+  /** A file's title: icon, bold path, status mark, counts, then the inline `✎ note` chip two columns after. */
+  function titleRowOf(
+    kit: Kit,
+    item: Extract<BodyItem, { kind: 'title' }>,
+    color: string,
+    style: Style,
+  ): RenderElement {
+    const { Box, Text } = kit.ui
+    const mark = statusMarkOf(item.file.status)
+    const icon = iconOf(item.file.path)
+    const title = (
+      <Text wrap="truncate-end">
+        <Text color={icon.color}>{icon.glyph}</Text>
+        <Text bold>{`${ICON_GAP}${item.file.path}`}</Text>
+        <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
+        <Text color={COLORS.added}>{` +${item.file.adds}`}</Text>
+        <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text>
+      </Text>
+    )
+    const anchor: Anchor = { path: item.file.path }
+    const titleKey = `title-row:${item.file.path}`
+    let chips: RenderElement | undefined
+    if (item.canNote) {
+      const chip = noteChip(anchor, startComposing)
+      // The same HEADER_MIN the hunk label row reserves for its own label, so the title's single
+      // note pill shrinks to its bare icon under the same pressure, the path (which already
+      // truncates on its own) giving way first.
+      const mode = chipsFit([chip], ruleRoomFor(kit.columns, HEADER_MIN))
+      chips = pillRow(kit, [chip], mode, titleKey)
+    }
+    return <Box key={titleKey}>{cardTitle(kit, style, { color, title, chips })}</Box>
+  }
+
   /**
    * One fixed row's element, by its payload kind: a `gap` draws one blank row, between files.
    * `contentWidth` is the row's room beside the file's left rail (`kit.columns - 2`), for whatever
@@ -558,40 +596,16 @@ export function createDiffView(
     const { Box, Text } = kit.ui
     switch (item.kind) {
       case 'close':
-        return closeRow(kit, color)
-      case 'title': {
-        const mark = statusMarkOf(item.file.status)
-        const icon = iconOf(item.file.path)
-        const left = (
-          <Text wrap="truncate-end">
-            <Text color={icon.color}>{icon.glyph}</Text>
-            <Text bold>{`${ICON_GAP}${item.file.path}`}</Text>
-            <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
-            <Text color={COLORS.added}>{` +${item.file.adds}`}</Text>
-            <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text>
-          </Text>
-        )
-        const anchor: Anchor = { path: item.file.path }
-        const titleKey = `title-row:${item.file.path}`
-        let right: RenderElement | undefined
-        if (item.canNote) {
-          const chip = noteChip(anchor, startComposing)
-          // The same HEADER_MIN the hunk toolbar reserves for its own label, so the heading's
-          // single note pill shrinks to its bare icon under the same pressure, the path (which
-          // already truncates on its own) giving way first.
-          const mode = chipsFit([chip], ruleRoomFor(kit.columns, HEADER_MIN))
-          right = pillRow(kit, [chip], mode, titleKey)
-        }
-        return (
-          <Box key={titleKey}>{ruleRow(kit, { color, start: RULE_START.open, left, right })}</Box>
-        )
-      }
+        return frameBottom(kit, kit.style, color) ?? <Box />
+      case 'title':
+        return titleRowOf(kit, item, color, kit.style)
       case 'status':
         return <Text dimColor>{item.text}</Text>
       case 'gap':
+      case 'blank':
         return <Text> </Text>
       case 'outdated-title':
-        return outdatedTitle(kit)
+        return outdatedHeading(kit)
       // The orphans group's own rows never pass through here: `placedRowOf` dispatches any key
       // prefixed `orphans#` to `orphanRowOf` before a file is ever looked up for `bodyRowOf`.
       case 'orphans-title':
@@ -634,7 +648,6 @@ export function createDiffView(
                 isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
                 confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
                 columns: contentWidth,
-                color,
                 onStartNote: startComposing,
                 onStage: () => void applyHunk(file, item.hunk, 'stage'),
                 onRevert: () => pressRevert(file, item.hunk, item.anchor),
@@ -669,11 +682,10 @@ export function createDiffView(
 
   /**
    * One block of the trailing orphans group: no `ChangedFile` backs these rows, so they never go
-   * through `bodyRowOf`/`placedRowOf`'s file-rail logic; the rail is a flat `COLORS.inactive`
-   * instead of a status colour. Only the item kinds `orphanBlocksOf` ever emits reach here.
+   * through `bodyRowOf`/`placedRowOf`'s file-rail logic; no rail is drawn (the group is not a card). Only the item kinds `orphanBlocksOf` ever emits reach here.
    */
   function orphanRowOf(kit: Kit, placed: Placed<BodyItem>): RenderElement {
-    const { Box } = kit.ui
+    const { Box, Text } = kit.ui
     const { block } = placed
     if (block.kind !== 'fixed') return <Box key={block.key} />
     const { item } = block
@@ -692,15 +704,20 @@ export function createDiffView(
       case 'note':
         content = noteRowOf(kit, item)
         break
+      case 'blank':
+        content = <Text> </Text>
+        break
       default:
         content = <Box />
     }
 
+    // The trailing group is not a file's card: no rail, indented to line up with the cards' text.
+    const indent = groupCellsOf(kit.style)
     return clippedOf(
       kit,
       block.key,
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        {railOf(kit, block.rows, COLORS.inactive)}
+        {indent > 0 ? <Text>{' '.repeat(indent)}</Text> : null}
         <Box flexGrow={1} overflow="hidden">
           {content}
         </Box>
@@ -711,13 +728,13 @@ export function createDiffView(
 
   /**
    * A placed block's element; the file it belongs to is found by its key's `path#...` prefix.
-   * Every row of a file's section carries a 2-column left rail, `▌ ` in the file's status
-   * colour, drawn here rather than by `bodyRowOf` so that function stays about one row's content.
-   * A hunk `Code` slice spans several terminal rows at once, so its rail is a `Text` of that many
-   * `▌ ` lines; the blank gap row between files carries no rail at all. D10 point 2: the file
-   * being edited this turn draws its rail in the accent instead, so the live feed is visible
-   * from across the room. The trailing orphans group (`orphans#` prefixed keys) has no file at
-   * all, so it is dispatched to `orphanRowOf` before the file lookup below.
+   * Every body row of a file's card draws behind the style's mark (`railedRows`): `▌ ` in the
+   * file's status colour under `bar`, nothing under `none`, `│ ` and ` │` under a frame. A hunk
+   * `Code` slice spans several terminal rows at once, so its rail is that many rows tall. The
+   * title, the frame's closing row and the blank row between files span the whole width and carry
+   * no rail. D10 point 2: the file being edited this turn draws its rail (or frame) in the accent
+   * instead, so the live feed is visible from across the room. The trailing orphans group
+   * (`orphans#` prefixed keys) has no file at all, so it is dispatched to `orphanRowOf` first.
    */
   function placedRowOf(
     kit: Kit,
@@ -725,13 +742,14 @@ export function createDiffView(
     filesByPath: ReadonlyMap<string, ChangedFile>,
   ): RenderElement {
     const { Box, Code } = kit.ui
+    const { style } = kit
     const { block } = placed
     if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
     const path = block.key.slice(0, block.key.indexOf('#'))
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
 
-    const contentWidth = contentWidthOf(kit.columns)
+    const contentWidth = contentWidthOf(kit.columns, style)
     const railColor = model.edited.has(file.path) ? COLORS.accent : statusMarkOf(file.status).color
 
     if (block.kind === 'hunk') {
@@ -739,23 +757,25 @@ export function createDiffView(
       const isMarked = block.mark !== undefined && placed.to === rowsOf(block)
       const mark = isMarked && block.mark ? NOTE_STATE_COLORS[block.mark] : undefined
       return (
-        <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-          {railOf(kit, placed.to - placed.from, railColor, mark)}
-          <Box flexGrow={1} overflow="hidden">
-            <Code
-              source={sliceHunk(block.hunk, placed.from, placed.to).text}
-              format="diff"
-              path={file.path}
-              wrap="truncate-end"
-            />
-          </Box>
+        <Box key={block.key}>
+          {railedRows(kit, style, {
+            color: railColor,
+            rows: placed.to - placed.from,
+            mark,
+            children: (
+              <Code
+                source={sliceHunk(block.hunk, placed.from, placed.to).text}
+                format="diff"
+                path={file.path}
+                wrap="truncate-end"
+              />
+            ),
+          })}
         </Box>
       )
     }
 
     const { item } = block
-    // The gap between cards has no border, and a card's own top and bottom rows (`╭─`, `╰`) span
-    // the whole width: none of them draws behind the `│ ` left border.
     if (item.kind === 'gap' || item.kind === 'title' || item.kind === 'close') {
       return clippedOf(
         kit,
@@ -768,11 +788,12 @@ export function createDiffView(
     return clippedOf(
       kit,
       block.key,
-      <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        {railOf(kit, block.rows, railColor)}
-        <Box flexGrow={1} overflow="hidden">
-          {bodyRowOf(kit, item, file, contentWidth, railColor)}
-        </Box>
+      <Box key={block.key}>
+        {railedRows(kit, style, {
+          color: railColor,
+          rows: block.rows,
+          children: bodyRowOf(kit, item, file, contentWidth, railColor),
+        })}
       </Box>,
       placed,
     )
@@ -793,7 +814,7 @@ export function createDiffView(
       )
 
     const files = filesOf()
-    const stream = streamFor(kit.capabilities, contentWidthOf(kit.columns))
+    const stream = streamFor(kit.capabilities, contentWidthOf(kit.columns, kit.style), kit.style)
     // A comment whose file left the diff still has to draw somewhere (R32 part 2's orphans
     // group): the empty-state text only wins when the stream is truly empty, not just the file
     // list.

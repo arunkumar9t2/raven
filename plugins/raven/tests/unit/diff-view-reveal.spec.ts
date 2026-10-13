@@ -3,6 +3,7 @@ import type { Kit } from '../../hooks/core/view'
 import type { Run } from '../../hooks/git/load'
 import { createReview } from '../../hooks/review/review'
 import { styleOf } from '../../hooks/ui/style'
+import { widthOf } from '../../hooks/ui/wrap'
 import { cancelKeyOf, commentButtonKeyOf, inputKeyOf } from '../../hooks/views/diff/anchor'
 import { createDiffView, type DiffActions } from '../../hooks/views/diff-view'
 import { fakeHost } from './fake-host'
@@ -175,6 +176,154 @@ describe('createDiffView', () => {
         : (findByKey(tree, cancelKeyOf(anchor))?.props.onPress as () => void)
       cancel?.()
       expect(focused.includes(commentButtonKeyOf(anchor))).toBe(!canClient)
+    }
+  })
+
+  test('a frame style closes each card with a close row; bar and none draw none', async () => {
+    for (const [name, hasClose] of [
+      ['bar', false],
+      ['none', false],
+      ['sharp', true],
+      ['rounded', true],
+    ] as const) {
+      const kit = { ...KIT, rows: 30, style: styleOf(name) } as unknown as Kit
+      const host = fakeHost({ run: runOf() })
+      const view = createDiffView(
+        host,
+        createReview(host, () => 0),
+        NO_ACTIONS,
+        () => 0,
+      )
+      await view.refresh()
+      const tree = view.render(kit)
+      expect(findByKey(tree, 'a.ts#close') !== undefined).toBe(hasClose)
+      expect(findByKey(tree, 'a.ts#title')).toBeDefined()
+    }
+  })
+})
+
+/** What a node draws: its text children and a Button's `label`, less a rule's 400-cell `─` fill. */
+function drawnOf(node: unknown): string {
+  return flatten(node)
+    .map(n => {
+      if (typeof n === 'string' || typeof n === 'number') {
+        const text = String(n)
+        return /^─{100,}$/.test(text) ? '' : text
+      }
+      const current = n as Node
+      const label = typeof current.props?.label === 'string' ? current.props.label : ''
+      return label + drawnOf(current.props?.children)
+    })
+    .join('')
+}
+
+const HUNK = '@@ -1,2 +1,2 @@\n a\n-b\n+c\n'
+const sectionOf = (path: string) =>
+  `diff --git a/${path} b/${path}\n--- a/${path}\n+++ b/${path}\n${HUNK}`
+
+/** A `Run` serving the given status/numstat/diff text for a repository under `/work`. */
+const worldOf = (world: { status: string; numstat: string; diff?: string }): Run => {
+  const diffArgv = 'git -c core.quotePath=false diff -M HEAD'
+  const outputs: Record<string, string | undefined> = {
+    'git rev-parse --show-toplevel': `${REPO}\n`,
+    'git status --porcelain=v1 -z --untracked-files=all': world.status,
+    'git diff HEAD --numstat -z': world.numstat,
+    [diffArgv]: world.diff,
+  }
+  return async argv => {
+    const out = outputs[argv.join(' ')]
+    return { exitCode: out === undefined ? 1 : 0, stdout: out ?? '', stderr: '' }
+  }
+}
+
+const STYLES = ['bar', 'none', 'sharp', 'rounded'] as const
+
+async function renderedAs(run: Run, name: (typeof STYLES)[number], columns: number) {
+  const kit = { ...KIT, columns, rows: 60, style: styleOf(name) } as unknown as Kit
+  const host = fakeHost({ run })
+  const view = createDiffView(
+    host,
+    createReview(host, () => 0),
+    NO_ACTIONS,
+    () => 0,
+  )
+  await view.refresh()
+  return view.render(kit)
+}
+
+describe('file cards as drawn at a narrow pane', () => {
+  const twoFiles = worldOf({
+    status: ' M a.ts\0 M b.ts\0',
+    numstat: '1\t1\ta.ts\x001\t1\tb.ts\x00',
+    diff: sectionOf('a.ts') + sectionOf('b.ts'),
+  })
+
+  test('under every style the title and label rows fit 30 columns', async () => {
+    for (const name of STYLES) {
+      const tree = await renderedAs(twoFiles, name, 30)
+      for (const path of ['a.ts', 'b.ts']) {
+        const title = drawnOf(findByKey(tree, `${path}#title`))
+        const label = drawnOf(findByKey(tree, `${path}#hunk-header:${path}|@@ -1,2 +1,2 @@`))
+        // The chips sit two columns after their row's text (`gap={2}`), which is not itself text.
+        expect(widthOf(title) + 2).toBeLessThanOrEqual(30)
+        expect(widthOf(label) + 2).toBeLessThanOrEqual(30)
+      }
+    }
+  })
+
+  test('under every style the chips shrink to bare icons once the pane is too narrow for words', async () => {
+    for (const name of STYLES) {
+      const tree = await renderedAs(twoFiles, name, 22)
+      const title = drawnOf(findByKey(tree, 'a.ts#title'))
+      const label = drawnOf(findByKey(tree, 'a.ts#hunk-header:a.ts|@@ -1,2 +1,2 @@'))
+      // (The path itself truncates by the engine at this width, so only the chips are asserted.)
+      expect(title).toContain('✎')
+      expect(title).not.toContain('note')
+      expect(label).toContain('✓')
+      expect(label).not.toContain('stage')
+      expect(label).not.toContain('revert')
+    }
+  })
+
+  test('a renamed file shows only its new path', async () => {
+    const renamed = worldOf({
+      status: 'R  new.ts\0old.ts\0',
+      numstat: '1\t1\t\0old.ts\0new.ts\0',
+      diff: `diff --git a/old.ts b/new.ts\nsimilarity index 80%\nrename from old.ts\nrename to new.ts\n--- a/old.ts\n+++ b/new.ts\n${HUNK}`,
+    })
+    for (const name of STYLES) {
+      const tree = await renderedAs(renamed, name, 60)
+      const title = drawnOf(findByKey(tree, 'new.ts#title'))
+      expect(title).toContain('new.ts')
+      expect(title).not.toContain('old.ts')
+    }
+  })
+
+  test('a binary and a not-read file draw their status as one railed body row; bar draws no close row', async () => {
+    const binary = worldOf({
+      status: ' M pic.png\0',
+      numstat: '-\t-\tpic.png\x00',
+      diff: '',
+    })
+    const unread = worldOf({
+      status: ' M a.ts\0',
+      numstat: '1\t1\ta.ts\x00',
+    })
+    for (const [run, path, text] of [
+      [binary, 'pic.png', 'Binary file'],
+      [unread, 'a.ts', 'Not read'],
+    ] as const) {
+      for (const name of STYLES) {
+        const tree = await renderedAs(run, name, 60)
+        const status = findByKey(tree, `${path}#status`)
+        const drawn = drawnOf(status)
+        expect(drawn).toContain(text)
+        const rail = { bar: '▌ ', none: '', sharp: '│ ', rounded: '│ ' }[name]
+        expect(drawn.startsWith(rail)).toBe(true)
+        expect(findByKey(tree, `${path}#close`) !== undefined).toBe(
+          name === 'sharp' || name === 'rounded',
+        )
+      }
     }
   })
 })

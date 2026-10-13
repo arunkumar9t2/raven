@@ -1262,22 +1262,24 @@ describe('review stream', () => {
       }
       return undefined
     }
-    expect(colorOf(await ui.find({ key: 'b.ts#title' }), '╭')).toBe('claude')
-    expect(colorOf(await ui.find({ key: 'a.ts#title' }), '╭')).not.toBe('claude')
-    expect(colorOf(await ui.find({ key: 'b.ts#close' }), '╰')).toBe('claude')
+    // The rail on a body row is the border now: accent for the file being edited, status colour otherwise.
+    expect(colorOf(await ui.find({ key: 'b.ts#status' }), '▌')).toBe('claude')
+    expect(colorOf(await ui.find({ key: 'a.ts#status' }), '▌')).not.toBe('claude')
   })
 
-  test('each file is a card: ╭─ title, │ on every body row, ╰ close, and a blank gap row (no border) between two files', async ($, on) => {
+  test('each file is a card: a title row, a ▌ rail on every body row, and a blank gap row (no rail) between two files', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
 
-    expect((await ui.find({ key: 'a.ts#title' }))?.text.startsWith('╭─')).toBe(true)
-    expect((await ui.find({ key: 'a.ts#status' }))?.text.startsWith('│')).toBe(true)
-    expect((await ui.find({ key: 'a.ts#close' }))?.text.startsWith('╰')).toBe(true)
+    expect((await ui.find({ key: 'a.ts#title' }))?.text).toContain('a.ts')
+    expect((await ui.find({ key: 'a.ts#title' }))?.text).not.toContain('╭')
+    expect((await ui.find({ key: 'a.ts#title-gap' }))?.text.startsWith('▌')).toBe(true)
+    expect((await ui.find({ key: 'a.ts#status' }))?.text.startsWith('▌')).toBe(true)
+    expect(await ui.find({ key: 'a.ts#close' })).toBeUndefined()
     expect((await ui.find({ key: 'b.ts#sep' }))?.text.trim()).toBe('')
-    expect((await ui.find({ key: 'b.ts#title' }))?.text.startsWith('╭─')).toBe(true)
+    expect((await ui.find({ key: 'b.ts#title' }))?.text).toContain('b.ts')
   })
 
   test("a file's card keeps its left border deep into a scroll, past its own title and most of its hunk", async ($, on) => {
@@ -1285,9 +1287,9 @@ describe('review stream', () => {
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
-    // kit.rows = 6; minus 2 header + 1 list + 1 rule leaves 2 body rows: fewer than a.ts's 7-row
-    // card (title, hunk-header, HUNK_TEXT's 3 code lines, close), so scrolling clamps to a top
-    // that scrolls the title and most of the hunk's code out of view.
+    // kit.rows = 6; minus the one-row header, 1 list row and the rule leaves 3 body rows: fewer than
+    // a.ts's 6-row card (title, gap, hunk label, HUNK_TEXT's 3 code lines), so scrolling clamps to
+    // the top that leaves only the code in view.
     const ui = await $.ui.mount({
       plugin: NAME,
       surface: 'terminal',
@@ -1306,14 +1308,12 @@ describe('review stream', () => {
     })
 
     expect(await ui.find({ key: 'a.ts#title' })).toBeUndefined()
-    // The header row scrolls out of view too; what's left is the hunk's own (partially sliced)
-    // code block, still carrying the border, then the card's closing row.
+    // What is left is the hunk's code block, still carrying the rail.
     const hunkCode = await ui.find({ key: `a.ts#hunk:0:${HUNK_HEADER}` })
-    expect(hunkCode?.text.startsWith('│')).toBe(true)
-    expect((await ui.find({ key: 'a.ts#close' }))?.text.startsWith('╰')).toBe(true)
+    expect(hunkCode?.text.startsWith('▌')).toBe(true)
   })
 
-  test('one blank row separates two file cards: close, gap, next title', async ($, on) => {
+  test('one blank row separates two file cards: the last row, gap, next title', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts', 'b.ts'])
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
@@ -1324,9 +1324,9 @@ describe('review stream', () => {
       .map(box => box.key)
       .filter(key => key?.includes('#') && !key.includes(':'))
     const at = (key: string) => keys.indexOf(key)
-    expect(at('a.ts#close')).toBeGreaterThan(-1)
-    expect(at('b.ts#sep')).toBe(at('a.ts#close') + 1)
+    expect(at('b.ts#sep')).toBeGreaterThan(at('a.ts#title'))
     expect(at('b.ts#title')).toBe(at('b.ts#sep') + 1)
+    expect(await ui.find({ key: 'a.ts#close' })).toBeUndefined()
     expect((await ui.find({ key: 'b.ts#sep' }))?.text.trim()).toBe('')
   })
 
@@ -2224,9 +2224,9 @@ describe('stage and revert a hunk', () => {
     const right = segs.map(seg => seg.t).join('')
     expect(right).toContain('↺ sure?')
     expect(right).not.toContain('note')
-    // 38 minus the card's 2-column left border leaves 36 for the toolbar: `├─ `, the 4-cell label
-    // `L1–2`, a space each side of the fill, then the pills.
-    expect(right.length).toBeLessThanOrEqual(36 - 3 - 4 - 2)
+    // 38 minus the bar's 2-column rail leaves 36 for the label row: the 4-cell label `L1–2`, the 2
+    // cell gap, then the pills.
+    expect(right.length).toBeLessThanOrEqual(36 - 4 - 2)
   })
 
   for (const surface of ['vscode', 'mobile'] as const) {
@@ -2264,7 +2264,7 @@ describe('stage and revert a hunk', () => {
   const SECOND_HUNK_HEADER = '@@ -10,2 +10,2 @@'
   const TWO_HUNK_TEXT = `${HUNK_TEXT}${SECOND_HUNK_HEADER}\n x\n-y\n+z\n`
 
-  test("no row draws between a file's two hunks (a later task adds a hunk context row there)", async ($, on) => {
+  test("one blank row draws between a file's two hunks", async ($, on) => {
     hunkWorld(
       on,
       () => {},
@@ -2275,7 +2275,8 @@ describe('stage and revert a hunk', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect(await ui.find({ key: 'a.ts#gap:1' })).toBeUndefined()
+    const gap = await ui.find({ key: 'a.ts#hunk-gap:1' })
+    expect(gap?.text.trim().replace('▌', '').trim()).toBe('')
     expect(await ui.find({ key: `a.ts#hunk:1:${SECOND_HUNK_HEADER}` })).toBeDefined()
   })
 })
