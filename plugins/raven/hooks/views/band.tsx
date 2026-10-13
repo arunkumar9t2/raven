@@ -6,7 +6,7 @@ import { COLORS } from '../core/colors'
 import type { Kit } from '../core/view'
 import { type Chip, chipsLayout } from '../ui/chips'
 import { BAND_GUTTER, BAND_LABEL_CELLS } from '../ui/chrome'
-import { iconText } from '../ui/icon-text'
+import { iconText, NOTE_GLYPH } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
 
 /** What the `AbovePrompt` band has to say: pending review comments, an unseen doc, or both. */
@@ -25,7 +25,7 @@ export type BandActions = {
 export const BAND_MARK = '\u{f15c6}'
 
 /**
- * One row above the prompt: `<mark> ✎ 2 pending · plan updated   open   ➤ send`: the accent Raven
+ * One row above the prompt: `<mark> <note glyph> 2 pending · plan updated   open   ➤ send`: the accent Raven
  * mark, the notes summary in the suggestion colour (the plan flag dim), then the controls as
  * pills on the right, `send` the one primary action. No brackets, one row. `chipsLayout` shrinks
  * `open` before `send` keeps its words, same priority rule as the diff header's own chips.
@@ -62,7 +62,7 @@ export function band(kit: Kit, state: BandProps, actions: BandActions) {
         {state.pendingCount > 0 ? (
           <Text
             color={COLORS.suggestion}
-          >{` ${iconText('✎', `${state.pendingCount} pending`)}`}</Text>
+          >{` ${iconText(NOTE_GLYPH, `${state.pendingCount} pending`)}`}</Text>
         ) : (
           ''
         )}

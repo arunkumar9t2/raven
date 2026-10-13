@@ -1,6 +1,6 @@
 import { countOf } from '../../core/format'
 import { type Chip, chipsIconsWidthOf } from '../../ui/chips'
-import { iconText } from '../../ui/icon-text'
+import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { widthOf } from '../../ui/wrap'
 
 /** What each header chip does; `NO_HANDLERS` for the width math, which never presses anything. */
@@ -72,7 +72,7 @@ export function headerChipsOf(args: HeaderChipArgs, on: HeaderHandlers = NO_HAND
     chips.push(
       {
         key: 'edit-send',
-        icon: '✎',
+        icon: NOTE_GLYPH,
         label: 'edit & send',
         priority: 3,
         onPress: on.onEditSend,
@@ -133,7 +133,7 @@ export type HeaderPlan =
       rows: 1
       /** The change map's cells in the one-row form. */
       mapCells: number
-      /** `✎ N notes pending`, or '' when the row has no room for it. */
+      /** `<note glyph> N notes pending`, or '' when the row has no room for it. */
       notesText: string
       /** The cells the left cluster takes; the chips get `columns - leftCells - 2`. */
       leftCells: number
@@ -182,7 +182,7 @@ export function headerPlanOf(input: HeaderPlanInput): HeaderPlan {
   const notes =
     input.confirmingClear || input.pending === 0
       ? ''
-      : iconText('✎', `${countOf(input.pending, 'note')} pending`)
+      : iconText(NOTE_GLYPH, `${countOf(input.pending, 'note')} pending`)
 
   const sparse = leftCellsOf(input, mapMin, '')
   if (!fits(sparse)) return { rows: 2 }

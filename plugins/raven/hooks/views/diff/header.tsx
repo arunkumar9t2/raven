@@ -10,7 +10,7 @@ import type { ChangedFile } from '../../git/changes'
 import { changeMap, changeMapOf } from '../../ui/change-map'
 import { chipsIconsWidthOf, chipsLayout } from '../../ui/chips'
 import { diffStat } from '../../ui/diff-stat'
-import { iconText } from '../../ui/icon-text'
+import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { pillRow } from '../../ui/strip'
 import { selectButtons } from '../select-buttons'
 import {
@@ -113,7 +113,7 @@ function sourceControl(kit: Kit, props: HeaderProps): RenderElement {
 }
 
 /**
- * The one-row header: `󰊢 4 files  +22 −3  ▂█▁▁  ·  source HEAD ▾  ✎ 1 note pending      ↑ ↓ ↻ ✎ ➤ ⌫`.
+ * The one-row header: `󰊢 4 files  +22 −3  ▂█▁▁  ·  source HEAD ▾  <note glyph> 1 note pending      ↑ ↓ ↻ <note glyph> ➤ ⌫`.
  * The left cluster is the counts, the change map right after them, the dim `·` and the source
  * picker (then, when the room allows, the notes summary); the chips sit flush right, sized by
  * `chipsLayout` in the room the cluster leaves, so the lowest-priority chip shrinks to its icon
@@ -194,7 +194,7 @@ function summaryRow(kit: Kit, props: HeaderProps): RenderElement {
  * the right. Rulings kept from the original header: R27, while a clear is armed the nav and
  * refresh chips and the map/notes summary drop so the confirm keeps its words even at the
  * narrowest docked pane; R28, with nothing armed the map and the notes summary degrade (map to
- * `MIN_MAP_CELLS`, notes to a bare `✎`) and `refresh` gives way entirely before they vanish; R30,
+ * `MIN_MAP_CELLS`, notes to a bare `<note glyph>`) and `refresh` gives way entirely before they vanish; R30,
  * nav (`previous`/`next`) never gives way, in words, icons or by dropping, because its two Buttons
  * are the file list's only carriers of `action="app:diffFileListUp/Down"` and a mounted-but-hidden
  * Button strands the Tab ring on nothing visible.
@@ -206,8 +206,10 @@ function actionsRow(kit: Kit, props: HeaderProps): RenderElement {
 
   const maxCells = Math.floor(kit.columns / 3)
   const fullNotesText =
-    !confirmingClear && pending > 0 ? iconText('✎', `${countOf(pending, 'note')} pending`) : ''
-  const compactNotesText = !confirmingClear && pending > 0 ? '✎' : ''
+    !confirmingClear && pending > 0
+      ? iconText(NOTE_GLYPH, `${countOf(pending, 'note')} pending`)
+      : ''
+  const compactNotesText = !confirmingClear && pending > 0 ? NOTE_GLYPH : ''
   const fullChips = headerChipsOf({ pending, confirmingClear, includeRefresh: true }, handlers)
   const fullMapCells = confirmingClear ? [] : changeMapOf(props.files, props.edited, maxCells)
   const fullLeftWidth = fullMapCells.length + (fullNotesText === '' ? 0 : 1 + fullNotesText.length)

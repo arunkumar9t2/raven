@@ -11,6 +11,7 @@ import {
   stackOf,
   titleRowsOf,
 } from '../../hooks/ui/card'
+import { iconText, NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { ROUNDED_FRAME, SHARP_FRAME, styleOf } from '../../hooks/ui/style'
 
 type Node = { type: unknown; props: Record<string, unknown> }
@@ -100,17 +101,17 @@ describe('cardTitle', () => {
   const props = {
     color: 'warning',
     title: el('a.ts'),
-    chips: el('✎ note'),
+    chips: el(iconText(NOTE_GLYPH, 'note')),
   }
 
   test('bar: title then chips, no border glyph', () => {
     const texts = textsOf(cardTitle(kit, styleOf('bar'), props))
-    expect(texts).toEqual(['a.ts', '✎ note'])
+    expect(texts).toEqual(['a.ts', iconText(NOTE_GLYPH, 'note')])
   })
 
   test('none: the same row plus a fill rule row', () => {
     const out = cardTitle(kit, styleOf('none'), props)
-    expect(textsOf(out)).toEqual(['a.ts', '✎ note', '─'.repeat(400)])
+    expect(textsOf(out)).toEqual(['a.ts', iconText(NOTE_GLYPH, 'note'), '─'.repeat(400)])
   })
 
   test('sharp and rounded: the corner, a space-padded title, chips, fill, closing corner', () => {
@@ -120,7 +121,7 @@ describe('cardTitle', () => {
     const rounded = textsOf(cardTitle(kit, styleOf('rounded'), props))
     expect(rounded[0]).toBe('╭─ ')
     expect(rounded.at(-1)).toBe('╮')
-    expect(sharp).toContain('✎ note')
+    expect(sharp).toContain(iconText(NOTE_GLYPH, 'note'))
   })
 
   test('chips are optional', () => {

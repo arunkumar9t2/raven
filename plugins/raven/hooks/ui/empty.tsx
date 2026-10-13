@@ -4,6 +4,7 @@
 import type { RenderElement } from 'claude-code'
 
 import type { UiKit } from '../core/view'
+import { iconText } from './icon-text'
 
 /** Nerd Font icons the empty states use. */
 export const EMPTY_ICONS = {
@@ -22,7 +23,7 @@ export function emptyState(kit: UiKit, icon: string, text: string): RenderElemen
   return (
     <Box key="empty" flexDirection="column" paddingTop={1} paddingLeft={2}>
       <Text dimColor wrap="truncate-end">
-        {`${icon}  ${text}`}
+        {iconText(icon, text)}
       </Text>
     </Box>
   )

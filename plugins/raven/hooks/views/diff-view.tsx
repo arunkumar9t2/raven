@@ -579,7 +579,7 @@ export function createDiffView(
     )
   }
 
-  /** A file's title: icon, bold path, status mark, counts, then the inline `✎ note` chip two columns after. */
+  /** A file's title: icon, bold path, status mark, counts, then the inline `<note glyph> note` chip two columns after. */
   function titleRowOf(
     kit: Kit,
     item: Extract<BodyItem, { kind: 'title' }>,

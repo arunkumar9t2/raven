@@ -8,7 +8,7 @@ import {
   type StripRow,
   targetsOf,
 } from '../../hooks/surface/strip'
-import { ICON_GAP } from '../../hooks/ui/icon-text'
+import { ICON_GAP, NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { iconGap, pill } from '../../hooks/ui/strip'
 import { widthOf } from '../../hooks/ui/wrap'
 
@@ -38,7 +38,7 @@ describe('cellsOf parity', () => {
       '\u{f0214}',
       '\u{e628}',
       '↺',
-      '✎',
+      NOTE_GLYPH,
       '➤',
       '■',
       '█',
@@ -178,7 +178,9 @@ describe('icon gap', () => {
   })
 
   test('a pill pairs its icon and label through the icon gap', () => {
-    expect(pill('x', '✎', 'note', 'normal', () => {}).t).toBe(` ✎${ICON_GAP}note `)
+    expect(pill('x', NOTE_GLYPH, 'note', 'normal', () => {}).t).toBe(
+      ` ${NOTE_GLYPH}${ICON_GAP}note `,
+    )
     expect(pill('x', '', 'note', 'normal', () => {}).t).toBe(' note ')
     expect(pill('x', '✕', '', 'normal', () => {}).t).toBe(' ✕ ')
   })

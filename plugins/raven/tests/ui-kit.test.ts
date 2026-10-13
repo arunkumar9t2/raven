@@ -6,6 +6,7 @@ import { badge } from '../hooks/ui/badge'
 import type { Chip } from '../hooks/ui/chips'
 import { diffStat } from '../hooks/ui/diff-stat'
 import { dot } from '../hooks/ui/dot'
+import { NOTE_GLYPH } from '../hooks/ui/icon-text'
 import { progressBar } from '../hooks/ui/progress-bar'
 import { sectionHeader } from '../hooks/ui/section-header'
 import { statBar } from '../hooks/ui/stat-bar'
@@ -58,7 +59,7 @@ const pillRowWorld = (
   key: string,
 ) => mountKit($, on, kit => pillRow(kit, chips, mode, key))
 
-const NOTE: Chip = { key: 'note', label: 'note', icon: '✎', onPress: () => {} }
+const NOTE: Chip = { key: 'note', label: 'note', icon: NOTE_GLYPH, onPress: () => {} }
 
 describe('the UI kit draws on the terminal surface', () => {
   test('every component draws once, with no refusal', async ($: Engine, on: On) => {
@@ -94,7 +95,7 @@ describe('the UI kit draws on the terminal surface', () => {
 
 describe("pillRow's pills", () => {
   const CHIPS: Chip[] = [
-    { key: 'quiet', label: 'note', icon: '✎', onPress: () => {} },
+    { key: 'quiet', label: 'note', icon: NOTE_GLYPH, onPress: () => {} },
     { key: 'armed', label: 'sure?', icon: '↺', forceWords: true, onPress: () => {} },
   ]
 

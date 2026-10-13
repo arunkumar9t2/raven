@@ -11,6 +11,7 @@ import {
   TREE_PANE,
   toolNameOf,
 } from '../hooks/names'
+import { iconText, NOTE_GLYPH } from '../hooks/ui/icon-text'
 import {
   anchorKeyOf,
   cancelKeyOf,
@@ -1825,16 +1826,16 @@ describe('diff header', () => {
     // `MIN_MAP_CELLS` is `2`, not `3` (ruling R30: nav no longer gives way to make room, so one
     // more cell has to): 5 files over that cap draw one bar glyph plus the dim `…` overflow cell.
     expect(mapGlyphs.length).toBeGreaterThanOrEqual(2)
-    // The compact summary is a bare `✎` here, not `✎2` (fix round 2): `send N` right next to it
-    // already carries the count, and at 10+ pending `✎10` was the one character the arithmetic
+    // The compact summary is a bare `the note glyph` here, not `the note glyph2` (fix round 2): `send N` right next to it
+    // already carries the count, and at 10+ pending `the note glyph10` was the one character the arithmetic
     // couldn't afford once nav stopped giving way (ruling R30); see the test below.
-    expect(row?.text).toMatch(/✎|✎ 2 notes pending/)
+    expect(row?.text).toContain(NOTE_GLYPH)
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
 
-  test('the compact notes summary stays a bare ✎ at 10+ pending, where a digit would overflow 38 columns', async ($, on) => {
+  test('the compact notes summary stays a bare the note glyph at 10+ pending, where a digit would overflow 38 columns', async ($, on) => {
     // Live-measured (fix round 2): with nav never giving way (R30) the row's own floor is tight
-    // enough that `✎10` (2 digits) pushed drawnWidth to 40 before this fix: `send N` already
+    // enough that `the note glyph10` (2 digits) pushed drawnWidth to 40 before this fix: `send N` already
     // carries the exact count, so the summary doesn't need to repeat it.
     const files = Array.from({ length: 5 }, (_, i) => `f${i}.ts`)
     const pending = Array.from({ length: 10 }, (_, i) => ({
@@ -1858,7 +1859,7 @@ describe('diff header', () => {
     })
 
     const row = await ui.find({ key: ACTIONS_ROW_KEY })
-    expect(row?.text).not.toContain('✎10')
+    expect(row?.text).not.toContain(`${NOTE_GLYPH}10`)
     expect((await pillOf(ui, 'send'))?.t).toContain('➤ 10')
     expect(drawnWidth(row)).toBeLessThanOrEqual(38)
   })
@@ -1945,14 +1946,16 @@ describe('diff header', () => {
     expect(await iconColorOf('readme.md')).toBe('rainbow_indigo')
   })
 
-  test('the file heading carries a right-aligned "✎ note" chip, keyed to its own path', async ($, on) => {
+  test('the file heading carries a right-aligned "the note glyph note" chip, keyed to its own path', async ($, on) => {
     gitWorld(on, {}, null)
 
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiff($)
-    expect((await pillOf(ui, commentButtonKeyOf({ path: 'a.ts' })))?.t).toContain('✎ note')
+    expect((await pillOf(ui, commentButtonKeyOf({ path: 'a.ts' })))?.t).toContain(
+      iconText(NOTE_GLYPH, 'note'),
+    )
     expect(await ui.find({ text: /comment on this/ })).toBeUndefined()
   })
 })
@@ -2142,7 +2145,7 @@ describe('stage and revert a hunk', () => {
     ])
     // What the surface module drew: no square brackets, the labels in words.
     const text = (await ui.find({ in: PILLS_KEY, type: 'Box' }))?.text ?? ''
-    expect(text).toContain('✎ note')
+    expect(text).toContain(iconText(NOTE_GLYPH, 'note'))
     expect(text).toContain('✓ stage')
     expect(text).toContain('↺ revert')
     expect(text).not.toMatch(/[[\]]/)
@@ -2195,7 +2198,7 @@ describe('stage and revert a hunk', () => {
       (await ui.find({ in: PILLS_KEY, type: 'Text', text: '✓ stage' }))?.props.backgroundColor
     expect(await bgOf()).toBe('userMessageBackground')
 
-    // The pills run from the strip's left edge: ` ✎ note ` (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert `,
+    // The pills run from the strip's left edge: ` the note glyph note ` (8) ` ` ` ✓ stage ` (9) ` ` ` ↺ revert `,
     // so stage spans columns 9..17.
     await ui.pointer({ type: 'move', x: 12, y: 0, in: PILLS_KEY })
     expect(await bgOf()).toBe('selectionBg')
@@ -2558,7 +2561,7 @@ describe('the AbovePrompt status band', () => {
     await $.session.start(SESSION)
 
     const ui = await mountBand($)
-    expect(await ui.find({ text: /✎ 1 pending/ })).toBeDefined()
+    expect(await ui.find({ text: new RegExp(iconText(NOTE_GLYPH, '1 pending')) })).toBeDefined()
   })
 
   test('draws nothing while the diff pane is open and shown', async ($, on) => {
@@ -2588,7 +2591,7 @@ describe('the AbovePrompt status band', () => {
     expect(await ui.find({ text: /pending/ })).toBeUndefined()
   })
 
-  test('draws a coloured mark, the ✎ N pending summary in the suggestion colour, and open/send as pills, send primary', async ($, on) => {
+  test('draws a coloured mark, the the note glyph N pending summary in the suggestion colour, and open/send as pills, send primary', async ($, on) => {
     const pending = { id: 'c1', path: 'a.ts', text: 'fix this', status: 'pending', createdAt: 0 }
     gitWorld(on, { [commentsStoreKeyOf(REPO)]: [pending] }, null)
 
@@ -2597,7 +2600,10 @@ describe('the AbovePrompt status band', () => {
     const ui = await mountBand($)
     const mark = await ui.find({ type: 'Text', text: /^\u{f15c6}$/u })
     expect(mark?.props.color).toBe('claude')
-    const summary = await ui.find({ type: 'Text', text: /^ ✎ 1 pending$/ })
+    const summary = await ui.find({
+      type: 'Text',
+      text: new RegExp(`^ ${iconText(NOTE_GLYPH, '1 pending')}$`),
+    })
     expect(summary?.props.color).toBe('suggestion')
     expect((await pillOf(ui, 'band:open'))?.t).toContain('open')
     const send = await pillOf(ui, 'band:send')
@@ -2909,14 +2915,17 @@ describe('a note is a card (R38)', () => {
     expect(await ui.find({ text: /pending/ })).toBeDefined()
   })
 
-  test('the compose box is the same card in the accent: ╭─ ✎ comment for Claude, the Input, ⏎ add and cancel, ╰ ╯', async ($, on) => {
+  test('the compose box is the same card in the accent: ╭─ the note glyph comment for Claude, the Input, ⏎ add and cancel, ╰ ╯', async ($, on) => {
     gitWorld(on, {}, null)
     await $.session.start(SESSION)
     await $.command.run(ravenCommand('diff'))
     const ui = await mountDiff($)
 
     await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
-    const titleText = await ui.find({ type: 'Text', text: '✎ comment for Claude' })
+    const titleText = await ui.find({
+      type: 'Text',
+      text: iconText(NOTE_GLYPH, 'comment for Claude'),
+    })
     expect(titleText?.props.color).toBe('claude')
     expect(await ui.find({ type: 'Input', key: inputKeyOf({ path: 'a.ts' }) })).toBeDefined()
     // The Input's own submit label is the only `⏎ add` (no second hint text beside the cancel pill).

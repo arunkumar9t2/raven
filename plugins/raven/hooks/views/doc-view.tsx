@@ -322,7 +322,7 @@ export function createDocView(
    * A markdown file's body, per `docSectionsOf` section: its blocks, then its notes (the doc's
    * comments whose `section`/`sectionIndex` match this section: a comment with no `sectionIndex`
    * matches the first section with its heading), the compose box while composing, then an idle
-   * ` ✎ note ` pill, right-aligned. A comment matching no section (its heading/index both gone)
+   * ` <note glyph> note ` pill, right-aligned. A comment matching no section (its heading/index both gone)
    * draws at the end under a dim `Outdated` row instead of being dropped. Only comments carrying a
    * `section` ever draw here (the same discriminator `blocks.ts`'s orphan group uses), so a diff
    * comment (hunk- or file-level) on this same path, which carries none, stays out of the Doc pane

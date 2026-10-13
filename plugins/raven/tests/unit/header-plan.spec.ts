@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { ICON_GAP, iconText } from '../../hooks/ui/icon-text'
+import { ICON_GAP, iconText, NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { widthOf } from '../../hooks/ui/wrap'
 import {
   type HeaderPlanInput,
@@ -61,7 +61,7 @@ describe('headerPlanOf', () => {
     expect(headerPlanOf(input({ columns: 120 }))).toEqual({
       rows: 1,
       mapCells: 5,
-      notesText: iconText('✎', '2 notes pending'),
+      notesText: iconText(NOTE_GLYPH, '2 notes pending'),
       leftCells: 61 + widthOf(ICON_GAP),
     })
   })

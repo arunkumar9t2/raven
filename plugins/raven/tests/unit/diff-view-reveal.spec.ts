@@ -2,6 +2,7 @@ import { describe, expect, test } from 'bun:test'
 import type { Kit } from '../../hooks/core/view'
 import type { Run } from '../../hooks/git/load'
 import { createReview } from '../../hooks/review/review'
+import { NOTE_GLYPH } from '../../hooks/ui/icon-text'
 import { styleOf } from '../../hooks/ui/style'
 import { widthOf } from '../../hooks/ui/wrap'
 import { cancelKeyOf, commentButtonKeyOf, inputKeyOf } from '../../hooks/views/diff/anchor'
@@ -277,7 +278,7 @@ describe('file cards as drawn at a narrow pane', () => {
       const title = drawnOf(findByKey(tree, 'a.ts#title'))
       const label = drawnOf(findByKey(tree, 'a.ts#hunk-header:a.ts|@@ -1,2 +1,2 @@'))
       // (The path itself truncates by the engine at this width, so only the chips are asserted.)
-      expect(title).toContain('✎')
+      expect(title).toContain(NOTE_GLYPH)
       expect(title).not.toContain('note')
       expect(label).toContain('✓')
       expect(label).not.toContain('stage')

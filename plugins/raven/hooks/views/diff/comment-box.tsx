@@ -11,6 +11,7 @@ import { ageOf } from '../../ui/age'
 import { boxedCard, ruleRow } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
 import { RULE_START } from '../../ui/chrome'
+import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { pillRow } from '../../ui/strip'
 import {
   type Anchor,
@@ -62,7 +63,7 @@ export type CommentBoxProps = {
  * The compose state for an anchor being written to: a line picker (on a hunk, when `hasPicker`)
  * plus an Input+cancel pair. `blocksOf` emits this block only while the anchor is being composed
  * and only on a surface with `canType`, so this always runs with a real `Input` to draw; the
- * idle "✎ note" control is `noteChip`, drawn by the heading or the hunk's toolbar instead.
+ * idle "<note glyph> note" control is `noteChip`, drawn by the heading or the hunk's toolbar instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Input, Select, Text } = kit.ui
@@ -104,7 +105,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
     color: COLORS.accent,
     title: (
       <Text color={COLORS.accent} bold wrap="truncate-end">
-        ✎ comment for Claude
+        {iconText(NOTE_GLYPH, 'comment for Claude')}
       </Text>
     ),
     rows: composeInnerRowsOf(props.hasPicker),
@@ -180,14 +181,14 @@ export function note(
 }
 
 /**
- * The "✎ note" chip descriptor: the one place that builds it and its key, used by a file's
+ * The "<note glyph> note" chip descriptor: the one place that builds it and its key, used by a file's
  * heading and a hunk's toolbar alike. Never drawn for an anchor already being composed; its
  * caller omits this in that case, leaving room for the compose box below.
  */
 export function noteChip(anchor: Anchor, onStart: (anchor: Anchor) => void): Chip {
   return {
     key: commentButtonKeyOf(anchor),
-    icon: '✎',
+    icon: NOTE_GLYPH,
     label: 'note',
     onPress: () => onStart(anchor),
   }
@@ -198,7 +199,7 @@ export type HunkToolbarProps = {
   /** The file's path: prose files show no function context. */
   path: string
   hunk: Hunk
-  /** Whether the "✎ note" chip draws: the surface can type and this hunk isn't being composed. */
+  /** Whether the "<note glyph> note" chip draws: the surface can type and this hunk isn't being composed. */
   canNote: boolean
   /** A turn's diff is read-only: the row draws the header label alone, no chips. */
   isReadOnly: boolean
@@ -222,7 +223,7 @@ export const HEADER_MIN = 12
 const LABEL_CHIP_GAP = 2
 
 /**
- * A hunk's label row, `ƒ name  L1–7   ✎ note  ✓ stage  ↺ revert`: a plain row, no rule. The
+ * A hunk's label row, `ƒ name  L1–7   <note glyph> note  ✓ stage  ↺ revert`: a plain row, no rule. The
  * chips sit two columns after the label (never at the pane's edge); unless the hunk is
  * read-only they are the note (when it can draw), stage and revert pills. Staging is a no-op once
  * staged (the pill reads "staged", kind on); revert confirms on a second press, keeping its words
