@@ -22,8 +22,12 @@ export type Align = 'left' | 'center' | 'right'
 /** A parsed GFM table: raw cell markdown, ragged rows already fitted to the header's width. */
 export type TableData = { header: string[]; align: Align[]; rows: string[][] }
 
+/** `grid`: the full boxed table. `rule`: bold header, one `─` rule, columns two spaces apart. */
+export type TableMode = 'rule' | 'grid'
+
 export type GridLayout = {
   kind: 'grid'
+  mode: TableMode
   widths: number[]
   align: Align[]
   header: CellLine[][]
@@ -40,6 +44,9 @@ export type DrawnLine = Piece[]
 
 const MIN_COLUMN = 6
 const WORD_CAP = 20
+
+/** Cells between columns of a `rule` table. */
+const COLUMN_GAP = 2
 
 const isWordChar = (char: string | undefined) => char !== undefined && /[\p{L}\p{N}]/u.test(char)
 
@@ -158,12 +165,17 @@ function distribute(min: number[], natural: number[], budget: number): number[] 
 /**
  * Fits `table` to `width` cells. Natural widths when the whole table fits; else columns shrink
  * (never below `min(natural, max(6, longest word capped at 20))`) and cells wrap; when even those
- * minimums overflow, a records layout.
+ * minimums overflow, a records layout. `mode` picks the chrome the widths leave room for: a grid's
+ * borders (3n + 1) or a rule table's column gaps (2 per gap).
  */
-export function layoutTable(table: TableData, width: number): TableLayout {
+export function layoutTable(
+  table: TableData,
+  width: number,
+  mode: TableMode = 'grid',
+): TableLayout {
   const count = table.header.length
   const all = [table.header, ...table.rows].map(row => row.map(cell => spansOf(cell)))
-  const overhead = 3 * count + 1
+  const overhead = mode === 'grid' ? 3 * count + 1 : COLUMN_GAP * Math.max(0, count - 1)
 
   const natural = Array.from({ length: count }, (_, j) =>
     Math.max(
@@ -211,6 +223,7 @@ export function layoutTable(table: TableData, width: number): TableLayout {
   const fitted = widths
   return {
     kind: 'grid',
+    mode,
     widths: fitted,
     align: table.align,
     header: headerCells.map((cell, j) => wrapSpans(cell, fitted[j] as number)),
@@ -232,8 +245,19 @@ function aligned(line: CellLine, width: number, align: Align, bold: boolean): Pi
   return [pad(left), ...pieces, pad(slack - left)].filter(piece => piece.text !== '')
 }
 
-/** The drawn lines of a layout: borders, padding and styled cell text, in order. */
-export function drawnRowsOf(layout: TableLayout): DrawnLine[] {
+const CORNERS = {
+  sharp: { tl: '┌', tr: '┐', bl: '└', br: '┘' },
+  rounded: { tl: '╭', tr: '╮', bl: '╰', br: '╯' },
+} as const
+
+/**
+ * The drawn lines of a layout: borders, padding and styled cell text, in order. `corners` rounds a
+ * grid's four outer corners (`style.tableCorners`); a `rule` layout has none.
+ */
+export function drawnRowsOf(
+  layout: TableLayout,
+  corners: 'sharp' | 'rounded' = 'sharp',
+): DrawnLine[] {
   if (layout.kind === 'records') {
     return layout.groups.flatMap((group, index) => [
       ...(index > 0 ? [[] as DrawnLine] : []),
@@ -241,6 +265,35 @@ export function drawnRowsOf(layout: TableLayout): DrawnLine[] {
     ])
   }
   const border = (text: string): Piece => ({ text, style: 'border' })
+  if (layout.mode === 'rule') {
+    const total =
+      layout.widths.reduce((sum, w) => sum + w, 0) +
+      COLUMN_GAP * Math.max(0, layout.widths.length - 1)
+    const ruleBand = (cells: CellLine[][], isHeader: boolean): DrawnLine[] => {
+      const height = Math.max(1, ...cells.map(cell => cell.length))
+      return Array.from({ length: height }, (_, k) => {
+        const line: DrawnLine = []
+        cells.forEach((cell, j) => {
+          if (j > 0) line.push(pad(COLUMN_GAP))
+          line.push(
+            ...aligned(
+              cell[k] ?? [],
+              layout.widths[j] as number,
+              layout.align[j] ?? 'left',
+              isHeader,
+            ),
+          )
+        })
+        return line
+      })
+    }
+    return [
+      ...ruleBand(layout.header, true),
+      [border('─'.repeat(total))],
+      ...layout.rows.flatMap(row => ruleBand(row, false)),
+    ]
+  }
+  const c = CORNERS[corners]
   const rule = (left: string, mid: string, right: string): DrawnLine => [
     border(left + layout.widths.map(w => '─'.repeat(w + 2)).join(mid) + right),
   ]
@@ -260,9 +313,9 @@ export function drawnRowsOf(layout: TableLayout): DrawnLine[] {
       return line
     })
   }
-  const lines: DrawnLine[] = [rule('┌', '┬', '┐'), ...band(layout.header, true)]
+  const lines: DrawnLine[] = [rule(c.tl, '┬', c.tr), ...band(layout.header, true)]
   for (const row of layout.rows) lines.push(rule('├', '┼', '┤'), ...band(row, false))
   // With no body the header's underline is still the divider; the bottom closes the box.
-  lines.push(rule('└', '┴', '┘'))
+  lines.push(rule(c.bl, '┴', c.br))
   return lines
 }
