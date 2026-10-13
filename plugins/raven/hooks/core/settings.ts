@@ -61,7 +61,7 @@ const THEME_KEY = /^[A-Za-z][A-Za-z0-9_]*$/
 const isColor = (text: string): boolean => {
   if (HEX_COLOR.test(text) || THEME_KEY.test(text)) return true
   const rgb = RGB_COLOR.exec(text)
-  return rgb !== null && rgb.slice(1).every(part => Number(part) <= 255)
+  return rgb?.slice(1).every(part => Number(part) <= 255) ?? false
 }
 
 /** A hex, `rgb(r, g, b)` or theme-key colour, trimmed; anything else is `''` (the engine's own). */

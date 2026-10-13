@@ -27,7 +27,7 @@ import { type WholeSide, wholeSideOf } from './whole-file'
 
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
-/** The block key of a framed card's closing row (`└────┘` / `╰────╯`); frame styles only. */
+/** The block key of a framed card's closing row (`└────┘` / `╰────╯`, drawn by the card kit); frame styles only. */
 export const CLOSE_KEY = 'close'
 /** The blank row under a file's title. */
 export const TITLE_GAP_KEY = 'title-gap'

@@ -247,6 +247,18 @@ describe('inline line threads (R39)', () => {
   })
 })
 
+describe('streamOf card stamps', () => {
+  test('every card block carries its exact path, even one containing #', () => {
+    const hashed: ChangedFile = { ...file, path: 'dir#1/a.txt' }
+    const { blocks } = streamOf([file, hashed], () => [hunkA], [], null)
+    const mine = blocks.filter(block => block.key.startsWith('dir#1/a.txt#'))
+    expect(mine.length).toBeGreaterThan(0)
+    expect(mine.filter(block => block.card !== 'dir#1/a.txt').map(block => block.key)).toEqual([
+      'dir#1/a.txt#sep',
+    ])
+  })
+})
+
 describe('blocksOf', () => {
   test('a file with no hunks yet is title, status row; idle draws no comment box', () => {
     const blocks = blocksOf(file, undefined, [], null)

@@ -1234,6 +1234,17 @@ describe('review stream', () => {
     expect(await ui.find({ key: 'b.ts#title' })).toBeDefined()
   })
 
+  test('a file whose path contains # still draws its card, with the rail on its body rows', async ($, on) => {
+    gitWorld(on, {}, null, ['a#1.ts', 'b.ts'])
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+
+    const ui = await mountDiff($)
+    expect((await ui.find({ key: 'a#1.ts#title' }))?.text).toContain('a#1.ts')
+    expect((await ui.find({ key: 'a#1.ts#status' }))?.text.startsWith('▌')).toBe(true)
+    expect((await ui.find({ key: 'b.ts#sep' }))?.text.trim()).toBe('')
+  })
+
   test('a file-list row carries a status dot and the stat bar', async ($, on) => {
     gitWorld(on, {}, null, ['a.ts'])
     await $.session.start(SESSION)
@@ -1434,7 +1445,7 @@ describe('review stream', () => {
       surface: 'terminal',
       component: 'Pane',
       // kit.rows = 7; minus 2 header + 2 list + 1 rule leaves 2 body rows: less than either
-      // file's section (title + status, unread with no hunks), so scrolling can reach past
+      // file's section (title, blank row and status, unread with no hunks), so scrolling can reach past
       // a.ts's into b.ts's title.
       props: { ...PANE_PROPS, scroll: { offset: 0, bodyRows: 7 } },
       requestId: DIFF_PANE.id,
@@ -2913,7 +2924,7 @@ describe('a note is a card (R38)', () => {
     }
   })
 
-  test("a note's top border reads status · line · age, a dim ` · ` between every part", async ($, on) => {
+  test("a note's header row reads status · line · age, a dim ` · ` between every part", async ($, on) => {
     gitWorld(
       on,
       {

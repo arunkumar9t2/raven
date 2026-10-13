@@ -69,6 +69,8 @@ import { fileTagOf, type WholeSource, wholePiecesOf, wholeSourceOf } from './dif
 import { iconOf, statusMarkOf } from './icons'
 
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
+/** The key suffix of the gap row `streamOf` puts between two cards (it carries no `card`). */
+const SEP_SUFFIX = '#sep'
 const WHEEL_ROWS = 3
 const EMPTY_STAGED: ReadonlySet<string> = new Set()
 const EMPTY_GONE_PATHS: ReadonlySet<string> = new Set()
@@ -631,7 +633,7 @@ export function createDiffView(
 
   /**
    * One fixed row's element, by its payload kind: a `gap` draws one blank row, between files.
-   * `contentWidth` is the row's room beside the file's left rail (`kit.columns - 2`), for whatever
+   * `contentWidth` is the row's room beside the file's left rail (`contentWidthOf`), for whatever
    * here measures text instead of `kit.columns`; the rail itself is drawn by the caller,
    * `placedRowOf`.
    */
@@ -794,7 +796,8 @@ export function createDiffView(
     const { style } = kit
     const { block } = placed
     if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
-    const path = block.key.slice(0, block.key.indexOf('#'))
+    const path =
+      block.card ?? (block.key.endsWith(SEP_SUFFIX) ? block.key.slice(0, -SEP_SUFFIX.length) : '')
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
 
@@ -878,7 +881,7 @@ export function createDiffView(
     filesByPath: ReadonlyMap<string, ChangedFile>,
   ): RenderElement {
     const { Box } = kit.ui
-    const path = block.key.slice(0, block.key.indexOf('#'))
+    const path = block.card ?? ''
     const file = filesByPath.get(path)
     const { item } = block
     if (!file || item.kind !== 'title') return <Box key={`${path}#pinned`} />
