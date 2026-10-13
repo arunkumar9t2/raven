@@ -10,18 +10,16 @@ import { DOC_PANE } from '../names'
 import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
-import { closeRow, ruleRow, stackOf } from '../ui/card'
-import { chipsFit } from '../ui/chips'
-import { BORDER_CELLS, RULE_START, ruleRoomFor } from '../ui/chrome'
+import { fill } from '../ui/card'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP, iconText } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
-import type { Style } from '../ui/style'
 import { table } from '../ui/table'
 import { widthOf } from '../ui/wrap'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
-import { addressedRow, commentBox, note, noteChip, outdatedTitle } from './diff/comment-box'
-import { NOTE_MAX_LINES, noteLinesOf } from './diff/note-layout'
+import { addressedRow, commentBox, note, noteChip, outdatedHeading } from './diff/comment-box'
+import { noteLinesOf } from './diff/note-layout'
+import { HEADING_GAP, headingChipModeOf, headingLookOf, headingMarkCellsOf } from './doc-heading'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { TITLE_EDGE_CELLS, titlePathOf } from './doc-path'
 import { type DocSection, docSectionsOf } from './doc-sections'
@@ -64,17 +62,17 @@ export type DocView = View & {
 
 const HISTORY_LIMIT = 10
 
-/** The least a section's `§ heading` title keeps before its pill shrinks to an icon. */
-const SECTION_TITLE_MIN = 3
-/** The calm colour of the card border and its `├─` separators. */
-const BORDER_COLOR = COLORS.subtle
+/** The calm colour of the dim rule under an H1/H2 heading. */
+const RULE_COLOR = COLORS.subtle
+/** Blank rows between the title row and a non-markdown body. */
+const BODY_TOP = 1
 /** A note doc's title icon (a document), where a file's is its type icon. */
 const NOTE_ICON = '\u{f0219}' // nf-md-file_document
 
 const HEADING_LINE = /^ {0,3}#{1,6}\s/
 
 /**
- * A section's text without its own heading line: the `├─ § heading` separator names the section,
+ * A section's text without its own heading line: its heading is drawn by the section's own heading row,
  * so the Markdown must not draw it a second time.
  */
 function withoutHeading(text: string): string {
@@ -98,38 +96,6 @@ export const labelOf = (path: string, cwd: string) =>
  * sections sharing a heading never share controls. `hunk` only keys the controls; the comment
  * itself stores `section` (the heading) and `sectionIndex` (the index), never this string. */
 const sectionAnchorOf = (path: string, index: number): Anchor => ({ path, hunk: `§${index}` })
-
-/**
- * An upper bound on the rows `text` takes at `width` cells: each source line wraps at most
- * `ceil(cells / width)` times, plus slack for the gaps a renderer adds between blocks. A rail drawn
- * this tall and clipped to the real height never leaves a gap.
- */
-export function rowsBoundOf(text: string, width: number): number {
-  const rows = text
-    .split('\n')
-    .reduce((sum, line) => sum + Math.max(1, Math.ceil(widthOf(line) / Math.max(1, width))), 0)
-  return Math.ceil(rows * 1.5) + 2
-}
-
-/**
- * `children` behind the card's `│ ` border: the rail is one absolute column clipped to the box's
- * own height, `rows` tall at most (an upper bound, see `rowsBoundOf`); so it spans the body
- * however long, with no fixed cap.
- */
-/** `kit` narrowed by the card border's cells. */
-const innerOf = (kit: Kit): Kit => ({ ...kit, columns: Math.max(1, kit.columns - BORDER_CELLS) })
-
-function railed(kit: Kit, key: string, rows: number, children: RenderElement): RenderElement {
-  const { Box, Text } = kit.ui
-  return (
-    <Box key={key} flexDirection="column" paddingLeft={BORDER_CELLS}>
-      <Box position="absolute" top={0} bottom={0} left={0} width={1} overflow="hidden">
-        <Text color={BORDER_COLOR}>{stackOf('│', rows)}</Text>
-      </Box>
-      {children}
-    </Box>
-  )
-}
 
 /**
  * The title row: the file-type icon (a document icon for a note), a gap, the bold name, and (for a
@@ -280,95 +246,92 @@ export function createDocView(
     host.redraw()
   }
 
-  /** An upper bound on the rows `chunks` draw at `width` (tables at their laid-out height). */
-  function chunksRowsBoundOf(chunks: readonly Chunk[], width: number, style: Style): number {
-    return chunks.reduce(
-      (sum, chunk) =>
-        sum +
-        chunk.blocks.reduce(
-          (inner, block) =>
-            inner +
-            2 +
-            (block.kind === 'table'
-              ? tables.rowsOf(block, width - 1, style).length
-              : rowsBoundOf(block.text, width)),
-          0,
-        ),
-      0,
+  /** One block as a drawn element: prose through `Markdown` (a file's with its pressable links,
+   * following one to the doc it resolves to), code through `Code`, a table through Raven's own
+   * grid; null for an empty fence (the engine may refuse the whole drawing on an empty `Code`). */
+  function blockElementOf(
+    kit: Kit,
+    chunk: Chunk,
+    block: DocBlock,
+    doc: Doc,
+    key: string,
+  ): RenderElement | null {
+    const { Code, Markdown } = kit.ui
+    // R36: the engine sizes a table to the terminal, not the pane, so Raven draws it, fitted to
+    // the pane's width. One cell short of it, so a full-width line never loses its last cell.
+    if (block.kind === 'table') {
+      return table(kit, { key, rows: tables.rowsOf(block, kit.columns - 1, kit.style) })
+    }
+    if (block.kind === 'code') {
+      if (block.text === '') return null
+      return <Code key={key} source={block.text} language={block.language} />
+    }
+    return doc.kind === 'file' ? (
+      <Markdown
+        key={key}
+        text={block.text}
+        pressableLinks={chunk.links}
+        onLinkPress={link => {
+          const target = resolveDocLink(doc.path, link.href)
+          if (target) void show({ kind: 'file', path: target })
+        }}
+      />
+    ) : (
+      <Markdown key={key} text={block.text} />
     )
   }
 
-  /** A chunk's blocks as drawn elements: prose through `Markdown` (a file's with its pressable
-   * links, following one to the doc it resolves to), code through `Code`. */
+  /**
+   * The chunks' blocks in order, each in its own wrapper `<keyPrefix>b:<n>` with one blank row
+   * above it except the first (`marginTop={1}`): Markdown, code and tables are separate elements,
+   * so this is what puts a blank row between them.
+   */
   function chunkElementsOf(
     kit: Kit,
     chunks: readonly Chunk[],
     doc: Doc,
     keyPrefix: string,
-  ): (RenderElement | null)[] {
-    const { Code, Markdown } = kit.ui
-    return chunks.flatMap((chunk, i) =>
-      chunk.blocks.map((block, j) => {
-        // R36: the engine sizes a table to the terminal, not the pane, so Raven draws it, fitted
-        // to the pane's width (the doc body adds no indent of its own).
-        if (block.kind === 'table') {
-          return table(kit, {
-            key: `${keyPrefix}table:${i}:${j}`,
-            // One cell short of the pane, so a full-width line never loses its last cell.
-            rows: tables.rowsOf(block, kit.columns - 1, kit.style),
-            // A blank row either side, like a Markdown block's own gap: none at the very start
-            // or end of the section.
-            gapTop: i > 0 || j > 0,
-            gapBottom: i < chunks.length - 1 || j < chunk.blocks.length - 1,
-          })
-        }
-        if (block.kind === 'code') {
-          // R2: an empty fence has nothing to draw; the engine may refuse the whole drawing
-          // if `Code` gets an empty source.
-          if (block.text === '') return null
-          return (
-            <Code
-              key={`${keyPrefix}code:${i}:${j}`}
-              source={block.text}
-              language={block.language}
-            />
-          )
-        }
-        return doc.kind === 'file' ? (
-          <Markdown
-            key={`${keyPrefix}md:${i}:${j}`}
-            text={block.text}
-            pressableLinks={chunk.links}
-            onLinkPress={link => {
-              const target = resolveDocLink(doc.path, link.href)
-              if (target) void show({ kind: 'file', path: target })
-            }}
-          />
-        ) : (
-          <Markdown key={`${keyPrefix}md:${i}:${j}`} text={block.text} />
+  ): RenderElement[] {
+    const { Box } = kit.ui
+    const out: RenderElement[] = []
+    chunks.forEach((chunk, i) => {
+      chunk.blocks.forEach((block, j) => {
+        const element = blockElementOf(kit, chunk, block, doc, `${keyPrefix}${i}:${j}`)
+        if (element === null) return
+        out.push(
+          <Box
+            key={`${keyPrefix}b:${out.length}`}
+            flexDirection="column"
+            marginTop={out.length > 0 ? 1 : 0}
+          >
+            {element}
+          </Box>,
         )
-      }),
-    )
+      })
+    })
+    return out
   }
 
   /**
-   * A markdown file's body, per `docSectionsOf` section: its blocks, then its notes (the doc's
-   * comments whose `section`/`sectionIndex` match this section: a comment with no `sectionIndex`
-   * matches the first section with its heading), the compose box while composing, then an idle
-   * ` <note glyph> note ` pill, right-aligned. A comment matching no section (its heading/index both gone)
-   * draws at the end under a dim `Outdated` row instead of being dropped. Only comments carrying a
-   * `section` ever draw here (the same discriminator `blocks.ts`'s orphan group uses), so a diff
-   * comment (hunk- or file-level) on this same path, which carries none, stays out of the Doc pane
-   * entirely and is left for the diff stream alone.
+   * A markdown file's body, per `docSectionsOf` section: a heading (the style's mark and accent
+   * for H1/H2, a dim rule under it in the styles without a bar, bold only for H3+), the note chip
+   * inline two cells after the heading text, a blank row above and below it, then the section's
+   * blocks one blank row apart, then its notes (the doc's comments whose `section`/`sectionIndex`
+   * match this section: a comment with no `sectionIndex` matches the first section with its
+   * heading) and the compose box while composing. Addressed notes collapse to one dim
+   * "✓ N addressed" row. A comment matching no section (its heading/index both gone) draws at the
+   * end under a dim `Outdated` row instead of being dropped. Only comments carrying a `section`
+   * ever draw here (the same discriminator `blocks.ts`'s orphan group uses), so a diff comment
+   * (hunk- or file-level) on this same path, which carries none, stays out of the Doc pane
+   * entirely and is left for the diff stream alone. There is no frame or rail: the pane's whole
+   * width is the body's.
    */
   function sectionsBody(
-    outer: Kit,
+    kit: Kit,
     shown: Shown,
     doc: Extract<Doc, { kind: 'file' }>,
     text: string,
   ): RenderElement {
-    // Everything inside lays out at the width the card's `│ ` border leaves.
-    const kit = innerOf(outer)
     const { Box, Text } = kit.ui
     const sections = sectionsOf(shown, text)
     const comments = review
@@ -407,64 +370,89 @@ export function createDocView(
       // (`addressedRow`), so a section's notes read the same way wherever they draw.
       const { addressed, visible } = splitAddressed(notes)
 
-      const sectionRows =
-        1 +
-        chunksRowsBoundOf(sv.chunks, kit.columns, kit.style) +
-        (addressed.length > 0 ? 1 : 0) +
-        visible.length * (NOTE_MAX_LINES + 3) +
-        (isComposing ? NOTE_MAX_LINES + 4 : 0)
+      const look = headingLookOf(kit.style, sv.section.level)
+      const markCells = headingMarkCellsOf(look)
+      const mode = chip
+        ? headingChipModeOf(kit.columns, markCells, widthOf(heading), chip)
+        : 'words'
+      const blocks = chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)
+      const hasNotes = addressed.length > 0 || visible.length > 0 || isComposing
+      const hasBody = blocks.length > 0 || hasNotes
 
-      return railed(
-        outer,
-        `section:${index}`,
-        sectionRows,
-        <Box flexDirection="column">
-          <Box key={`section-note:${anchorKeyOf(anchor)}`}>
-            {ruleRow(kit, {
-              color: BORDER_COLOR,
-              start: RULE_START.branch,
-              left: (
-                <Text wrap="truncate-end">
-                  <Text color={BORDER_COLOR}>§ </Text>
-                  <Text bold>{heading}</Text>
-                </Text>
-              ),
-              right: chip
-                ? pillRow(
-                    kit,
-                    [chip],
-                    chipsFit([chip], ruleRoomFor(kit.columns, SECTION_TITLE_MIN)),
-                    `${anchorKeyOf(anchor)}:note`,
-                  )
-                : undefined,
-            })}
+      return (
+        <Box key={`section:${index}`} flexDirection="column">
+          <Box
+            key={`section-head:${index}`}
+            flexDirection="column"
+            marginTop={1}
+            marginBottom={hasBody ? 1 : 0}
+          >
+            <Box
+              key={`section-note:${anchorKeyOf(anchor)}`}
+              flexDirection="row"
+              overflow="hidden"
+              flexWrap="nowrap"
+              paddingRight={TITLE_EDGE_CELLS}
+            >
+              <Box flexShrink={1} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+                {look.mark ? <Text color={COLORS.accent}>{`${look.mark} `}</Text> : null}
+                <Box flexShrink={1} overflow="hidden">
+                  <Text
+                    wrap="truncate-end"
+                    bold
+                    dimColor={look.dim}
+                    color={look.accent ? COLORS.accent : undefined}
+                  >
+                    {heading}
+                  </Text>
+                </Box>
+              </Box>
+              {chip ? (
+                <Box flexShrink={0} marginLeft={HEADING_GAP}>
+                  {pillRow(kit, [chip], mode, `${anchorKeyOf(anchor)}:note`)}
+                </Box>
+              ) : null}
+            </Box>
+            {look.rule ? (
+              <Box flexDirection="row" height={1} overflow="hidden">
+                {fill(kit, RULE_COLOR)}
+              </Box>
+            ) : null}
           </Box>
-          {chunkElementsOf(kit, sv.chunks, doc, `s${index}:`)}
-          {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
-          {visible.map(comment =>
-            note(
-              kit,
-              comment,
-              noteLinesOf(comment, Math.max(1, kit.columns - BORDER_CELLS)),
-              now(),
-              id => review.remove(id),
-              review.resend,
-            ),
-          )}
-          {isComposing
-            ? commentBox(kit, {
-                anchor,
-                inputKey: inputKeyOf(anchor),
-                hasPicker: false,
-                inputRows: 2,
-                line: null,
-                columns: kit.columns,
-                onLineChange: () => {},
-                onSubmit: submitted => submitComment(doc.path, heading, index, submitted),
-                onCancel: () => stopComposing(anchor),
-              })
-            : null}
-        </Box>,
+          {blocks}
+          {hasNotes ? (
+            <Box
+              key={`section-notes:${index}`}
+              flexDirection="column"
+              marginTop={blocks.length > 0 ? 1 : 0}
+            >
+              {addressed.length > 0 ? addressedRow(kit, anchor, addressed.length) : null}
+              {visible.map(comment =>
+                note(
+                  kit,
+                  comment,
+                  noteLinesOf(comment, kit.columns),
+                  now(),
+                  id => review.remove(id),
+                  review.resend,
+                ),
+              )}
+              {isComposing
+                ? commentBox(kit, {
+                    anchor,
+                    inputKey: inputKeyOf(anchor),
+                    hasPicker: false,
+                    inputRows: 2,
+                    line: null,
+                    columns: kit.columns,
+                    onLineChange: () => {},
+                    onSubmit: submitted => submitComment(doc.path, heading, index, submitted),
+                    onCancel: () => stopComposing(anchor),
+                  })
+                : null}
+            </Box>
+          ) : null}
+        </Box>
       )
     })
 
@@ -486,8 +474,8 @@ export function createDocView(
       <Box flexDirection="column">
         {sectionElements}
         {outdated.length > 0 ? (
-          <Box flexDirection="column">
-            {outdatedTitle(kit)}
+          <Box flexDirection="column" marginTop={1}>
+            {outdatedHeading(kit)}
             {[...outdatedGroups.entries()].map(([key, group]) => {
               const { addressed, visible } = splitAddressed(group)
               const anchor: Anchor = { path: doc.path, hunk: `§outdated:${key}` }
@@ -498,7 +486,7 @@ export function createDocView(
                     note(
                       kit,
                       comment,
-                      noteLinesOf(comment, Math.max(1, kit.columns - BORDER_CELLS)),
+                      noteLinesOf(comment, kit.columns),
                       now(),
                       id => review.remove(id),
                       review.resend,
@@ -518,28 +506,30 @@ export function createDocView(
     if (shown.doc.kind === 'file' && isImage(shown.doc.path)) {
       const path = shown.doc.path
       if (!kit.capabilities.canShowImage || !isPng(path)) {
-        return railed(kit, 'doc-body', 2, <Text dimColor>{path}</Text>)
+        return (
+          <Box key="doc-body" flexDirection="column" marginTop={BODY_TOP}>
+            <Text dimColor>{path}</Text>
+          </Box>
+        )
       }
-      const columns = Math.max(1, Math.min(innerOf(kit).columns, 60))
+      const columns = Math.max(1, Math.min(kit.columns, 60))
       const rows = Math.max(1, Math.round(columns / 2))
-      return railed(
-        kit,
-        'doc-body',
-        rows + 1,
-        <Image
-          source={{ file: path, format: 'png' }}
-          columns={columns}
-          rows={rows}
-          alt={baseName(path)}
-        />,
+      return (
+        <Box key="doc-body" flexDirection="column" marginTop={BODY_TOP}>
+          <Image
+            source={{ file: path, format: 'png' }}
+            columns={columns}
+            rows={rows}
+            alt={baseName(path)}
+          />
+        </Box>
       )
     }
     if (shown.text === null) {
-      return railed(
-        kit,
-        'doc-body',
-        3,
-        <Text color={COLORS.error}>Could not read: {shown.error}</Text>,
+      return (
+        <Box key="doc-body" flexDirection="column" marginTop={BODY_TOP}>
+          <Text color={COLORS.error}>Could not read: {shown.error}</Text>
+        </Box>
       )
     }
     // Commenting applies only to a file doc: a comment anchors to `doc.path`, which an inline
@@ -547,26 +537,20 @@ export function createDocView(
     if (shown.doc.kind === 'file' && isMarkdown(shown.doc.path)) {
       return sectionsBody(kit, shown, shown.doc, shown.text)
     }
-    const inner = innerOf(kit)
     if (shown.doc.kind === 'note') {
-      const chunks = chunksOf(shown, shown.text)
-      return railed(
-        kit,
-        'doc-body',
-        chunksRowsBoundOf(chunks, inner.columns, inner.style),
-        <Box flexDirection="column">{chunkElementsOf(inner, chunks, shown.doc, '')}</Box>,
+      return (
+        <Box key="doc-body" flexDirection="column" marginTop={BODY_TOP}>
+          {chunkElementsOf(kit, chunksOf(shown, shown.text), shown.doc, '')}
+        </Box>
       )
     }
     const isCut = shown.text.length > ELEMENT_TEXT_LIMIT
     const source = shown.text.slice(0, ELEMENT_TEXT_LIMIT)
-    return railed(
-      kit,
-      'doc-body',
-      rowsBoundOf(source, inner.columns) + 1,
-      <Box flexDirection="column">
+    return (
+      <Box key="doc-body" flexDirection="column" marginTop={BODY_TOP}>
         <Code source={source} path={shown.doc.path} startLine={1} />
         {isCut ? <Text dimColor>… the rest of the file is not shown</Text> : null}
-      </Box>,
+      </Box>
     )
   }
 
@@ -613,7 +597,6 @@ export function createDocView(
         <Box key="doc-card" flexDirection="column">
           {body(kit, shown)}
         </Box>
-        <Box key="doc-close">{closeRow(kit, BORDER_COLOR)}</Box>
       </Box>
     )
   }

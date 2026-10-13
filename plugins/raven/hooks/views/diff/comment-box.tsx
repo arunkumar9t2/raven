@@ -8,9 +8,9 @@ import type { Kit } from '../../core/view'
 import type { Hunk } from '../../git/hunks'
 import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../../review/comments'
 import { ageOf } from '../../ui/age'
-import { boxedCard, noteCard, ruleRow } from '../../ui/card'
+import { boxedCard, noteCard } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
-import { BOXED_CELLS, RULE_START } from '../../ui/chrome'
+import { BOXED_CELLS } from '../../ui/chrome'
 import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { pillRow } from '../../ui/strip'
 import {
@@ -311,22 +311,7 @@ export function addressedRow(kit: Kit, anchor: Anchor, count: number): RenderEle
   )
 }
 
-/** A group's separator rule, `├─ title ────`, in the calm border colour. */
-function groupRule(kit: Kit, title: string): RenderElement {
-  const { Text } = kit.ui
-  return ruleRow(kit, {
-    color: COLORS.subtle,
-    start: RULE_START.branch,
-    left: <Text dimColor>{title}</Text>,
-  })
-}
-
-/** The rule above the outdated-comments group (both panes). */
-export function outdatedTitle(kit: Kit): RenderElement {
-  return groupRule(kit, 'Outdated')
-}
-
-/** The plain dim heading above the diff's outdated-comments group (the Doc pane keeps `outdatedTitle`'s rule until Part C). */
+/** The plain dim heading above the diff's outdated-comments group (both panes). */
 export function outdatedHeading(kit: Kit): RenderElement {
   const { Text } = kit.ui
   return <Text dimColor>Outdated</Text>

@@ -447,26 +447,33 @@ describe('options: watched doc paths, defaults', () => {
     expect(title).not.toContain('/')
   })
 
-  test('the doc body is an open card: a ╭─ title, a │ border column, a ╰ close, the heading drawn once', async ($, on) => {
-    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n\n## Goals\n\n- a\n' })
-
-    await $.session.start(SESSION)
-    await $.tool.call(editOf(DOC_PATH))
-    const ui = await $.ui.mount({
+  const mountDoc = ($: Engine) =>
+    $.ui.mount({
       plugin: NAME,
       surface: 'terminal',
       component: 'Pane',
       props: { ...PANE_PROPS, title: 'Doc' },
       requestId: DOC_PANE.id,
     })
-    expect((await ui.find({ key: 'doc-title' }))?.text).toMatch(/x\.md/)
-    expect((await ui.find({ key: 'doc-close' }))?.text).toMatch(/^╰/)
-    const border = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('│\n│'))
-    expect(border?.props.color).toBe('subtle')
-    // Each section opens with `├─ § heading`, pill at the right; the Markdown draws no second heading.
-    expect(
-      (await ui.find({ key: `section-note:${anchorKeyOf({ path: DOC_PATH, hunk: '§1' })}` }))?.text,
-    ).toMatch(/^├─ § Goals/)
+
+  test('the doc has no frame: a bar before H1/H2 headings, none before H3, each heading drawn once', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n\n## Goals\n\n- a\n\n### Detail\n\nmore\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await mountDoc($)
+    expect(await ui.find({ key: 'doc-close' })).toBeUndefined()
+    const texts = (await ui.findAll({ type: 'Text' })).map(each => each.text)
+    expect(texts.find(text => text.startsWith('│\n│'))).toBeUndefined()
+    // Under the default bar style nothing is framed at all.
+    expect(texts.filter(text => /[│┌└├╭╰]/.test(text))).toEqual([])
+    const headingOf = async (index: number) =>
+      (await ui.find({ key: `section-note:${anchorKeyOf({ path: DOC_PATH, hunk: `§${index}` })}` }))
+        ?.text
+    expect(await headingOf(0)).toMatch(/^▌ Plan/)
+    expect(await headingOf(1)).toMatch(/^▌ Goals/)
+    expect(await headingOf(2)).toMatch(/^Detail/)
+    expect(await headingOf(1)).not.toMatch(/§|├─/)
     const markdown = (await ui.findAll({ type: 'Markdown' })).map(each => String(each.props.text))
     expect(markdown.some(text => /#/.test(text))).toBe(false)
     expect((await pillOf(ui, commentButtonKeyOf({ path: DOC_PATH, hunk: '§1' })))?.t).toContain(
@@ -474,23 +481,72 @@ describe('options: watched doc paths, defaults', () => {
     )
   })
 
-  test('the card border spans a long doc to its last row (no fixed cap)', async ($, on) => {
+  test('a long doc draws every block and no rail column', async ($, on) => {
     const long = `# Long\n\n${Array.from({ length: 700 }, (_, i) => `- item ${i}`).join('\n')}\n`
     openWorld(on, { [DOC_PATH]: long })
 
     await $.session.start(SESSION)
     await $.tool.call(editOf(DOC_PATH))
-    const ui = await $.ui.mount({
-      plugin: NAME,
-      surface: 'terminal',
-      component: 'Pane',
-      props: { ...PANE_PROPS, title: 'Doc' },
-      requestId: DOC_PANE.id,
-    })
-    const rail = (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('│\n│'))
-    // The rail is at least as tall as the 700 list rows the section draws.
-    expect(rail?.text.split('\n').length).toBeGreaterThanOrEqual(700)
+    const ui = await mountDoc($)
+    expect(
+      (await ui.findAll({ type: 'Text' })).find(each => each.text.startsWith('│\n│')),
+    ).toBeUndefined()
+    const markdown = (await ui.findAll({ type: 'Markdown' })).map(each => String(each.props.text))
+    expect(markdown.join('\n')).toContain('- item 699')
   })
+
+  test('a heading has a blank row above and below; blocks are one blank row apart', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n\n```ts\nconst x = 1\n```\n\nOutro\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await mountDoc($)
+    const heading = await ui.find({ key: 'section-head:0' })
+    expect(heading?.props.marginTop).toBe(1)
+    expect(heading?.props.marginBottom).toBe(1)
+    // Intro (Markdown), the fence (Code) and Outro (Markdown): the first sits under the heading's
+    // own gap, each later one a blank row below the one before.
+    expect((await ui.find({ key: 's0:b:0' }))?.props.marginTop).toBe(0)
+    expect((await ui.find({ key: 's0:b:1' }))?.props.marginTop).toBe(1)
+    expect((await ui.find({ key: 's0:b:2' }))?.props.marginTop).toBe(1)
+  })
+
+  test('a heading with no body adds no second blank row below it', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# A\n# B\n\nbody\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await mountDoc($)
+    expect((await ui.find({ key: 'section-head:0' }))?.props.marginBottom).toBe(0)
+    expect((await ui.find({ key: 'section-head:1' }))?.props.marginBottom).toBe(1)
+  })
+
+  test('under bar no rule is drawn under a heading', async ($, on) => {
+    openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n' })
+
+    await $.session.start(SESSION)
+    await $.tool.call(editOf(DOC_PATH))
+    const ui = await mountDoc($)
+    expect((await ui.find({ key: 'section-head:0' }))?.text).not.toContain('─')
+  })
+
+  for (const cardStyle of ['none', 'sharp', 'rounded'] as const) {
+    test(
+      `under ${cardStyle} an H1/H2 heading has no mark and a dim rule under it; H3 has neither`,
+      { options: { cardStyle } },
+      async ($, on) => {
+        openWorld(on, { [DOC_PATH]: '# Plan\n\nIntro\n\n### Detail\n\nmore\n' })
+
+        await $.session.start(SESSION)
+        await $.tool.call(editOf(DOC_PATH))
+        const ui = await mountDoc($)
+        const h1 = (await ui.find({ key: 'section-head:0' }))?.text ?? ''
+        expect(h1).toContain('─')
+        expect(h1).not.toContain('▌')
+        expect((await ui.find({ key: 'section-head:1' }))?.text).not.toContain('─')
+      },
+    )
+  }
 
   test('nothing shown yet is a dim icon and a line', async ($, on) => {
     openWorld(on)
@@ -605,7 +661,7 @@ describe('options: watched doc paths, defaults', () => {
     text = '# Still here\n\nnew topic\n'
     await $.tool.call(editOf(DOC_PATH))
 
-    expect((await ui.find({ text: /^├─ Outdated/ }))?.text).toBeDefined()
+    expect(await ui.find({ text: /Outdated/ })).toBeDefined()
     expect(await ui.find({ text: /orphan/ })).toBeDefined()
   })
 

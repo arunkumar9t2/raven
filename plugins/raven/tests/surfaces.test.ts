@@ -182,8 +182,7 @@ describe('doc tables', () => {
     (await ui.findAll({ type: 'Text' })).map(each => each.text).filter(text => !text.includes('\n'))
   const GLYPHS = /[│┌└├╭╰]/
 
-  // The doc card's own frame is still drawn until C7, so assertions look only at the table's rows:
-  // the lines from the header row ("Path") through the last row ("b.ts").
+  // The table's own rows: the lines from the header row ("Path") through the last row ("b.ts").
   const tableLinesOf = (lines: string[]) => {
     const first = lines.findIndex(text => text.includes('Path'))
     const last = lines.findIndex(text => text.includes('b.ts'))
@@ -243,7 +242,12 @@ describe('doc tables', () => {
           })
           await expect(ui.drawn()).resolves.toBeDefined()
 
-          const lines = (await textLines(ui)).filter(text => GLYPHS.test(text))
+          // The grid's own rows: from the top border through the bottom one.
+          const all = await textLines(ui)
+          const lines = all.slice(
+            all.findIndex(text => text.startsWith(top)),
+            all.findIndex(text => text.startsWith(bottom)) + 1,
+          )
           expect(lines.some(text => text.startsWith(top))).toBe(true)
           expect(lines.some(text => text.startsWith(bottom))).toBe(true)
           expect(lines.length).toBeGreaterThan(5)

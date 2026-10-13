@@ -1,5 +1,6 @@
 import { type Chip, chipsFit } from '../ui/chips'
 import type { Style } from '../ui/style'
+import { TITLE_EDGE_CELLS } from './doc-path'
 
 /** How a section heading draws: its bar, its colour, whether it is dim, and the rule under it. */
 export type HeadingLook = {
@@ -39,9 +40,6 @@ export const HEADING_GAP = 2
 /** The least of a heading's text the chip leaves before it shrinks to its icon. */
 export const HEADING_TEXT_MIN = 12
 
-/** The right-edge cell a heading row keeps free (see `doc-path.ts`). */
-const EDGE_CELLS = 1
-
 /**
  * `'words'` when the chip fits beside the heading (at least `HEADING_TEXT_MIN` of it, or all of
  * it when shorter) with the gap and the reserved edge cell; else `'icons'`, so a chip shrinks
@@ -54,5 +52,5 @@ export function headingChipModeOf(
   chip: Pick<Chip, 'icon' | 'label'>,
 ): 'words' | 'icons' {
   const text = Math.min(headingCells, HEADING_TEXT_MIN)
-  return chipsFit([chip], columns - EDGE_CELLS - markCells - text - HEADING_GAP)
+  return chipsFit([chip], columns - TITLE_EDGE_CELLS - markCells - text - HEADING_GAP)
 }
