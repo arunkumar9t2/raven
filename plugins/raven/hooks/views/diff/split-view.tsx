@@ -120,6 +120,18 @@ function textSide(
   )
 }
 
+/** A truncation marker: one dim line across the whole body, not a numbered row. */
+function markerRow(kit: Kit, row: SplitRow, width: number): RenderElement {
+  const { Box, Text } = kit.ui
+  return (
+    <Box width={width} flexShrink={0} overflow="hidden">
+      <Text dimColor wrap="truncate-end">
+        {plainOf(row.text ?? '')}
+      </Text>
+    </Box>
+  )
+}
+
 /**
  * The visible rows of a side-by-side hunk body: `props.split.rows.slice(from, to)`, drawn in the
  * candidate `props.render` names. One terminal row per `SplitRow`, so the window's row accounting
@@ -132,26 +144,34 @@ export function splitHunk(kit: Kit, props: SplitHunkProps): RenderElement {
 
   if (props.render === 'A') {
     const pieces = runsOf(rows).flatMap(run =>
-      piecesOf(rows.slice(run.from, run.to), ELEMENT_TEXT_LIMIT).map(([from, to]) => ({
-        kind: run.kind,
-        start: run.from + from,
-        rows: rows.slice(run.from + from, run.from + to),
-      })),
+      run.kind === 'marker'
+        ? [{ kind: run.kind, start: run.from, rows: rows.slice(run.from, run.to) }]
+        : piecesOf(rows.slice(run.from, run.to), ELEMENT_TEXT_LIMIT).map(([from, to]) => ({
+            kind: run.kind,
+            start: run.from + from,
+            rows: rows.slice(run.from + from, run.from + to),
+          })),
     )
     return (
       <Box key={props.key} flexDirection="column" overflow="hidden">
-        {pieces.map(piece => (
-          <Box
-            key={`run:${props.from + piece.start}`}
-            flexDirection="row"
-            overflow="hidden"
-            flexWrap="nowrap"
-          >
-            {codeSide(kit, props.path, piece.rows, 'left', widths.left, piece.kind)}
-            <Text dimColor>{columnOf('│', piece.rows.length)}</Text>
-            {codeSide(kit, props.path, piece.rows, 'right', widths.right, piece.kind)}
-          </Box>
-        ))}
+        {pieces.map(piece =>
+          piece.kind === 'marker' ? (
+            <Box key={`run:${props.from + piece.start}`} flexDirection="column" overflow="hidden">
+              {piece.rows.map(row => markerRow(kit, row, props.width))}
+            </Box>
+          ) : (
+            <Box
+              key={`run:${props.from + piece.start}`}
+              flexDirection="row"
+              overflow="hidden"
+              flexWrap="nowrap"
+            >
+              {codeSide(kit, props.path, piece.rows, 'left', widths.left, piece.kind)}
+              <Text dimColor>{columnOf('│', piece.rows.length)}</Text>
+              {codeSide(kit, props.path, piece.rows, 'right', widths.right, piece.kind)}
+            </Box>
+          ),
+        )}
       </Box>
     )
   }
@@ -160,6 +180,9 @@ export function splitHunk(kit: Kit, props: SplitHunkProps): RenderElement {
   return (
     <Box key={props.key} flexDirection="column" overflow="hidden">
       {rows.map((row, index) => {
+        if (row.kind === 'marker') {
+          return <Box key={`row:${props.from + index}`}>{markerRow(kit, row, props.width)}</Box>
+        }
         const words =
           withWords && row.left && row.right
             ? wordDiffOf(plainOf(row.left.text), plainOf(row.right.text))

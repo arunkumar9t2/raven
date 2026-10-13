@@ -301,3 +301,44 @@ describe('a read-only turn hunk', () => {
     expect(hunk && 'split' in hunk).toBe(false)
   })
 })
+
+describe('a hunk with one side empty', () => {
+  const written = hunkOfChange('', 'one\ntwo\nthree\nfour')
+
+  test('a turn Write (all adds) is never split: unified rows, no split payload', () => {
+    const blocks = blocksOf(FILE, [written], [], null, { width: 100, readOnly: true, split: true })
+    const [hunk] = hunkBlocks(blocks)
+    expect(hunk && 'split' in hunk).toBe(false)
+    // The phantom blank line `hunkOfChange` removes from the empty before, plus four adds.
+    expect(hunk && rowsOf(hunk)).toBe(5)
+  })
+
+  test('a plain all-add hunk is never split, whatever the file status says', () => {
+    const added = hunkFrom('@@ -0,0 +1,3 @@', ['+a', '+b', '+c'])
+    const [hunk] = hunkBlocks(blocksOf(FILE, [added], [], null, { width: 100, split: true }))
+    expect(hunk && 'split' in hunk).toBe(false)
+    expect(hunk && rowsOf(hunk)).toBe(3)
+  })
+
+  test('an all-delete hunk is never split either', () => {
+    const removed = hunkFrom('@@ -1,2 +0,0 @@', ['-a', '-b'])
+    const [hunk] = hunkBlocks(blocksOf(FILE, [removed], [], null, { width: 100, split: true }))
+    expect(hunk && 'split' in hunk).toBe(false)
+  })
+
+  test('a hunk with context beside its adds still splits', () => {
+    const inserted = hunkFrom('@@ -1,2 +1,3 @@', [' a', '+b', ' c'])
+    const [hunk] = hunkBlocks(blocksOf(FILE, [inserted], [], null, { width: 100, split: true }))
+    expect(hunk && 'split' in hunk).toBe(true)
+  })
+
+  test('its compose box offers old-side lines because it draws unified', () => {
+    const removed = hunkFrom('@@ -1,2 +0,0 @@', ['-a', '-b'])
+    const anchor = { path: 'a.ts', hunk: removed.header }
+    const blocks = blocksOf(FILE, [removed], [], anchor, { width: 100, split: true })
+    const box = blocks.find(
+      block => block.kind === 'fixed' && (block.item as BodyItem).kind === 'comment-box',
+    )
+    expect(box && 'isSplit' in (box as { item: object }).item).toBe(false)
+  })
+})

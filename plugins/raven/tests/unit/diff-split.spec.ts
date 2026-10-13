@@ -7,6 +7,7 @@ import {
   runEndOf,
   type SideLine,
   splitHunkOf,
+  splitLinesOf,
   splitRowsOf,
   splitRowsOfHunk,
 } from '../../hooks/views/diff/split'
@@ -111,10 +112,10 @@ describe('splitRowsOfHunk / splitHunkOf / gutterWidthOf', () => {
   })
 
   test('the gutter is the digit count of the highest line number either side reaches', () => {
-    expect(gutterWidthOf(hunkFrom('@@ -98,3 +100,4 @@', []))).toBe(3)
-    expect(gutterWidthOf(hunkFrom('@@ -0,0 +1,3 @@', []))).toBe(1)
-    expect(gutterWidthOf(hunkFrom('@@ -1,1 +1,1 @@', []))).toBe(1)
-    expect(gutterWidthOf(hunkFrom('@@ -9,2 +9,2 @@', []))).toBe(2)
+    expect(gutterWidthOf(hunkFrom('@@ -98,3 +100,4 @@', [' a', ' b', '-c', '+d', '+e']))).toBe(3)
+    expect(gutterWidthOf(hunkFrom('@@ -0,0 +1,3 @@', ['+a', '+b', '+c']))).toBe(1)
+    expect(gutterWidthOf(hunkFrom('@@ -1,1 +1,1 @@', ['-a', '+b']))).toBe(1)
+    expect(gutterWidthOf(hunkFrom('@@ -9,2 +9,2 @@', [' a', ' b']))).toBe(2)
     expect(gutterWidthOf(hunkFrom('garbage', []))).toBe(1)
   })
 
@@ -186,5 +187,67 @@ describe('effectiveLineOf', () => {
     expect(effectiveLineOf(newLine, true)).toBe(newLine)
     expect(effectiveLineOf(oldLine, false)).toBe(oldLine)
     expect(effectiveLineOf(null, true)).toBeNull()
+  })
+})
+
+describe('a blank context line emitted as an empty string (diff.suppressBlankEmpty)', () => {
+  const lines = [' a', '', '-b', '+B', '', ' c']
+
+  test('is a context row with empty text, and the numbers do not drift', () => {
+    expect(splitRowsOf(lines.join('\n'), 1, 1)).toEqual([
+      { kind: 'context', left: side(1, 'a', ' '), right: side(1, 'a', ' ') },
+      { kind: 'context', left: side(2, '', ' '), right: side(2, '', ' ') },
+      { kind: 'change', left: side(3, 'b', '-'), right: side(3, 'B', '+') },
+      { kind: 'context', left: side(4, '', ' '), right: side(4, '', ' ') },
+      { kind: 'context', left: side(5, 'c', ' '), right: side(5, 'c', ' ') },
+    ])
+  })
+
+  test('ends a change run, in unified and split alike', () => {
+    expect(runEndOf(['-a', '', '+b'], 0)).toBe(1)
+    expect(runEndOf(['-a', '', '+b'], 2)).toBe(3)
+    expect(splitRowsOf(['-a', '', '+b'].join('\n'), 1, 1)).toHaveLength(3)
+  })
+
+  test('cutting a body at run ends keeps the whole hunk rows (the partition holds)', () => {
+    const rows = splitRowsOf(lines.join('\n'), 1, 1)
+    const cuts: number[] = []
+    for (let at = 0; at < lines.length; ) {
+      at = runEndOf(lines, at)
+      cuts.push(at)
+    }
+    let from = 0
+    const parts: unknown[] = []
+    for (const to of cuts) {
+      parts.push(...splitLinesOf(lines.slice(from, to), 1, 1).map(row => row.kind))
+      from = to
+    }
+    expect(parts).toHaveLength(rows.length)
+  })
+})
+
+describe('a truncation marker row', () => {
+  const clamped = hunkFrom('@@ -1,5 +1,5 @@', [' a', '-b', '+c', ' … (577 more lines)'])
+
+  test('is one marker row with no numbered sides, not a context line', () => {
+    const rows = splitRowsOfHunk(clamped)
+    expect(rows).toHaveLength(3)
+    expect(rows[2]).toEqual({ kind: 'marker', left: null, right: null, text: '… (577 more lines)' })
+  })
+
+  test('only the last body line is a marker', () => {
+    const early = hunkFrom('@@ -1,3 +1,3 @@', [' … (5 more lines)', ' x'])
+    expect(splitRowsOfHunk(early).map(row => row.kind)).toEqual(['context', 'context'])
+  })
+})
+
+describe('the gutter follows the lines actually present', () => {
+  test('a header that undercounts a long body still gets a wide enough gutter', () => {
+    const body = Array.from({ length: 120 }, () => '+x')
+    expect(gutterWidthOf(hunkFrom('@@ -1 +1 @@', body))).toBe(3)
+  })
+
+  test('a header counting more than the body holds does not widen it', () => {
+    expect(gutterWidthOf(hunkFrom('@@ -1,500 +1,500 @@', [' a', '-b', '+c']))).toBe(1)
   })
 })

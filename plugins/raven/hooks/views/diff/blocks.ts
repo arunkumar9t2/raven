@@ -23,7 +23,7 @@ import {
 import type { Block } from './layout'
 import { rowsOf, sliceHunk } from './layout'
 import { composeRowsOf, noteLinesOf, noteRowsOf } from './note-layout'
-import { gutterWidthOf, runEndOf, splitHunkOf } from './split'
+import { gutterWidthOf, runEndOf, splitHunkOf, splitsAsColumns } from './split'
 import { type WholeSide, wholeSideOf } from './whole-file'
 
 export const TITLE_KEY = 'title'
@@ -147,7 +147,9 @@ function hunkSegmentsOf(
   const stamp = whole ? { whole } : {}
   // A whole-file hunk is source, never side by side. The gutter is the whole hunk's, so a sliced
   // segment keeps its siblings' width.
-  const gutter = isSplit && !whole ? gutterWidthOf(hunk) : null
+  // A hunk with nothing on one side (a turn's Write) stays unified too.
+  const asSplit = isSplit && !whole && splitsAsColumns(hunk)
+  const gutter = asSplit ? gutterWidthOf(hunk) : null
   const blockOf = (blockKey: string, shown: Hunk, mark?: CommentStatus): Block<BodyItem> => ({
     kind: 'hunk',
     key: blockKey,
@@ -167,7 +169,7 @@ function hunkSegmentsOf(
   // the end of the change run it belongs to, so the segments partition the hunk's split rows
   // exactly (a cut inside a run would re-pair its lines). A context line still ends at itself.
   const cutOf = (at: number): number => {
-    if (isSplit && !whole) return runEndOf(body, at)
+    if (asSplit) return runEndOf(body, at)
     // A `\ No newline` marker belongs to the line above it: the segment takes it along.
     let to = at + 1
     while (body[to]?.startsWith('\\')) to += 1
@@ -423,7 +425,7 @@ export function blocksOf(
         width,
         inputRows,
         hunk,
-        isSplit && !whole,
+        isSplit && !whole && splitsAsColumns(hunk),
       ),
     )
   })

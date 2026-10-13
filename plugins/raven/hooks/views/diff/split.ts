@@ -1,4 +1,4 @@
-import { bodyLinesOf, type Hunk, lineKindOf, parseHeader } from '../../git/hunks'
+import { bodyLinesOf, type Hunk, isMoreLinesMarker, lineKindOf, parseHeader } from '../../git/hunks'
 import type { CommentLine } from '../../review/comments'
 
 /** One side of a split row: the line number on that side, its text without the diff prefix, and its mark. */
@@ -6,9 +6,17 @@ export type SideLine = { n: number; text: string; mark: ' ' | '+' | '-' }
 
 /**
  * One terminal row of a side-by-side hunk. A context row has both sides; a change row pairs a
- * removed line (left) with an added line (right), the shorter side of a run padded with `null`.
+ * removed line (left) with an added line (right), the shorter side of a run padded with `null`. A
+ * marker row (the ` … (N more lines)` cut of a clamped hunk) has neither side: it draws as one
+ * dim line across the whole body.
  */
-export type SplitRow = { left: SideLine | null; right: SideLine | null; kind: 'context' | 'change' }
+export type SplitRow = {
+  left: SideLine | null
+  right: SideLine | null
+  kind: 'context' | 'change' | 'marker'
+  /** The marker's text, on a marker row only. */
+  text?: string
+}
 
 /** A hunk's side-by-side rows, and the width in digits of its line-number gutter. */
 export type SplitHunk = { rows: readonly SplitRow[]; gutter: number }
@@ -21,6 +29,15 @@ export type SplitHunk = { rows: readonly SplitRow[]; gutter: number }
  * belong to the line above and advance neither counter, as in `hunkLinesOf`.
  */
 export function splitRowsOf(hunkBody: string, oldStart: number, newStart: number): SplitRow[] {
+  return hunkBody === '' ? [] : splitLinesOf(hunkBody.split('\n'), oldStart, newStart)
+}
+
+/** `splitRowsOf` over a hunk's body lines, so a body of one blank line is not mistaken for an empty one. */
+export function splitLinesOf(
+  lines: readonly string[],
+  oldStart: number,
+  newStart: number,
+): SplitRow[] {
   const rows: SplitRow[] = []
   let oldN = oldStart
   let newN = newStart
@@ -36,9 +53,14 @@ export function splitRowsOf(hunkBody: string, oldStart: number, newStart: number
     added = []
   }
 
-  for (const line of hunkBody.split('\n')) {
+  for (const [index, line] of lines.entries()) {
     const kind = lineKindOf(line)
     if (kind === null) continue
+    if (index === lines.length - 1 && isMoreLinesMarker(line)) {
+      flush()
+      rows.push({ kind: 'marker', left: null, right: null, text: line.slice(1) })
+      continue
+    }
     const text = line.slice(1)
     if (kind === 'del') {
       removed.push({ n: oldN, text, mark: '-' })
@@ -68,21 +90,33 @@ export function splitRowsOfHunk(hunk: Hunk): readonly SplitRow[] {
   const cached = rowsCache.get(hunk)
   if (cached) return cached
   const parsed = parseHeader(hunk.header)
-  const rows = splitRowsOf(
-    bodyLinesOf(hunk).join('\n'),
-    parsed?.oldStart ?? 1,
-    parsed?.newStart ?? 1,
-  )
+  const rows = splitLinesOf(bodyLinesOf(hunk), parsed?.oldStart ?? 1, parsed?.newStart ?? 1)
   rowsCache.set(hunk, rows)
   return rows
 }
 
-/** The digits of the highest line number either side of `hunk` reaches; 1 for a malformed header. */
+/** The digits of the highest line number either side of `hunk` really draws; 1 for a hunk with no line. */
 export function gutterWidthOf(hunk: Hunk): number {
-  const parsed = parseHeader(hunk.header)
-  if (!parsed) return 1
-  const last = Math.max(parsed.oldStart + parsed.oldCount, parsed.newStart + parsed.newCount) - 1
-  return String(Math.max(1, last)).length
+  let last = 1
+  for (const row of splitRowsOfHunk(hunk)) {
+    last = Math.max(last, row.left?.n ?? 0, row.right?.n ?? 0)
+  }
+  return String(last).length
+}
+
+/**
+ * Whether `hunk` has something to show on both sides. An all-add or all-delete hunk (a turn's
+ * `Write`, whose `hunkOfChange` also removes one phantom blank line from the empty before) would
+ * leave one half empty, so it draws as the unified diff instead. A context line counts for both
+ * sides; a hunk with no lines at all keeps the split rule of its caller.
+ */
+export function splitsAsColumns(hunk: Hunk): boolean {
+  const rows = splitRowsOfHunk(hunk)
+  const hasContent = (line: SideLine | null) =>
+    line !== null && (line.mark === ' ' || line.text !== '')
+  const left = rows.some(row => hasContent(row.left))
+  const right = rows.some(row => hasContent(row.right))
+  return left === right
 }
 
 /** `hunk` as side-by-side rows; `gutter` is passed when a slice must keep its whole hunk's width. */

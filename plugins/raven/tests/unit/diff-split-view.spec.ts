@@ -168,3 +168,23 @@ describe('candidate B2: B with changed words', () => {
     expect(findAll(tree, n => n.props.backgroundColor === 'diffAdded').length).toBeGreaterThan(0)
   })
 })
+
+describe('a truncation marker row', () => {
+  const clamped = splitHunkOf(
+    hunkFrom('@@ -1,5 +1,5 @@', [' a', '-b', '+c', ' … (577 more lines)']),
+  )
+
+  test('draws once, dim, across the whole body, with no line number, in every candidate', () => {
+    for (const render of ['A', 'B', 'B2'] as const) {
+      const tree = splitHunk(
+        KIT,
+        propsOf({ split: clamped, from: 0, to: clamped.rows.length, render, width: 100 }),
+      )
+      const drawn = textUnder(tree)
+      expect(drawn.split('… (577 more lines)').length - 1).toBe(1)
+      const marker = findAll(tree, n => n.type === Text && textUnder(n) === '… (577 more lines)')
+      expect(marker).toHaveLength(1)
+      expect(marker[0]?.props.dimColor).toBe(true)
+    }
+  })
+})
