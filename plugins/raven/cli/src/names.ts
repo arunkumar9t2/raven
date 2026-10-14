@@ -6,4 +6,4 @@ export {
   type PaneSubcommand,
 } from '../../hooks/names'
 
-export const VERSION = '0.1.0'
+export const VERSION = '0.3.0'
