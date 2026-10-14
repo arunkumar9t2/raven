@@ -41,6 +41,7 @@
       "type": "string",
       "title": "Card style",
       "description": "How files, doc sections, the compose box and tables are framed: bar (default), none, sharp or rounded.",
+      "options": ["bar", "none", "sharp", "rounded"],
       "required": false,
       "default": "bar"
     },

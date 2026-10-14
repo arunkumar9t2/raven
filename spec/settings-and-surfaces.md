@@ -16,7 +16,7 @@ plugin and which `register`'s `options` argument carries at `session.start`:
 | `autoOpen` | boolean | `true` | Opens panes nobody asked for: the diff on the main loop's first edit, a plan or watched doc the first time it is written, Tasks on the first task list. Off, a pane opens only when asked (`/raven`, the Files view, Claude's `raven` CLI). |
 | `autoOpenColumns` | number | `144` | Skips those opens below this terminal width, in columns. |
 | `keyboardControls` | boolean | `false` | Draws plain Tab-reachable buttons instead of interactive pills: `canClient` is forced false on every surface, so the bracket-free `Button` fallback draws and every control is in the Tab ring again (R42). |
-| `cardStyle` | string | `'bar'` | `bar`, `none`, `sharp` or `rounded`: how files, doc sections, the compose box and tables are framed. Any other value falls back to `bar`. See [`views.md`](./views.md#the-drawing-kit). |
+| `cardStyle` | string | `'bar'` | `bar`, `none`, `sharp` or `rounded`: how files, doc sections, the compose box and tables are framed. The field declares these as its `options`, so `/config` draws a picker over them; any other stored value falls back to `bar`. See [`views.md`](./views.md#the-drawing-kit). |
 | `splitColumns` | number | `160` | Pane width, in columns, at which the diff switches to side-by-side unless the header chip forced a mode ([`diff-pane.md`](./diff-pane.md#side-by-side)). |
 | `paneBackground` | string | `''` | An opt-in colour painted behind every Raven pane so it matches the terminal: `#rgb`, `#rrggbb`, `rgb(r, g, b)` or a theme colour name. Empty leaves the engine's own pane colour. |
 
