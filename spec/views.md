@@ -220,8 +220,9 @@ The pieces the panes share:
   titles, the doc title, the file list, the header counts) builds the pair with `iconText` and
   `ICON_GAP`, one space, so the gap is decided in one place. `NOTE_GLYPH` is the note marker
   everywhere (Nerd Font nf-md-message_text_outline, U+F036A): every note chip, count and title uses
-  it. On a terminal whose Nerd Font fallback is not a Mono variant a glyph draws wider than its cell
-  and overlaps the space after it; the remedy is the terminal's font, not a wider gap.
+  it. A terminal that draws a Nerd Font glyph from a fallback font can draw it wider than its cell
+  (Alacritty draws a fallback glyph at its own width), so it overlaps the space after it; the
+  remedy is a patched Nerd Font Mono as the terminal's font, not a wider gap.
 - **Widths** (`widthOf`, `clustersOf` in `ui/wrap.ts`): the cell width every fit calculation uses.
   Wide characters (CJK, emoji) count 2, combining and zero-width marks 0, a base followed by the
   emoji variation selector VS16 counts 2, and a ZWJ sequence is one cluster of its first emoji's

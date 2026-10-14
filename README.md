@@ -14,7 +14,8 @@ with the hours, no, the other one"). Raven is a side panel for that moment.
 <img src="docs/media/raven-grid.webp" alt="Raven's panes: the live diff, notes Claude has addressed, a rendered plan with a note, and the file tree with changes marked" width="640">
 
 - **A live diff.** Every changed file in one scrolling view, with syntax highlighting, updated as
-  Claude edits files and runs commands. The file Claude is working on right now is highlighted.
+  Claude edits files and runs commands. The file Claude is working on right now is highlighted. In a
+  wide pane the diff shows side by side, with the changed words highlighted.
 - **Notes Claude reads.** Comment on a file, a hunk or a single line. Your notes go to Claude with
   your next prompt, or right away with **send**. After Claude replies, Raven marks the notes it
   addressed with ✓.
@@ -34,10 +35,9 @@ with the hours, no, the other one"). Raven is a side panel for that moment.
 
 - Claude Code 2.1.287 or later
 - A terminal at least 110 columns wide
-- [Bun](https://bun.sh) installed (Claude uses it to run Raven's command-line helper; self-contained
-  binaries that don't need Bun are coming soon)
-- A [Nerd Font](https://www.nerdfonts.com) for the file icons (optional; without one, icons show as
-  blank boxes)
+- [Bun](https://bun.sh) installed (Claude uses it to run Raven's command-line helper)
+- A [Nerd Font](https://www.nerdfonts.com) Mono variant as your terminal font, for the icons
+  (optional; without one, icons show as blank boxes)
 - Under tmux, `CLAUDE_CODE_NO_FLICKER=1` set in your environment
 
 ## Install
@@ -86,12 +86,12 @@ Open `/config` and look for Raven:
 | `keyboardControls` | off | Draws plain buttons you can reach with Tab, so every control works from the keyboard. |
 | `cardStyle` | `bar` | How files, doc sections, the note box and tables are framed: `bar` (a coloured bar down the left), `none` (no marks, a rule under titles), `sharp` or `rounded` (a closed frame; tables become full grids). |
 | `splitColumns` | `160` | The diff shows side by side when the pane is at least this many columns wide. The `split` / `unified` chip in the diff header overrides it, and Raven remembers the choice per repository. |
-| `paneBackground` | empty | A colour painted behind every Raven pane so it matches your terminal, `#rgb`, `#rrggbb`, `rgb(r, g, b)` or a theme colour name (Claude Code resolves the name; one it does not know is its to handle), for example `#101315`. Empty keeps Claude Code's own pane colour. |
+| `paneBackground` | empty | A colour painted behind every Raven pane so it matches your terminal, for example `#101315`. Takes `#rgb`, `#rrggbb`, `rgb(r, g, b)` or a theme colour name, which Claude Code resolves. Empty keeps Claude Code's own pane colour. |
 
 Settings are read when a session starts, so a change applies to the next session.
 
-Raven cannot read your terminal's background, so set `paneBackground` to the same colour. On Omarchy
-it is `colors.primary.background` in `~/.local/state/omarchy/current/theme/alacritty.toml`.
+Raven cannot read your terminal's background, so set `paneBackground` to the same colour, the
+background in your terminal's theme or config.
 
 ## Troubleshooting
 
@@ -100,8 +100,10 @@ it is `colors.primary.background` in `~/.local/state/omarchy/current/theme/alacr
 - **Claude Code's own diff panel covers Raven.** Close it once with its ✕; Claude Code remembers.
 - **Raven keeps opening by itself.** Turn off `autoOpen` in `/config`.
 - **Icons look like boxes.** Switch your terminal to a Nerd Font.
-- **Icons touch or overlap the text after them.** Your terminal's fallback Nerd Font draws glyphs wider
-  than a cell. Use a Mono variant (for example `JetBrainsMono Nerd Font Mono`).
+- **Icons touch or overlap the text after them.** Your terminal draws the icons wider than a cell. Set
+  the terminal font itself to a patched Nerd Font Mono (for example `IosevkaTerm Nerd Font Mono` or
+  `JetBrainsMono Nerd Font Mono`). A separate symbols font as a fallback is not enough in terminals
+  such as Alacritty, which draw a fallback glyph at its own width.
 
 ## Contributing
 
