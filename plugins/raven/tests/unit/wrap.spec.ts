@@ -1,5 +1,5 @@
 import { describe, expect, test } from 'bun:test'
-import { widthOf, wrapText } from '../../hooks/ui/wrap'
+import { cutTailToCells, cutToCells, widthOf, wrapText } from '../../hooks/ui/wrap'
 
 describe('wrapText', () => {
   test('wraps at word boundaries within the width', () => {
@@ -100,5 +100,23 @@ describe('widthOf emoji sequences', () => {
   test('a hard-broken word never splits a sequence and fits its width', () => {
     expect(wrapText('⚠️⚠️⚠️', 4, 9)).toEqual(['⚠️⚠️', '⚠️'])
     expect(wrapText('👨‍👩‍👧👨‍👩‍👧', 2, 9)).toEqual(['👨‍👩‍👧', '👨‍👩‍👧'])
+  })
+})
+
+describe('cutToCells / cutTailToCells', () => {
+  test('keep the head or the tail within the cells', () => {
+    expect(cutToCells('abcdef', 3)).toBe('abc')
+    expect(cutTailToCells('abcdef', 3)).toBe('def')
+    expect(cutToCells('abc', 10)).toBe('abc')
+    expect(cutTailToCells('abc', 10)).toBe('abc')
+    expect(cutToCells('abc', 0)).toBe('')
+    expect(cutTailToCells('abc', 0)).toBe('')
+  })
+
+  test('never split a wide character or a cluster', () => {
+    expect(cutToCells('日本語', 5)).toBe('日本')
+    expect(cutTailToCells('日本語', 5)).toBe('本語')
+    expect(cutToCells('a👍🏽b', 2)).toBe('a')
+    expect(cutTailToCells('a❤️b', 2)).toBe('b')
   })
 })

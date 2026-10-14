@@ -108,6 +108,33 @@ export function widthOf(text: string): number {
   return width
 }
 
+/** The longest head of `text` that fits `cells` terminal cells, cut between clusters. */
+export function cutToCells(text: string, cells: number): string {
+  let cut = ''
+  let used = 0
+  for (const cluster of clustersOf(text)) {
+    const w = clusterWidth(cluster)
+    if (used + w > cells) break
+    cut += cluster
+    used += w
+  }
+  return cut
+}
+
+/** The longest tail of `text` that fits `cells` terminal cells, cut between clusters (its end kept). */
+export function cutTailToCells(text: string, cells: number): string {
+  const clusters = clustersOf(text)
+  let start = clusters.length
+  let used = 0
+  while (start > 0) {
+    const w = clusterWidth(clusters[start - 1] as string)
+    if (used + w > cells) break
+    used += w
+    start--
+  }
+  return clusters.slice(start).join('')
+}
+
 export type Word = Span[]
 
 export const wordWidth = (word: Word) => word.reduce((sum, span) => sum + widthOf(span.text), 0)
@@ -252,15 +279,7 @@ export function wrapText(
   const lines = all.slice(0, limit)
   const last = lines.length - 1
   const room = Math.max(1, last === 0 ? Math.min(firstWidth, width) : width) - 1
-  // Cut the last line to `room` cells (one is left for the ellipsis), summing widths as it goes.
-  let cut = ''
-  let used = 0
-  for (const char of clustersOf(lines[last] as string)) {
-    const w = widthOf(char)
-    if (used + w > room) break
-    cut += char
-    used += w
-  }
-  lines[last] = `${cut.trimEnd()}…`
+  // Cut the last line to `room` cells (one is left for the ellipsis).
+  lines[last] = `${cutToCells(lines[last] as string, room).trimEnd()}…`
   return lines
 }

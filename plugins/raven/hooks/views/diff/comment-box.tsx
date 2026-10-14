@@ -10,7 +10,6 @@ import { type Comment, type CommentLine, changedLinesOf, lineKeyOf } from '../..
 import { ageOf } from '../../ui/age'
 import { boxedCard, noteCard } from '../../ui/card'
 import { type Chip, chipsFit } from '../../ui/chips'
-import { BOXED_CELLS } from '../../ui/chrome'
 import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
 import { pillRow } from '../../ui/strip'
 import { widthOf } from '../../ui/wrap'
@@ -30,8 +29,8 @@ import { hunkLabelOf } from './hunk-label'
 import {
   COMPOSE_PICKER_CELLS,
   COMPOSE_PREVIEW_INDENT,
+  composeInnerWidthOf,
   composeLayoutOf,
-  composePreviewLinesOf,
   noteChipsOf,
   noteRowsOf,
   STATUS_WORDS,
@@ -73,6 +72,8 @@ export type CommentBoxProps = {
    * the row count and the drawing never disagree.
    */
   hasPicker: boolean
+  /** The wrapped preview of the typed text (`composePreviewLinesOf`), drawn dim under the Input. */
+  preview: readonly string[]
   /** The hunk draws side by side: the line picker offers new-side lines only. */
   isSplit?: boolean
   /** The line chosen in the picker; null means "whole hunk". */
@@ -93,16 +94,18 @@ export type CommentBoxProps = {
  * user-message fill, `└──┘` (`style.compose`: sharp, rounded under `rounded`). Its interior is one
  * row, `whole hunk ▾  <Input>  ✕ cancel` (the Input draws its own `⏎ add`), until the pane is too
  * narrow: then the picker takes a row above the Input and the cancel pill a row below
- * (`composeLayoutOf`). Once the typed text no longer fits the Input, its wrapped text draws dim under the Input row (`composePreviewLinesOf`, the rows `composeRowsOf` counted). `blocksOf` emits this block only while the anchor is being composed and
- * only on a surface with `canType`, so this always runs with a real `Input` to draw; the idle
+ * (`composeLayoutOf`). Once the typed text no longer fits
+ * the Input, its wrapped text draws dim under the Input row (`props.preview`, the rows
+ * `composeRowsOf` counted). `blocksOf` emits this block only while the anchor is being composed
+ * and only on a surface with `canType`, so this always runs with a real `Input` to draw; the idle
  * note control is `noteChip`, drawn by the title or the hunk's label row instead.
  */
 export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Input, Select, Text } = kit.ui
   const { anchor } = props
-  const innerWidth = Math.max(1, props.columns - BOXED_CELLS)
+  const innerWidth = composeInnerWidthOf(props.columns)
   const layout = composeLayoutOf(props.hasPicker, innerWidth)
-  const preview = composePreviewLinesOf(props.draft ?? '', props.hasPicker, innerWidth)
+  const { preview } = props
 
   const lines = props.hunk
     ? pickableLinesOf(changedLinesOf(props.hunk), props.isSplit ?? false)

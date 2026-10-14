@@ -22,7 +22,13 @@ import {
 } from './anchor'
 import type { Block } from './layout'
 import { rowsOf, sliceHunk } from './layout'
-import { composeRowsOf, noteLinesOf, noteRowsOf } from './note-layout'
+import {
+  composeInnerWidthOf,
+  composePreviewLinesOf,
+  composeRowsOf,
+  noteLinesOf,
+  noteRowsOf,
+} from './note-layout'
 import { gutterWidthOf, runEndOf, splitHunkOf, splitsAsColumns } from './split'
 import { type WholeSide, wholeSideOf } from './whole-file'
 
@@ -92,7 +98,15 @@ export type BodyItem =
   | { kind: 'note'; comment: Comment; lines: string[] }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
-  | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean; isSplit?: boolean }
+  | {
+      kind: 'comment-box'
+      anchor: Anchor
+      hunk?: Hunk
+      hasPicker: boolean
+      /** The wrapped preview of the typed text, drawn under the Input; its length is in `rows`. */
+      preview: readonly string[]
+      isSplit?: boolean
+    }
   | { kind: 'hunk-header'; anchor: Anchor; hunk: Hunk; canNote: boolean; isReadOnly: boolean }
   | { kind: 'gap' }
   | { kind: 'blank' }
@@ -229,8 +243,8 @@ function notesBlocksOf(notes: Comments, anchor: Anchor, width: number): Block<Bo
  * while idle, the "＋ note" control lives on the heading or the hunk's actions row instead, so no
  * block is emitted at all. A surface without `canType` drops the box entirely (no controls to
  * draw); `hasPicker` (whether the box draws its line-picker row) is carried on the block itself
- * so the row count here and `commentBox`'s own drawing never disagree. The box's rows come from
- * `composeRowsOf` at this width for the text typed so far.
+ * so the row count here and `commentBox`'s own drawing never disagree. The wrapped `preview` of
+ * the text typed so far is computed once here; the box's rows count it (`composeRowsOf`).
  */
 function anchorBlocksOf(
   notes: Comments,
@@ -246,7 +260,8 @@ function anchorBlocksOf(
   if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
 
   const hasPicker = hunk !== undefined && capabilities.canPick
-  const rows = composeRowsOf(hasPicker, width, composeText)
+  const preview = composePreviewLinesOf(composeText, hasPicker, composeInnerWidthOf(width))
+  const rows = composeRowsOf(hasPicker, width, preview.length)
   return [
     ...notesBlocks,
     {
@@ -255,7 +270,14 @@ function anchorBlocksOf(
       rows,
       // The Input must stay mounted (its text would be lost), so it is never clipped at the top.
       pinned: true,
-      item: { kind: 'comment-box', anchor, hunk, hasPicker, ...(isSplit ? { isSplit: true } : {}) },
+      item: {
+        kind: 'comment-box',
+        anchor,
+        hunk,
+        hasPicker,
+        preview,
+        ...(isSplit ? { isSplit: true } : {}),
+      },
     },
   ]
 }

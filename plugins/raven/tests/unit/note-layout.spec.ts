@@ -3,7 +3,9 @@ import {
   COMPOSE_ACTION_CELLS,
   COMPOSE_INPUT_CELLS,
   COMPOSE_PICKER_CELLS,
+  composeInnerWidthOf,
   composeLayoutOf,
+  composePreviewCountOf,
   composePreviewLinesOf,
   composeRowsOf,
 } from '../../hooks/views/diff/note-layout'
@@ -84,7 +86,34 @@ describe('composePreviewLinesOf', () => {
   })
 
   test('the box counts the preview rows', () => {
-    expect(composeRowsOf(false, 100, 'x'.repeat(200))).toBe(composeRowsOf(false, 100) + 3)
-    expect(composeRowsOf(false, 100, 'short')).toBe(composeRowsOf(false, 100))
+    const rows = (text: string) =>
+      composeRowsOf(false, 100, composePreviewCountOf(text, false, composeInnerWidthOf(100)))
+    expect(rows('x'.repeat(200))).toBe(composeRowsOf(false, 100) + 3)
+    expect(rows('short')).toBe(composeRowsOf(false, 100))
+  })
+
+  test('a capped preview keeps the tail of its first row, so the seam into the next row is intact', () => {
+    const words = Array.from({ length: 120 }, (_, i) => `word${String(i).padStart(3, '0')}`)
+    const text = words.join(' ')
+    const lines = composePreviewLinesOf(text, false, 100)
+    expect(lines.length).toBe(6)
+    const first = lines[0] as string
+    expect(first.startsWith('…')).toBe(true)
+    // Every shown row's characters are a contiguous run of the typed text, ending at its end.
+    const shown = lines.map((line, i) => (i === 0 ? first.slice(1) : line)).join(' ')
+    expect(text.endsWith(shown)).toBe(true)
+  })
+
+  test('the count equals the lines, and the cheap path skips wrapping', () => {
+    const text = 'x'.repeat(200)
+    expect(composePreviewCountOf(text, false, 96)).toBe(
+      composePreviewLinesOf(text, false, 96).length,
+    )
+    expect(composePreviewCountOf('short', false, 96)).toBe(0)
+  })
+
+  test('the inner width is the columns less the frame, at least one', () => {
+    expect(composeInnerWidthOf(100)).toBe(96)
+    expect(composeInnerWidthOf(2)).toBe(1)
   })
 })

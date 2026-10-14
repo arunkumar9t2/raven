@@ -1,7 +1,7 @@
 import { countOf } from '../../core/format'
 import { type Chip, chipsIconsWidthOf } from '../../ui/chips'
 import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
-import { widthOf } from '../../ui/wrap'
+import { cutToCells, widthOf } from '../../ui/wrap'
 import { splitChipOf } from './split-mode'
 
 /** What each header chip does; `NO_HANDLERS` for the width math, which never presses anything. */
@@ -129,12 +129,7 @@ const SOURCE_LABEL_MAX = 24
  */
 export function sourceLabelOf(label: string): string {
   if (widthOf(label) <= SOURCE_LABEL_MAX) return label
-  let cut = ''
-  for (const char of label) {
-    if (widthOf(`${cut}${char}`) > SOURCE_LABEL_MAX - 1) break
-    cut += char
-  }
-  return `${cut}…`
+  return `${cutToCells(label, SOURCE_LABEL_MAX - 1)}…`
 }
 
 /** A surface without a `Select` draws HEAD / session start / branch point as plain buttons. */

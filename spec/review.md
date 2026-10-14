@@ -111,7 +111,7 @@ with `…` on that row. The box shows the whole text instead as a **preview** un
 (`composePreviewLinesOf`): once the typed text is as wide as the Input's visible cells (the interior
 less an inline picker, an inline cancel pill and the Input's own 8-cell `⏎ add` label), the text
 draws wrapped to the interior less a two-column indent, dim, one row per line, at most 6 rows. Past 6
-lines the last 6 show (the end is where the person is typing) and the first starts with `…`; a word
+lines the last 6 show (the end is where the person is typing) and the first starts with `…` and drops its own start to fit, so its end meets the next row intact; a word
 longer than a line breaks hard, as in a note card. While the text fits the Input there are no
 preview rows.
 
@@ -123,8 +123,9 @@ preview rows.
 ╰──────────────────────────────────────────────────╯
 ```
 
-`composeRowsOf` and `commentBox` both read `composePreviewLinesOf`, so the rows `blocksOf` gives the
-box (from `BlocksOptions.composeText`, the view's draft) and the rows it draws never disagree; the
+`blocksOf` computes `composePreviewLinesOf` once per composing anchor (from `BlocksOptions.composeText`,
+the view's draft) and carries it on the block; `composeRowsOf` counts it and `commentBox` draws it, so
+the rows given to the box and the rows it draws never disagree; the
 diff view's stream cache re-sizes when the preview line count changes, and the Doc pane redraws on
 a keystroke while a preview row draws before or after it. The box's rows are the interior plus the
 two borders plus the preview rows (0 to 6):

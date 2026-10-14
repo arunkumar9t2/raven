@@ -23,7 +23,7 @@ import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { cardTitle, frameBottom, groupRows } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { BOXED_CELLS, groupCellsOf, ruleRoomFor } from '../ui/chrome'
+import { groupCellsOf, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
@@ -69,7 +69,7 @@ import {
   stepFileIndexOf,
   viewOf,
 } from './diff/layout'
-import { composePreviewLinesOf } from './diff/note-layout'
+import { composeInnerWidthOf, composePreviewCountOf } from './diff/note-layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { effectiveLineOf } from './diff/split'
@@ -549,16 +549,16 @@ export function createDiffView(
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
     const comments = review.comments()
-    // The compose box's height follows the preview rows of the typed text, for a hunk anchor
-    // (with the picker) and a file anchor (without); the stream re-sizes only when they change.
+    // The compose box's height follows the preview rows of the typed text; the stream re-sizes
+    // only when their count changes.
     const composeKey = model.composing
-      ? [true, false]
-          .map(
-            picker =>
-              composePreviewLinesOf(model.composingText, picker, Math.max(1, width - BOXED_CELLS))
-                .length,
-          )
-          .join(':')
+      ? String(
+          composePreviewCountOf(
+            model.composingText,
+            model.composing.hunk !== undefined && capabilities.canPick,
+            composeInnerWidthOf(width),
+          ),
+        )
       : ''
 
     if (
@@ -701,6 +701,7 @@ export function createDiffView(
           inputKey: inputKeyOf(item.anchor),
           hunk: item.hunk,
           hasPicker: item.hasPicker,
+          preview: item.preview,
           isSplit: item.isSplit,
           draft: model.composingText,
           line: effectiveLineOf(model.composingLine, item.isSplit ?? false),

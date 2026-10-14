@@ -11,7 +11,6 @@ import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
 import { fill } from '../ui/card'
-import { BOXED_CELLS } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP, iconText } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
@@ -19,7 +18,12 @@ import { table } from '../ui/table'
 import { widthOf } from '../ui/wrap'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { addressedRow, commentBox, note, noteChip, outdatedHeading } from './diff/comment-box'
-import { composePreviewLinesOf, noteLinesOf } from './diff/note-layout'
+import {
+  composeInnerWidthOf,
+  composePreviewCountOf,
+  composePreviewLinesOf,
+  noteLinesOf,
+} from './diff/note-layout'
 import { HEADING_GAP, headingChipModeOf, headingLookOf, headingMarkCellsOf } from './doc-heading'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { TITLE_EDGE_CELLS, titlePathOf } from './doc-path'
@@ -523,6 +527,11 @@ export function createDocView(
                     anchor,
                     inputKey: inputKeyOf(anchor),
                     hasPicker: false,
+                    preview: composePreviewLinesOf(
+                      composing?.text ?? '',
+                      false,
+                      composeInnerWidthOf(kit.columns),
+                    ),
                     line: null,
                     columns: kit.columns,
                     draft: composing?.text,
@@ -532,11 +541,11 @@ export function createDocView(
                       composing = { ...composing, text: typed }
                       // The next render hands the text back as the Input's value; a redraw is
                       // needed only while a preview row draws, before or after this change.
-                      const room = Math.max(1, kit.columns - BOXED_CELLS)
+                      const room = composeInnerWidthOf(kit.columns)
                       if (
                         typed !== before &&
-                        (composePreviewLinesOf(before, false, room).length > 0 ||
-                          composePreviewLinesOf(typed, false, room).length > 0)
+                        (composePreviewCountOf(before, false, room) > 0 ||
+                          composePreviewCountOf(typed, false, room) > 0)
                       )
                         host.redraw()
                     },

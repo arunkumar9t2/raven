@@ -12,7 +12,7 @@ export function capLine(text: string): string {
   return text.slice(0, last >= 0xd800 && last <= 0xdbff ? LINE_CAP - 1 : LINE_CAP)
 }
 
-/** `text` without the control characters an element refuses; a tab stays (a `Code` takes it). */
+/** `text` without the control characters an element refuses; a tab stays (`plainOf` spaces it via `expandTabs`). */
 export function cleanTextOf(text: string): string {
   let out = ''
   for (const char of text) {

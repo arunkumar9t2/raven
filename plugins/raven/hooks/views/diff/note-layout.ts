@@ -1,7 +1,7 @@
 import type { Comment } from '../../review/comments'
 import type { Chip } from '../../ui/chips'
 import { BOXED_CELLS, NOTE_CELLS } from '../../ui/chrome'
-import { clustersOf, widthOf, wrapText } from '../../ui/wrap'
+import { cutTailToCells, widthOf, wrapText } from '../../ui/wrap'
 import { dropKeyOf, resendKeyOf } from './anchor'
 
 /** A note's most text lines. */
@@ -92,50 +92,65 @@ export function composeLayoutOf(hasPicker: boolean, innerWidth: number): Compose
   }
 }
 
+/** The compose interior's cells in a box `columns` wide (the frame less). */
+export const composeInnerWidthOf = (columns: number): number => Math.max(1, columns - BOXED_CELLS)
+
+/**
+ * The cells the compose Input shows its text in: the interior less an inline picker, an inline
+ * cancel pill and the Input's own submit label.
+ */
+function composeInputCellsOf(hasPicker: boolean, innerWidth: number): number {
+  const layout = composeLayoutOf(hasPicker, innerWidth)
+  const beside =
+    (hasPicker && !layout.pickerRow ? COMPOSE_PICKER_CELLS + COMPOSE_GAP : 0) +
+    (layout.actionsRow ? 0 : COMPOSE_ACTION_CELLS + COMPOSE_GAP)
+  return Math.max(1, innerWidth - beside - COMPOSE_SUBMIT_CELLS)
+}
+
+let memo: { key: string; lines: readonly string[] } | null = null
+
 /**
  * The wrapped preview under the compose Input: the whole typed `text` once it no longer fits the
- * Input's visible cells (the interior less an inline picker, an inline cancel pill and the Input's
- * own submit label), else none. Lines wrap to the interior less the indent, at most
+ * Input's visible cells, else none. Lines wrap to the interior less the indent, at most
  * `COMPOSE_PREVIEW_MAX_LINES`; past that the last lines show (the end is where the person types)
- * with the first starting `…`. The one value the box's row count and its drawing both read.
+ * with the first led by `…` and its start dropped to fit, so its end meets the next row intact.
+ * The last result is kept, so repeated calls in one render wrap once.
  */
 export function composePreviewLinesOf(
   text: string,
   hasPicker: boolean,
   innerWidth: number,
-): string[] {
-  const layout = composeLayoutOf(hasPicker, innerWidth)
-  const beside =
-    (hasPicker && !layout.pickerRow ? COMPOSE_PICKER_CELLS + COMPOSE_GAP : 0) +
-    (layout.actionsRow ? 0 : COMPOSE_ACTION_CELLS + COMPOSE_GAP)
-  const inputCells = Math.max(1, innerWidth - beside - COMPOSE_SUBMIT_CELLS)
-  if (widthOf(text) < inputCells) return []
+): readonly string[] {
+  if (widthOf(text) < composeInputCellsOf(hasPicker, innerWidth)) return []
+  const key = `${hasPicker ? 1 : 0}:${innerWidth}:${text}`
+  if (memo?.key === key) return memo.lines
 
   const width = Math.max(1, innerWidth - COMPOSE_PREVIEW_INDENT)
   const all = wrapText(text, width, Number.MAX_SAFE_INTEGER)
-  if (all.length <= COMPOSE_PREVIEW_MAX_LINES) return all
-  const shown = all.slice(-COMPOSE_PREVIEW_MAX_LINES)
-  let cut = ''
-  let used = 0
-  for (const char of clustersOf(shown[0] as string)) {
-    const w = widthOf(char)
-    if (used + w > width - 1) break
-    cut += char
-    used += w
+  let lines: readonly string[] = all
+  if (all.length > COMPOSE_PREVIEW_MAX_LINES) {
+    const shown = all.slice(-COMPOSE_PREVIEW_MAX_LINES)
+    shown[0] = `…${cutTailToCells(shown[0] as string, width - 1)}`
+    lines = shown
   }
-  shown[0] = `…${cut}`
-  return shown
+  memo = { key, lines }
+  return lines
+}
+
+/** How many preview rows `text` draws; cheap while it still fits the Input (no wrapping). */
+export function composePreviewCountOf(
+  text: string,
+  hasPicker: boolean,
+  innerWidth: number,
+): number {
+  if (widthOf(text) < composeInputCellsOf(hasPicker, innerWidth)) return 0
+  return composePreviewLinesOf(text, hasPicker, innerWidth).length
 }
 
 /**
  * The compose box's rows at `contentWidth`: the interior between a top and a bottom border, plus
- * one row per `composePreviewLinesOf` line for the `text` typed so far.
+ * `previewRows` (the length of the block's `preview`).
  */
-export function composeRowsOf(hasPicker: boolean, contentWidth: number, text = ''): number {
-  const innerWidth = Math.max(1, contentWidth - BOXED_CELLS)
-  return (
-    composeLayoutOf(hasPicker, innerWidth).inner +
-    composePreviewLinesOf(text, hasPicker, innerWidth).length +
-    2
-  )
+export function composeRowsOf(hasPicker: boolean, contentWidth: number, previewRows = 0): number {
+  return composeLayoutOf(hasPicker, composeInnerWidthOf(contentWidth)).inner + previewRows + 2
 }
