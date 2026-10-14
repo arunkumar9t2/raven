@@ -363,7 +363,7 @@ describe('blocksOf', () => {
     expect(fileBox).toMatchObject({ rows: 3 })
   })
 
-  test('the compose box grows a row when the picker or the cancel pill wraps, and when the Input needs a second row', () => {
+  test('the compose box grows a row when the picker or the cancel pill wraps', () => {
     const boxAt = (width: number, composing: { path: string; hunk?: string }, extra = {}) =>
       blocksOf(file, [hunkA], [], composing, { width, ...extra }).find(b =>
         b.key.startsWith('comment-box:'),
@@ -374,7 +374,6 @@ describe('blocksOf', () => {
     expect(boxAt(60, onHunk)).toMatchObject({ rows: 4 })
     expect(boxAt(40, onHunk)).toMatchObject({ rows: 5 })
     expect(boxAt(40, { path: file.path })).toMatchObject({ rows: 4 })
-    expect(boxAt(100, onHunk, { composeInputRows: 2 })).toMatchObject({ rows: 4 })
   })
 
   test('row total matches title + notes + toolbar + hunk lines', () => {

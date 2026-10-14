@@ -3,8 +3,6 @@ import {
   COMPOSE_ACTION_CELLS,
   COMPOSE_INPUT_CELLS,
   COMPOSE_PICKER_CELLS,
-  COMPOSE_SUBMIT_CELLS,
-  composeInputRowsOf,
   composeLayoutOf,
   composeRowsOf,
 } from '../../hooks/views/diff/note-layout'
@@ -37,11 +35,6 @@ describe('composeLayoutOf', () => {
   test('a very narrow box wraps both: picker row, Input row, cancel row', () => {
     expect(composeLayoutOf(true, 42)).toEqual({ pickerRow: true, actionsRow: true, inner: 3 })
   })
-
-  test('a second Input row adds one interior row', () => {
-    expect(composeLayoutOf(false, 100, 2).inner).toBe(2)
-    expect(composeLayoutOf(true, 42, 2).inner).toBe(4)
-  })
 })
 
 describe('composeRowsOf', () => {
@@ -51,31 +44,5 @@ describe('composeRowsOf', () => {
     expect(composeRowsOf(true, 60)).toBe(4)
     expect(composeRowsOf(true, 40)).toBe(5)
     expect(composeRowsOf(false, 40)).toBe(4)
-    expect(composeRowsOf(false, 100, 2)).toBe(4)
-  })
-})
-
-describe('composeInputRowsOf', () => {
-  test('short text is one Input row; text that reaches the Input is two', () => {
-    // no picker, 96 cells of interior: the Input has 96 - (10 + 1) - 8 = 77 cells
-    expect(composeInputRowsOf(0, false, 96)).toBe(1)
-    expect(composeInputRowsOf(76, false, 96)).toBe(1)
-    expect(composeInputRowsOf(77, false, 96)).toBe(2)
-  })
-
-  test('an inline picker narrows the Input, so the second row comes sooner', () => {
-    // 96 - (24 + 1) - (10 + 1) - 8 = 52
-    expect(composeInputRowsOf(51, true, 96)).toBe(1)
-    expect(composeInputRowsOf(52, true, 96)).toBe(2)
-  })
-
-  test('a wrapped picker and wrapped cancel hand their cells back to the Input', () => {
-    // inner 42 with a picker: picker row and cancel row both wrapped, so the Input has 42 - 8 = 34
-    expect(composeInputRowsOf(33, true, 42)).toBe(1)
-    expect(composeInputRowsOf(34, true, 42)).toBe(2)
-  })
-
-  test('the submit label stays counted so the cursor is never under it', () => {
-    expect(COMPOSE_SUBMIT_CELLS).toBe(8)
   })
 })

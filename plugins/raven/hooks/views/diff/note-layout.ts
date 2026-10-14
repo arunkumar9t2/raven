@@ -58,8 +58,6 @@ export const COMPOSE_PICKER_CELLS = 24
 export const COMPOSE_INPUT_CELLS = 32
 /** The ` ✕ cancel ` pill. */
 export const COMPOSE_ACTION_CELLS = 10
-/** The Input's own `⏎ add` label and the gap before it, drawn inside the Input's width. */
-export const COMPOSE_SUBMIT_CELLS = 8
 const COMPOSE_GAP = 1
 
 export type ComposeLayout = {
@@ -67,7 +65,7 @@ export type ComposeLayout = {
   pickerRow: boolean
   /** The cancel pill sits on its own row under the Input. */
   actionsRow: boolean
-  /** The interior rows: the Input's rows plus each wrapped row. */
+  /** The interior rows: the Input's one row plus each wrapped row. */
   inner: number
 }
 
@@ -76,41 +74,18 @@ export type ComposeLayout = {
  * picker, Input and cancel on one row when they fit; else the picker on its own row above, and the
  * cancel pill on its own row below when even Input and cancel do not fit side by side.
  */
-export function composeLayoutOf(
-  hasPicker: boolean,
-  innerWidth: number,
-  inputRows: 1 | 2 = 1,
-): ComposeLayout {
+export function composeLayoutOf(hasPicker: boolean, innerWidth: number): ComposeLayout {
   const picker = hasPicker ? COMPOSE_PICKER_CELLS + COMPOSE_GAP : 0
   const beside = COMPOSE_INPUT_CELLS + COMPOSE_GAP + COMPOSE_ACTION_CELLS
-  if (picker + beside <= innerWidth)
-    return { pickerRow: false, actionsRow: false, inner: inputRows }
+  if (picker + beside <= innerWidth) return { pickerRow: false, actionsRow: false, inner: 1 }
   const actionsRow = beside > innerWidth
   return {
     pickerRow: hasPicker,
     actionsRow,
-    inner: inputRows + (hasPicker ? 1 : 0) + (actionsRow ? 1 : 0),
+    inner: 1 + (hasPicker ? 1 : 0) + (actionsRow ? 1 : 0),
   }
 }
 
-/**
- * Whether the Input needs a second row for `chars` typed characters: its width is the interior
- * less whatever shares its row (an inline picker, an inline cancel) and its own submit label. The
- * Input draws at most two rows, scrolling inside them beyond that.
- */
-export function composeInputRowsOf(chars: number, hasPicker: boolean, innerWidth: number): 1 | 2 {
-  const layout = composeLayoutOf(hasPicker, innerWidth)
-  const beside =
-    (hasPicker && !layout.pickerRow ? COMPOSE_PICKER_CELLS + COMPOSE_GAP : 0) +
-    (layout.actionsRow ? 0 : COMPOSE_ACTION_CELLS + COMPOSE_GAP)
-  const inputCells = Math.max(1, innerWidth - beside - COMPOSE_SUBMIT_CELLS)
-  return chars >= inputCells ? 2 : 1
-}
-
 /** The compose box's rows at `contentWidth`: the interior between a top and a bottom border. */
-export const composeRowsOf = (
-  hasPicker: boolean,
-  contentWidth: number,
-  inputRows: 1 | 2 = 1,
-): number =>
-  composeLayoutOf(hasPicker, Math.max(1, contentWidth - BOXED_CELLS), inputRows).inner + 2
+export const composeRowsOf = (hasPicker: boolean, contentWidth: number): number =>
+  composeLayoutOf(hasPicker, Math.max(1, contentWidth - BOXED_CELLS)).inner + 2

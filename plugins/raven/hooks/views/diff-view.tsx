@@ -23,7 +23,7 @@ import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { cardTitle, frameBottom, groupRows } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { BOXED_CELLS, groupCellsOf, ruleRoomFor } from '../ui/chrome'
+import { groupCellsOf, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
@@ -69,7 +69,6 @@ import {
   stepFileIndexOf,
   viewOf,
 } from './diff/layout'
-import { composeInputRowsOf } from './diff/note-layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { effectiveLineOf } from './diff/split'
@@ -244,7 +243,6 @@ export function createDiffView(
     hunks: ReadonlyMap<string, readonly Hunk[]>
     comments: Comments
     composing: Anchor | null
-    composeInputRows: 1 | 2
     readOnly: boolean
     capabilities: Capabilities
     isLoaded: boolean
@@ -549,13 +547,6 @@ export function createDiffView(
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
     const comments = review.comments()
-    const composeInputRows: 1 | 2 = model.composing
-      ? composeInputRowsOf(
-          model.composingText.length,
-          model.composing.hunk !== undefined && capabilities.canPick,
-          Math.max(1, width - BOXED_CELLS),
-        )
-      : 1
 
     if (
       cache &&
@@ -563,7 +554,6 @@ export function createDiffView(
       cache.hunks === model.hunks &&
       cache.comments === comments &&
       cache.composing === model.composing &&
-      cache.composeInputRows === composeInputRows &&
       cache.readOnly === readOnly &&
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick &&
@@ -586,7 +576,6 @@ export function createDiffView(
         capabilities,
         width,
         style,
-        composeInputRows,
         split: isSplit,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
@@ -599,7 +588,6 @@ export function createDiffView(
       hunks: model.hunks,
       comments,
       composing: model.composing,
-      composeInputRows,
       readOnly,
       capabilities,
       isLoaded: model.isLoaded,
@@ -698,11 +686,6 @@ export function createDiffView(
           hunk: item.hunk,
           hasPicker: item.hasPicker,
           isSplit: item.isSplit,
-          inputRows: composeInputRowsOf(
-            model.composingText.length,
-            item.hasPicker,
-            Math.max(1, contentWidth - BOXED_CELLS),
-          ),
           draft: model.composingText,
           line: effectiveLineOf(model.composingLine, item.isSplit ?? false),
           columns: contentWidth,

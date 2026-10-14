@@ -73,15 +73,13 @@ export type CommentBoxProps = {
   hasPicker: boolean
   /** The hunk draws side by side: the line picker offers new-side lines only. */
   isSplit?: boolean
-  /** The Input's rows (`composeInputRowsOf`): 2 once its text has outgrown one row. */
-  inputRows: 1 | 2
   /** The line chosen in the picker; null means "whole hunk". */
   line: CommentLine | null
   /** The box's own width, frame included: what `composeLayoutOf` lays out against. */
   columns: number
   /** The text typed so far, drawn into the Input again when the box remounts; empty when none. */
   draft?: string
-  /** Runs on every change of the Input's text; the view keeps it as `draft` and sizes `inputRows` by it. */
+  /** Runs on every change of the Input's text; the view keeps it as `draft`. */
   onInput?: (text: string) => void
   onLineChange: (line: CommentLine | null) => void
   onSubmit: (text: string) => void
@@ -101,7 +99,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { Box, Input, Select, Text } = kit.ui
   const { anchor } = props
   const innerWidth = Math.max(1, props.columns - BOXED_CELLS)
-  const layout = composeLayoutOf(props.hasPicker, innerWidth, props.inputRows)
+  const layout = composeLayoutOf(props.hasPicker, innerWidth)
 
   const lines = props.hunk
     ? pickableLinesOf(changedLinesOf(props.hunk), props.isSplit ?? false)

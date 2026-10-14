@@ -238,7 +238,6 @@ function anchorBlocksOf(
   composing: Anchor | null,
   capabilities: Capabilities,
   width: number,
-  inputRows: 1 | 2,
   hunk?: Hunk,
   isSplit = false,
 ): Block<BodyItem>[] {
@@ -246,7 +245,7 @@ function anchorBlocksOf(
   if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
 
   const hasPicker = hunk !== undefined && capabilities.canPick
-  const rows = composeRowsOf(hasPicker, width, inputRows)
+  const rows = composeRowsOf(hasPicker, width)
   return [
     ...notesBlocks,
     {
@@ -334,8 +333,6 @@ export type BlocksOptions = {
   unreadText?: string
   /** The border style: what a title takes (2 rows under `none`) and whether a close row ends the card. Bar when omitted. */
   style?: Style
-  /** 2 when the compose Input has outgrown one row (`composeInputRowsOf`); 1 when omitted. */
-  composeInputRows?: 1 | 2
   /** Draws each hunk side by side: hunk blocks carry `split` rows and count them as their height. */
   split?: boolean
 }
@@ -360,7 +357,6 @@ export function blocksOf(
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
   const style = options.style ?? styleOf('bar')
   const width = options.width
-  const inputRows = options.composeInputRows ?? 1
   const whole = wholeSideOf(file.status)
   const isSplit = options.split ?? false
   const fileAnchor: Anchor = { path: file.path }
@@ -380,7 +376,7 @@ export function blocksOf(
   ]
   const fileLevel = isReadOnly
     ? []
-    : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width, inputRows)
+    : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width)
   if (fileLevel.length > 0) blocks.push(...fileLevel, blankBlock(FILE_GAP_KEY))
 
   if (hunks === undefined || hunks.length === 0) {
@@ -423,7 +419,6 @@ export function blocksOf(
         composing,
         capabilities,
         width,
-        inputRows,
         hunk,
         isSplit && !whole && splitsAsColumns(hunk),
       ),

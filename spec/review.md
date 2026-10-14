@@ -105,16 +105,14 @@ of their own (`composeLayoutOf`, `composeRowsOf` in `views/diff/note-layout.ts`)
 the room beside the card's rail in the diff and the pane's width in the Doc pane, and its interior is
 that less the four frame cells (`BOXED_CELLS`). The picker (24 cells, plus a gap) moves to a row above
 the Input once the interior is under 68 cells, that is a box under 72; the cancel pill (10 cells,
-plus a gap) moves to a row below once the interior is under 43, a box under 47. The Input soft-wraps
-and draws at most two rows, taking the second as the typed text outgrows the first
-(`composeInputRowsOf`). The box's rows are the interior plus the two borders:
+plus a gap) moves to a row below once the interior is under 43, a box under 47. The Input is one row: the
+engine's `Input` is a one-line field that does not wrap, so text longer than the row is cut with
+`…` on that row and the box never grows for it. The box's rows are the interior plus the two borders:
 
 - A hunk anchor with its picker: 3 rows from a box of 72 cells, 4 with the picker above, 5 with the
   cancel pill below as well.
 - A file anchor, or a surface without `canPick`: no picker, so 3 rows from 47 cells and 4 below that.
-- Each of these gains a row once the Input has grown to two.
-- A doc section's box has no picker and always sizes its Input at two rows, so it is 4 rows from 47
-  cells and 5 below.
+- A doc section's box has no picker, so it is 3 rows from 47 cells and 4 below.
 
 The box is never clipped at the top of a scrolled window, so its Input stays mounted while any of
 the box shows. The Input can still unmount (the box scrolled fully out of the window, a doc reload
