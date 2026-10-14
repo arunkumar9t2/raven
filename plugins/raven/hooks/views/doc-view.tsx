@@ -11,6 +11,7 @@ import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
 import { fill } from '../ui/card'
+import { BOXED_CELLS } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP, iconText } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
@@ -18,7 +19,7 @@ import { table } from '../ui/table'
 import { widthOf } from '../ui/wrap'
 import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
 import { addressedRow, commentBox, note, noteChip, outdatedHeading } from './diff/comment-box'
-import { noteLinesOf } from './diff/note-layout'
+import { composePreviewLinesOf, noteLinesOf } from './diff/note-layout'
 import { HEADING_GAP, headingChipModeOf, headingLookOf, headingMarkCellsOf } from './doc-heading'
 import { docLinksOf, resolveDocLink } from './doc-links'
 import { TITLE_EDGE_CELLS, titlePathOf } from './doc-path'
@@ -526,9 +527,18 @@ export function createDocView(
                     columns: kit.columns,
                     draft: composing?.text,
                     onInput: typed => {
-                      // The next render hands it back as the Input's value; no redraw is needed.
-                      if (composing !== null && composing.anchor.hunk === anchor.hunk)
-                        composing = { ...composing, text: typed }
+                      if (composing === null || composing.anchor.hunk !== anchor.hunk) return
+                      const before = composing.text
+                      composing = { ...composing, text: typed }
+                      // The next render hands the text back as the Input's value; a redraw is
+                      // needed only while a preview row draws, before or after this change.
+                      const room = Math.max(1, kit.columns - BOXED_CELLS)
+                      if (
+                        typed !== before &&
+                        (composePreviewLinesOf(before, false, room).length > 0 ||
+                          composePreviewLinesOf(typed, false, room).length > 0)
+                      )
+                        host.redraw()
                     },
                     onLineChange: () => {},
                     onSubmit: submitted => submitComment(submitted),

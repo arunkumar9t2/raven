@@ -27,7 +27,7 @@ import {
   TITLE_GAP_KEY,
   TITLE_KEY,
 } from '../../hooks/views/diff/blocks'
-import { contentRowsOf } from '../../hooks/views/diff/layout'
+import { contentRowsOf, rowsOf } from '../../hooks/views/diff/layout'
 import {
   composeRowsOf,
   NOTE_MAX_LINES,
@@ -374,6 +374,16 @@ describe('blocksOf', () => {
     expect(boxAt(60, onHunk)).toMatchObject({ rows: 4 })
     expect(boxAt(40, onHunk)).toMatchObject({ rows: 5 })
     expect(boxAt(40, { path: file.path })).toMatchObject({ rows: 4 })
+  })
+
+  test('the compose box grows by the wrapped preview rows of the typed text', () => {
+    const boxRows = (composeText: string) =>
+      blocksOf(file, [hunkA], [], { path: file.path }, { width: 100, composeText })
+        .filter(b => b.key.startsWith('comment-box:'))
+        .reduce((sum, b) => sum + rowsOf(b), 0)
+    expect(boxRows('short')).toBe(3)
+    expect(boxRows('x'.repeat(200))).toBe(3 + 3)
+    expect(boxRows('x'.repeat(2000))).toBe(3 + 6)
   })
 
   test('row total matches title + notes + toolbar + hunk lines', () => {

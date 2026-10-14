@@ -3183,6 +3183,23 @@ describe('a note is a card (R38)', () => {
     expect(await ui.find({ text: '╮' })).toBeUndefined()
   })
 
+  test('a note too long for the one-line Input draws wrapped, dim, under it', async ($, on) => {
+    gitWorld(on, {}, null)
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    const ui = await mountDiff($)
+
+    await pressPill(ui, commentButtonKeyOf({ path: 'a.ts' }))
+    const key = inputKeyOf({ path: 'a.ts' })
+    await ui.input({ key, text: 'short', kind: 'change' })
+    expect(await ui.find({ type: 'Text', text: /^ {2}short/ })).toBeUndefined()
+    const long = `${'tail '.repeat(40)}ending`
+    await ui.input({ key, text: long, kind: 'change' })
+    const row = await ui.find({ type: 'Text', text: /ending$/ })
+    expect(row?.props.dimColor).toBe(true)
+    expect(row?.text.startsWith('  ')).toBe(true)
+  })
+
   test('the ▌ rail does not run through the compose box, which sits on the code edge', async ($, on) => {
     gitWorld(on, {}, null)
     await $.session.start(SESSION)

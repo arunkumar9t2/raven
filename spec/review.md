@@ -106,8 +106,29 @@ the room beside the card's rail in the diff and the pane's width in the Doc pane
 that less the four frame cells (`BOXED_CELLS`). The picker (24 cells, plus a gap) moves to a row above
 the Input once the interior is under 68 cells, that is a box under 72; the cancel pill (10 cells,
 plus a gap) moves to a row below once the interior is under 43, a box under 47. The Input is one row: the
-engine's `Input` is a one-line field that does not wrap, so text longer than the row is cut with
-`…` on that row and the box never grows for it. The box's rows are the interior plus the two borders:
+engine's `Input` is a one-line field that does not wrap, so text longer than its visible cells is cut
+with `…` on that row. The box shows the whole text instead as a **preview** under the Input row
+(`composePreviewLinesOf`): once the typed text is as wide as the Input's visible cells (the interior
+less an inline picker, an inline cancel pill and the Input's own 8-cell `⏎ add` label), the text
+draws wrapped to the interior less a two-column indent, dim, one row per line, at most 6 rows. Past 6
+lines the last 6 show (the end is where the person is typing) and the first starts with `…`; a word
+longer than a line breaks hard, as in a note card. While the text fits the Input there are no
+preview rows.
+
+```
+╭─ * comment for Claude ───────────────────────────╮
+│ whole hunk ▾ this is a long comment ajfl… ⏎ add  │
+│   this is a long comment ajflsdjfgljsdkfjlkdjfkl │
+│   lkdjflksdjflkjsdlf                             │
+╰──────────────────────────────────────────────────╯
+```
+
+`composeRowsOf` and `commentBox` both read `composePreviewLinesOf`, so the rows `blocksOf` gives the
+box (from `BlocksOptions.composeText`, the view's draft) and the rows it draws never disagree; the
+diff view's stream cache re-sizes when the preview line count changes, and the Doc pane redraws on
+a keystroke while a preview row draws before or after it. The box's rows are the interior plus the
+two borders plus the preview rows (0 to 6):
+
 
 - A hunk anchor with its picker: 3 rows from a box of 72 cells, 4 with the picker above, 5 with the
   cancel pill below as well.

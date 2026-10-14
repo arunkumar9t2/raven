@@ -29,7 +29,9 @@ import {
 import { hunkLabelOf } from './hunk-label'
 import {
   COMPOSE_PICKER_CELLS,
+  COMPOSE_PREVIEW_INDENT,
   composeLayoutOf,
+  composePreviewLinesOf,
   noteChipsOf,
   noteRowsOf,
   STATUS_WORDS,
@@ -91,7 +93,7 @@ export type CommentBoxProps = {
  * user-message fill, `└──┘` (`style.compose`: sharp, rounded under `rounded`). Its interior is one
  * row, `whole hunk ▾  <Input>  ✕ cancel` (the Input draws its own `⏎ add`), until the pane is too
  * narrow: then the picker takes a row above the Input and the cancel pill a row below
- * (`composeLayoutOf`). `blocksOf` emits this block only while the anchor is being composed and
+ * (`composeLayoutOf`). Once the typed text no longer fits the Input, its wrapped text draws dim under the Input row (`composePreviewLinesOf`, the rows `composeRowsOf` counted). `blocksOf` emits this block only while the anchor is being composed and
  * only on a surface with `canType`, so this always runs with a real `Input` to draw; the idle
  * note control is `noteChip`, drawn by the title or the hunk's label row instead.
  */
@@ -100,6 +102,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
   const { anchor } = props
   const innerWidth = Math.max(1, props.columns - BOXED_CELLS)
   const layout = composeLayoutOf(props.hasPicker, innerWidth)
+  const preview = composePreviewLinesOf(props.draft ?? '', props.hasPicker, innerWidth)
 
   const lines = props.hunk
     ? pickableLinesOf(changedLinesOf(props.hunk), props.isSplit ?? false)
@@ -159,7 +162,7 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
         {iconText(NOTE_GLYPH, 'comment for Claude')}
       </Text>
     ),
-    rows: layout.inner,
+    rows: layout.inner + preview.length,
     children: (
       <Box flexDirection="column">
         {layout.pickerRow ? picker : null}
@@ -168,6 +171,13 @@ export function commentBox(kit: Kit, props: CommentBoxProps): RenderElement {
           {input}
           {layout.actionsRow ? null : cancel}
         </Box>
+        {preview.map((line, index) => (
+          <Box key={`${props.inputKey}:preview:${index}`}>
+            <Text dimColor wrap="truncate-end">
+              {`${' '.repeat(COMPOSE_PREVIEW_INDENT)}${line}`}
+            </Text>
+          </Box>
+        ))}
         {layout.actionsRow ? cancel : null}
       </Box>
     ),

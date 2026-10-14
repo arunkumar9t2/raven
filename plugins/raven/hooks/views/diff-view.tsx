@@ -23,7 +23,7 @@ import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
 import { cardTitle, frameBottom, groupRows } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { groupCellsOf, ruleRoomFor } from '../ui/chrome'
+import { BOXED_CELLS, groupCellsOf, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
@@ -69,6 +69,7 @@ import {
   stepFileIndexOf,
   viewOf,
 } from './diff/layout'
+import { composePreviewLinesOf } from './diff/note-layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { effectiveLineOf } from './diff/split'
@@ -243,6 +244,7 @@ export function createDiffView(
     hunks: ReadonlyMap<string, readonly Hunk[]>
     comments: Comments
     composing: Anchor | null
+    composeKey: string
     readOnly: boolean
     capabilities: Capabilities
     isLoaded: boolean
@@ -547,6 +549,17 @@ export function createDiffView(
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
     const comments = review.comments()
+    // The compose box's height follows the preview rows of the typed text, for a hunk anchor
+    // (with the picker) and a file anchor (without); the stream re-sizes only when they change.
+    const composeKey = model.composing
+      ? [true, false]
+          .map(
+            picker =>
+              composePreviewLinesOf(model.composingText, picker, Math.max(1, width - BOXED_CELLS))
+                .length,
+          )
+          .join(':')
+      : ''
 
     if (
       cache &&
@@ -554,6 +567,7 @@ export function createDiffView(
       cache.hunks === model.hunks &&
       cache.comments === comments &&
       cache.composing === model.composing &&
+      cache.composeKey === composeKey &&
       cache.readOnly === readOnly &&
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick &&
@@ -577,6 +591,7 @@ export function createDiffView(
         width,
         style,
         split: isSplit,
+        composeText: model.composingText,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -588,6 +603,7 @@ export function createDiffView(
       hunks: model.hunks,
       comments,
       composing: model.composing,
+      composeKey,
       readOnly,
       capabilities,
       isLoaded: model.isLoaded,

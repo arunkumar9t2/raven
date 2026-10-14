@@ -4,6 +4,7 @@ import {
   COMPOSE_INPUT_CELLS,
   COMPOSE_PICKER_CELLS,
   composeLayoutOf,
+  composePreviewLinesOf,
   composeRowsOf,
 } from '../../hooks/views/diff/note-layout'
 
@@ -44,5 +45,46 @@ describe('composeRowsOf', () => {
     expect(composeRowsOf(true, 60)).toBe(4)
     expect(composeRowsOf(true, 40)).toBe(5)
     expect(composeRowsOf(false, 40)).toBe(4)
+  })
+})
+
+describe('composePreviewLinesOf', () => {
+  // no picker, 100 cells: the Input has 100 - 11 - 8 = 81 cells; with a picker, 81 - 25 = 56.
+  test('text that fits the Input draws no preview', () => {
+    expect(composePreviewLinesOf('', false, 100)).toEqual([])
+    expect(composePreviewLinesOf('x'.repeat(80), false, 100)).toEqual([])
+  })
+
+  test('text just over the Input wraps to the interior less the two-column indent', () => {
+    const text = `${'word '.repeat(20)}end`
+    const lines = composePreviewLinesOf(text, false, 100)
+    expect(lines.length).toBe(2)
+    expect(lines.join(' ')).toBe(text)
+    for (const line of lines) expect(line.length).toBeLessThanOrEqual(98)
+  })
+
+  test('a long unbroken word breaks hard', () => {
+    const lines = composePreviewLinesOf('x'.repeat(200), false, 100)
+    expect(lines).toEqual(['x'.repeat(98), 'x'.repeat(98), 'x'.repeat(4)])
+  })
+
+  test('past six lines the last six show, the first starting with an ellipsis', () => {
+    const text = Array.from({ length: 10 }, (_, i) => String(i).repeat(98)).join('')
+    const lines = composePreviewLinesOf(text, false, 100)
+    expect(lines.length).toBe(6)
+    expect(lines[0]?.startsWith('…')).toBe(true)
+    expect(lines[0]?.length).toBe(98)
+    expect(lines.at(-1)).toBe('9'.repeat(98))
+  })
+
+  test('an inline picker narrows the Input, so the threshold drops', () => {
+    const text = 'x'.repeat(70)
+    expect(composePreviewLinesOf(text, false, 100)).toEqual([])
+    expect(composePreviewLinesOf(text, true, 100).length).toBe(1)
+  })
+
+  test('the box counts the preview rows', () => {
+    expect(composeRowsOf(false, 100, 'x'.repeat(200))).toBe(composeRowsOf(false, 100) + 3)
+    expect(composeRowsOf(false, 100, 'short')).toBe(composeRowsOf(false, 100))
   })
 })
