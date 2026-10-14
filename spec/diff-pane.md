@@ -224,23 +224,17 @@ text on only one side, such as a turn's `Write`, stay unified inside an otherwis
 ` … (N more lines)` line (see [Long hunks](#long-hunks)). In split view that line is a marker row
 with neither side: one dim line across the whole body.
 
-**Rendering.** This paragraph is the one place the candidate drawings differ; the kept one is
-selected by `SPLIT_RENDER` in `plugins/raven/hooks/views/diff/split-view.tsx`. Three are built.
-*A (syntax and a marker strip)* draws each side of each run as a `Code` with `format: 'source'`,
-`startLine` and the file's language, with a one-column `▌` strip beside it in the added or removed
-colour on change rows; syntax colours are kept and the line colour is the marker alone. *B (red and
-green rows)* draws each row as a `Text` with a full-side `backgroundColor` in the diff add or remove
-key, a dim gutter, and no syntax colours. *B′ (B plus word highlights)* is B with the changed words of
-a paired row drawn on the brighter word fills, from Raven's own token-level diff (`wordDiffOf`: a
-longest common subsequence over word, space and punctuation tokens; a line over 120 tokens, or two
-lines that share no word, are changed whole). The engine draws its word highlights only in unified
-`Code`, so only B′ has them in split view.
-
-**The 10 000-character cut.** `Code` refuses text over its cap (`ELEMENT_TEXT_LIMIT`), and in
-candidate A each side of each run is one `Code`. `piecesOf` cuts a run into row pieces so that, on
-each side, a piece's source (each line plus its newline) stays within the cap; both sides cut at the
-same rows, which keeps the columns aligned, and every piece takes at least one row. A single line is
-already bounded by `LINE_CAP`.
+**Rendering.** Each row draws as one `Text` per side (`splitHunk` in
+`plugins/raven/hooks/views/diff/split-view.tsx`): the mark, a right-aligned line number in a dim
+gutter, then the line, the whole side on the diff add or remove fill and padded to the side's edge
+(`sideCellOf`). A paired row's changed words draw on the brighter word fills, from Raven's own
+token-level diff (`wordDiffOf` in `word-diff.ts`: a longest common subsequence over word, space and
+punctuation tokens; a line over 120 tokens, or two lines that share no word, are changed whole). The
+engine draws its word highlights only in unified `Code`, which is why split view computes its own.
+Syntax colours are given up for the fills: in two narrow columns the red and green rows and the
+changed words read faster than syntax, which the person chose over a syntax-coloured drawing with a
+marker strip. A line is cut at `LINE_CAP` before it is drawn, so no element nears the 10 000-character
+cap.
 
 **Comments.** Anchors are the same as in unified, with one difference in what is offered. A new line
 note anchors to a new-side line only: the compose box's picker lists the hunk's added lines, and a

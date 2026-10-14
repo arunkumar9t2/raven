@@ -74,7 +74,7 @@ import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { effectiveLineOf } from './diff/split'
 import { createSplitMode } from './diff/split-mode'
-import { SPLIT_RENDER, splitHunk } from './diff/split-view'
+import { splitHunk } from './diff/split-view'
 import { fileTagOf, type WholeSource, wholePiecesOf, wholeSourceOf } from './diff/whole-file'
 import { iconOf, statusMarkOf } from './icons'
 
@@ -843,8 +843,6 @@ export function createDiffView(
             from: placed.from,
             to: placed.to,
             width: contentWidth,
-            path: file.path,
-            render: SPLIT_RENDER,
           })
         }
         const sliced = sliceHunk(block.hunk, placed.from, placed.to)

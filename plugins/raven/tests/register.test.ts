@@ -3405,11 +3405,12 @@ describe('side-by-side body', () => {
     await $.command.run(ravenCommand('diff'))
 
     const ui = await mountDiffAt($, 160)
-    // HUNK_TEXT is ` a`, `-b`, `+c`: candidate A draws them as Code sources, B/B2 as row text.
-    const drawn = (await ui.findAll({ type: 'Code' })).map(code => String(code.props.source))
-    const text = (await ui.find({ text: /\+1 c|\+2 c/ })) !== undefined
-    expect(drawn.includes('b') || text).toBe(true)
-    expect(drawn.includes('c') || text).toBe(true)
+    // HUNK_TEXT is ` a`, `-b`, `+c`: one context row, then `b` paired with `c` on one row.
+    const rows = (await ui.findAll({ text: /│/ })).filter(el => el.key?.startsWith('row:'))
+    const cells = rows.map(row => row.text.split('│').map(cell => cell.trim()))
+    expect(cells.length).toBe(2)
+    expect(cells[1]?.[0]).toMatch(/^-\s*\d+ b$/)
+    expect(cells[1]?.[1]).toMatch(/^\+\s*\d+ c$/)
   })
 })
 
@@ -3417,21 +3418,8 @@ describe('split body with a line note and a scroll', () => {
   type Drawn = { n: number; text: string }
   type Mounted = Awaited<ReturnType<typeof mountDiffAt>>
 
-  /**
-   * Every source line the body draws, with its line number, in either candidate: the `Code`
-   * sources (A, numbered by `startLine`) or the filled row cells (B, B2, numbered in the gutter).
-   */
+  /** Every source line the body draws, with its line number from the row's gutter. */
   const drawnOf = async (ui: Mounted): Promise<Drawn[]> => {
-    const codes = (await ui.findAll({ type: 'Code' })).filter(
-      code => code.props.format === 'source',
-    )
-    if (codes.length > 0) {
-      return codes.flatMap(code =>
-        String(code.props.source)
-          .split('\n')
-          .map((line, index) => ({ n: Number(code.props.startLine) + index, text: line })),
-      )
-    }
     const rows = (await ui.findAll({ text: /│/ })).filter(el => el.key?.startsWith('row:'))
     return rows.flatMap(row =>
       row.text.split('│').flatMap(cell => {
