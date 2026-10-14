@@ -3198,6 +3198,11 @@ describe('a note is a card (R38)', () => {
     const row = await ui.find({ type: 'Text', text: /ending$/ })
     expect(row?.props.dimColor).toBe(true)
     expect(row?.text.startsWith('  ')).toBe(true)
+
+    // An edit that keeps the same preview row count still redraws the preview's text.
+    await ui.input({ key, text: `${'tail '.repeat(40)}endinG`, kind: 'change' })
+    expect(await ui.find({ type: 'Text', text: /endinG$/ })).toBeDefined()
+    expect(await ui.find({ type: 'Text', text: /ending$/ })).toBeUndefined()
   })
 
   test('the ▌ rail does not run through the compose box, which sits on the code edge', async ($, on) => {

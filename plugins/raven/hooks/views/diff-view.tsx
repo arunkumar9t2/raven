@@ -69,7 +69,11 @@ import {
   stepFileIndexOf,
   viewOf,
 } from './diff/layout'
-import { composeInnerWidthOf, composePreviewCountOf } from './diff/note-layout'
+import {
+  composeInnerWidthOf,
+  composePreviewCountOf,
+  composePreviewLinesOf,
+} from './diff/note-layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
 import { effectiveLineOf } from './diff/split'
@@ -701,7 +705,13 @@ export function createDiffView(
           inputKey: inputKeyOf(item.anchor),
           hunk: item.hunk,
           hasPicker: item.hasPicker,
-          preview: item.preview,
+          // The stream caches on the preview's row count, so its lines come from the live text here
+          // (same text, width and picker, so the same count the block was sized with).
+          preview: composePreviewLinesOf(
+            model.composingText,
+            item.hasPicker,
+            composeInnerWidthOf(contentWidth),
+          ),
           isSplit: item.isSplit,
           draft: model.composingText,
           line: effectiveLineOf(model.composingLine, item.isSplit ?? false),

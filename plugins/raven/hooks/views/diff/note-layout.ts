@@ -121,7 +121,7 @@ export function composePreviewLinesOf(
   hasPicker: boolean,
   innerWidth: number,
 ): readonly string[] {
-  if (widthOf(text) < composeInputCellsOf(hasPicker, innerWidth)) return []
+  if (widthOf(text.trimEnd()) < composeInputCellsOf(hasPicker, innerWidth)) return []
   const key = `${hasPicker ? 1 : 0}:${innerWidth}:${text}`
   if (memo?.key === key) return memo.lines
 
@@ -143,7 +143,7 @@ export function composePreviewCountOf(
   hasPicker: boolean,
   innerWidth: number,
 ): number {
-  if (widthOf(text) < composeInputCellsOf(hasPicker, innerWidth)) return 0
+  if (widthOf(text.trimEnd()) < composeInputCellsOf(hasPicker, innerWidth)) return 0
   return composePreviewLinesOf(text, hasPicker, innerWidth).length
 }
 
