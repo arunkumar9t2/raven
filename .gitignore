@@ -5,3 +5,4 @@ dist/
 docs/superpowers/
 .claude/types/
 *.log
+docs/progress.md
