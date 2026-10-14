@@ -22,13 +22,22 @@ export function parseHeader(header: string): {
   }
 }
 
-/** A hunk body line's kind; null for '' and the '\ No newline at end of file' marker. */
+/**
+ * A hunk body line's kind; null for the '\ No newline at end of file' marker. A bare '' is a blank
+ * context line: git writes it so under `diff.suppressBlankEmpty`.
+ */
 export function lineKindOf(line: string): 'add' | 'del' | 'context' | null {
-  if (line === '' || line.startsWith('\\')) return null
+  if (line.startsWith('\\')) return null
   if (line.startsWith('+')) return 'add'
   if (line.startsWith('-')) return 'del'
   return 'context'
 }
+
+/** The line `clampHunk` ends a cut hunk with: a context-looking line that is not a source line. */
+const MORE_LINES_RE = /^ … \(\d+ more lines\)$/
+
+/** Whether `line` is the ` … (N more lines)` marker `clampHunk` appended. */
+export const isMoreLinesMarker = (line: string): boolean => MORE_LINES_RE.test(line)
 
 const bodyLinesCache = new WeakMap<Hunk, readonly string[]>()
 

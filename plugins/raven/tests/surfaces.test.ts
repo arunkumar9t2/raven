@@ -1,6 +1,7 @@
 import type { On } from 'claude-code'
 import { describe, type Engine, expect, test, tier } from 'claude-code/testing'
 import { DIFF_PANE, DOC_PANE, NAME, toolNameOf } from '../hooks/names'
+import { NOTE_GLYPH } from '../hooks/ui/icon-text'
 import { commentButtonKeyOf } from '../hooks/views/diff/anchor'
 import { baseWorld, PANE_PROPS, REPO, ran, ravenCommand, SESSION, trackShownPanes } from './helpers'
 
@@ -51,7 +52,7 @@ describe('surface safety', () => {
 
       if (surface === 'mobile') {
         expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
-        expect(await ui.find({ text: '✎' })).toBeUndefined()
+        expect(await ui.find({ text: NOTE_GLYPH })).toBeUndefined()
         expect(await ui.find({ text: 'stage' })).toBeDefined()
         expect(await ui.find({ text: /↺ revert/ })).toBeDefined()
       }
@@ -126,7 +127,7 @@ describe('surface safety', () => {
 
     await expect(ui.drawn()).resolves.toBeDefined()
     expect(await ui.findAll({ type: 'Input' })).toHaveLength(0)
-    // Goals is section index 1 (Plan is 0): no "✎ note" chip control on a surface with no typing.
+    // Goals is section index 1 (Plan is 0): no note chip (glyph + "note") control on a surface with no typing.
     expect(
       await ui.find({ key: commentButtonKeyOf({ path: '/work/plan.md', hunk: '§1' }) }),
     ).toBeUndefined()
@@ -177,7 +178,18 @@ describe('doc tables', () => {
     'The engine **sizes GFM tables to the terminal width**, not the pane, so every row wraps and the `box borders` break apart into stray characters when the pane is narrower than the terminal.'
   const MARKDOWN = `Before\n\n| Path | What Claude sees |\n| --- | --- |\n| \`a.ts\` | ${PROSE} |\n| b.ts | ok |\n\nAfter`
 
-  test('a wide table in a note is drawn to fit the pane, borders intact', async ($: Engine, on: On) => {
+  const textLines = async (ui: { findAll: (q: { type: 'Text' }) => Promise<{ text: string }[]> }) =>
+    (await ui.findAll({ type: 'Text' })).map(each => each.text).filter(text => !text.includes('\n'))
+  const GLYPHS = /[│┌└├╭╰]/
+
+  // The table's own rows: the lines from the header row ("Path") through the last row ("b.ts").
+  const tableLinesOf = (lines: string[]) => {
+    const first = lines.findIndex(text => text.includes('Path'))
+    const last = lines.findIndex(text => text.includes('b.ts'))
+    return lines.slice(first, last + 1)
+  }
+
+  test('under the default bar style a table is a header, one rule and the rows, fitted to the pane', async ($: Engine, on: On) => {
     world(on)
     await $.session.start(SESSION)
     await $.tool.call({ tool: toolNameOf(NAME), op: 'note', markdown: MARKDOWN, title: 'Table' })
@@ -192,16 +204,58 @@ describe('doc tables', () => {
       })
       await expect(ui.drawn()).resolves.toBeDefined()
 
-      const lines = (await ui.findAll({ type: 'Text' }))
-        .map(each => each.text)
-        .filter(text => /[│┌└├]/.test(text) && !text.includes('\n'))
-      expect(lines.some(text => text.startsWith('┌'))).toBe(true)
-      expect(lines.some(text => text.startsWith('└'))).toBe(true)
-      expect(lines.length).toBeGreaterThan(5)
-      // The card's `│ ` border takes two cells of the pane.
-      for (const text of lines) expect([...text].length).toBeLessThanOrEqual(bodyColumns - 2)
+      const lines = await textLines(ui)
+      const rows = tableLinesOf(lines)
+      // The engine reports a row's text both whole and in pieces, so count distinct rules.
+      expect(new Set(rows.filter(text => /^─+$/.test(text)))).toHaveProperty('size', 1)
+      expect(rows.some(text => GLYPHS.test(text))).toBe(false)
+      for (const text of rows) expect([...text].length).toBeLessThanOrEqual(bodyColumns - 1)
 
       await ui.unmount()
     }
   })
+
+  for (const [cardStyle, top, bottom] of [
+    ['sharp', '┌', '└'],
+    ['rounded', '╭', '╰'],
+  ] as const) {
+    test(
+      `under ${cardStyle} a table is a full grid with ${top} ${bottom} corners, fitted to the pane`,
+      { options: { cardStyle } },
+      async ($: Engine, on: On) => {
+        world(on)
+        await $.session.start(SESSION)
+        await $.tool.call({
+          tool: toolNameOf(NAME),
+          op: 'note',
+          markdown: MARKDOWN,
+          title: 'Table',
+        })
+
+        for (const bodyColumns of [100, 70]) {
+          const ui = await $.ui.mount({
+            plugin: NAME,
+            surface: 'terminal',
+            component: 'Pane',
+            props: { ...PANE_PROPS, title: 'Doc', bodyColumns },
+            requestId: DOC_PANE.id,
+          })
+          await expect(ui.drawn()).resolves.toBeDefined()
+
+          // The grid's own rows: from the top border through the bottom one.
+          const all = await textLines(ui)
+          const lines = all.slice(
+            all.findIndex(text => text.startsWith(top)),
+            all.findIndex(text => text.startsWith(bottom)) + 1,
+          )
+          expect(lines.some(text => text.startsWith(top))).toBe(true)
+          expect(lines.some(text => text.startsWith(bottom))).toBe(true)
+          expect(lines.length).toBeGreaterThan(5)
+          for (const text of lines) expect([...text].length).toBeLessThanOrEqual(bodyColumns - 1)
+
+          await ui.unmount()
+        }
+      },
+    )
+  }
 })

@@ -68,7 +68,7 @@ a plan, or starts a task list (see [Settings](#settings) to turn that off).
 
 Run a pane's command again to close it.
 
-To leave a note, click **✎ note** on a file or a hunk, pick a line if you want one, type, and press
+To leave a note, click **note** on a file or a hunk, pick a line if you want one, type, and press
 Enter. To send notes without waiting for your next prompt, click **send**.
 
 You can also ask Claude to show you things, like "show me the plan in raven". To let Claude do that
@@ -84,6 +84,14 @@ Open `/config` and look for Raven:
 | `autoOpenColumns` | `144` | Raven only opens by itself when the terminal is at least this many columns wide. |
 | `watchedPaths` | empty | Extra folders, comma-separated, whose Markdown files open rendered as Claude writes them. Plan folders are watched already. |
 | `keyboardControls` | off | Draws plain buttons you can reach with Tab, so every control works from the keyboard. |
+| `cardStyle` | `bar` | How files, doc sections, the note box and tables are framed: `bar` (a coloured bar down the left), `none` (no marks, a rule under titles), `sharp` or `rounded` (a closed frame; tables become full grids). |
+| `splitColumns` | `160` | The diff shows side by side when the pane is at least this many columns wide. The `split` / `unified` chip in the diff header overrides it, and Raven remembers the choice per repository. |
+| `paneBackground` | empty | A colour painted behind every Raven pane so it matches your terminal, `#rgb`, `#rrggbb`, `rgb(r, g, b)` or a theme colour name (Claude Code resolves the name; one it does not know is its to handle), for example `#101315`. Empty keeps Claude Code's own pane colour. |
+
+Settings are read when a session starts, so a change applies to the next session.
+
+Raven cannot read your terminal's background, so set `paneBackground` to the same colour. On Omarchy
+it is `colors.primary.background` in `~/.local/state/omarchy/current/theme/alacritty.toml`.
 
 ## Troubleshooting
 
@@ -92,6 +100,8 @@ Open `/config` and look for Raven:
 - **Claude Code's own diff panel covers Raven.** Close it once with its ✕; Claude Code remembers.
 - **Raven keeps opening by itself.** Turn off `autoOpen` in `/config`.
 - **Icons look like boxes.** Switch your terminal to a Nerd Font.
+- **Icons touch or overlap the text after them.** Your terminal's fallback Nerd Font draws glyphs wider
+  than a cell. Use a Mono variant (for example `JetBrainsMono Nerd Font Mono`).
 
 ## Contributing
 

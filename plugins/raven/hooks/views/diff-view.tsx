@@ -5,6 +5,7 @@ import type { RenderElement } from 'claude-code'
 
 import { COLORS, NOTE_STATE_COLORS } from '../core/colors'
 import { type Host, loggedAs } from '../core/host'
+import { DEFAULT_SETTINGS } from '../core/settings'
 import type { Capabilities, Kit, View } from '../core/view'
 import type { ChangedFile } from '../git/changes'
 import type { Hunk } from '../git/hunks'
@@ -20,19 +21,29 @@ import { patchOf } from '../git/patch'
 import { DIFF_PANE } from '../names'
 import type { CommentLine, Comments } from '../review/comments'
 import type { Review } from '../review/review'
-import { closeRow, ruleRow } from '../ui/card'
+import { cardTitle, frameBottom, groupRows } from '../ui/card'
 import { chipsFit } from '../ui/chips'
-import { RULE_START, ruleRoomFor } from '../ui/chrome'
+import { groupCellsOf, ruleRoomFor } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
+import { ICON_GAP } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
-import { type Anchor, anchorKeyOf, commentButtonKeyOf, inputKeyOf } from './diff/anchor'
+import type { Style } from '../ui/style'
+import {
+  type Anchor,
+  anchorKeyOf,
+  commentBoxKeyOf,
+  commentButtonKeyOf,
+  inputKeyOf,
+} from './diff/anchor'
 import {
   type BodyItem,
   contentWidthOf,
   fileAtRow,
   fixedRowsOf,
   type Stream,
+  sepPathOf,
   streamOf,
+  TITLE_GAP_KEY,
 } from './diff/blocks'
 import {
   addressedRow,
@@ -43,14 +54,32 @@ import {
   noteChip,
   orphanPathRow,
   orphansTitle,
-  outdatedTitle,
+  outdatedHeading,
 } from './diff/comment-box'
 import { fileList, MAX_ROWS } from './diff/file-list'
-import { header } from './diff/header'
-import { clampTop, type Placed, rowsOf, sliceHunk, stepFileIndexOf, windowOf } from './diff/layout'
-import { railOf } from './diff/rail'
+import { type HeaderProps, header, headerPlanFor } from './diff/header'
+import {
+  type Block,
+  clampTop,
+  type FixedBlock,
+  type Placed,
+  rowOfKey,
+  rowsOf,
+  sliceHunk,
+  stepFileIndexOf,
+  viewOf,
+} from './diff/layout'
+import {
+  composeInnerWidthOf,
+  composePreviewCountOf,
+  composePreviewLinesOf,
+} from './diff/note-layout'
 import { selectedHunksOf, sourceValueOf } from './diff/source'
 import { createSourceController } from './diff/source-controller'
+import { effectiveLineOf } from './diff/split'
+import { createSplitMode } from './diff/split-mode'
+import { splitHunk } from './diff/split-view'
+import { fileTagOf, type WholeSource, wholePiecesOf, wholeSourceOf } from './diff/whole-file'
 import { iconOf, statusMarkOf } from './icons'
 
 // A wheel tick reports a row or two; the terminal's own scrollable views move a few rows per tick.
@@ -66,6 +95,12 @@ type Model = {
   composing: Anchor | null
   /** The line picked in the composing anchor's Select; null is "whole hunk". */
   composingLine: CommentLine | null
+  /**
+   * The text typed into the open compose box: sizes its Input rows, and is handed back to the
+   * Input as its `value` so a note survives the box unmounting (scrolled away, resized across the
+   * split threshold) and drawing again.
+   */
+  composingText: string
   top: number
   /** Staged hunk headers per file path, cleared for a path when its hunks no longer carry them. */
   stagedHunks: ReadonlyMap<string, ReadonlySet<string>>
@@ -135,11 +170,48 @@ export type DiffView = View & {
   toplevel: () => string | null
 }
 
+/** What the diff view takes from the person's settings. */
+export type DiffOptions = {
+  /** The body width, in columns, at which the diff goes side by side unless forced. */
+  splitColumns: number
+}
+
+/**
+ * A wholly added or deleted file's visible lines as numbered source, its "No newline" marker dim
+ * beneath. A view over the `Code` cap is cut into numbered pieces (`wholePiecesOf`).
+ */
+function wholeCodeOf(kit: Kit, path: string, whole: WholeSource): RenderElement {
+  const { Box, Code, Text } = kit.ui
+  const pieces = wholePiecesOf(whole)
+  return (
+    <Box flexDirection="column" overflow="hidden">
+      {whole.count > 0
+        ? pieces.map(piece => (
+            <Code
+              key={`whole:${piece.startLine}`}
+              source={piece.source}
+              format="source"
+              startLine={piece.startLine}
+              path={path}
+              wrap="truncate-end"
+            />
+          ))
+        : null}
+      {whole.tail.map((line, index) => (
+        <Text key={`tail:${index}`} dimColor wrap="truncate-end">
+          {line}
+        </Text>
+      ))}
+    </Box>
+  )
+}
+
 export function createDiffView(
   host: Host,
   review: Review,
   actions: DiffActions,
   now: () => number,
+  options: DiffOptions = { splitColumns: DEFAULT_SETTINGS.splitColumns },
 ): DiffView {
   let model: Model = {
     repository: null,
@@ -148,6 +220,7 @@ export function createDiffView(
     hunks: new Map(),
     composing: null,
     composingLine: null,
+    composingText: '',
     top: 0,
     stagedHunks: new Map(),
     confirming: null,
@@ -160,12 +233,14 @@ export function createDiffView(
   }
 
   const sourceController = createSourceController(host)
+  const splitMode = createSplitMode(host, options.splitColumns)
 
   // The body rows and the title rows/content-row count of the most recent render computed, so
   // `scroll` and `select` (which have no kit) can clamp/jump without recomputing them.
   let lastBodyRows = 0
   let lastTitleRows: ReadonlyMap<string, number> = new Map()
   let lastContentRows = 0
+  let lastBlocks: readonly Block<BodyItem>[] = []
 
   // The last streamOf() result, valid while its inputs are reference-equal to these.
   let cache: {
@@ -173,11 +248,14 @@ export function createDiffView(
     hunks: ReadonlyMap<string, readonly Hunk[]>
     comments: Comments
     composing: Anchor | null
+    composeKey: string
     readOnly: boolean
     capabilities: Capabilities
     isLoaded: boolean
     gonePaths: ReadonlySet<string>
     width: number
+    cardStyle: Style['cardStyle']
+    isSplit: boolean
     stream: Stream
   } | null = null
 
@@ -266,6 +344,7 @@ export function createDiffView(
     if (started !== generation) return
 
     await sourceController.refresh(repository)
+    await splitMode.resolveStored(repository?.toplevel ?? null)
     // Resolving the sources can move the base (the branch point is known only now): read again.
     if (refOf(sourceController.base()) !== baseRead) repository = await read()
     if (started !== generation) return
@@ -392,19 +471,19 @@ export function createDiffView(
   let isClient = false
 
   function startComposing(anchor: Anchor) {
-    update({ composing: anchor, composingLine: null })
+    update({ composing: anchor, composingLine: null, composingText: '' })
     actions.focus(inputKeyOf(anchor))
   }
 
   /** Closes the compose box and hands the keyboard back to its anchor's comment button. */
   function stopComposing(anchor: Anchor) {
-    update({ composing: null, composingLine: null })
+    update({ composing: null, composingLine: null, composingText: '' })
     if (!isClient) actions.focus(commentButtonKeyOf(anchor))
   }
 
-  function submitComment(anchor: Anchor, text: string) {
+  function submitComment(anchor: Anchor, text: string, isSplit = false) {
     if (text.trim() !== '') {
-      const line = model.composingLine
+      const line = effectiveLineOf(model.composingLine, isSplit)
       review.add(line ? { ...anchor, line, text: text.trim() } : { ...anchor, text: text.trim() })
     }
     stopComposing(anchor)
@@ -464,11 +543,27 @@ export function createDiffView(
   }
 
   /** Every changed file's blocks in one stream, cached while its inputs are unchanged. */
-  function streamFor(capabilities: Capabilities, width: number): Stream {
+  function streamFor(
+    capabilities: Capabilities,
+    width: number,
+    style: Style,
+    isSplit = false,
+  ): Stream {
     const files = filesOf()
     const source = sourceController.source()
     const readOnly = sourceController.isReadOnly()
     const comments = review.comments()
+    // The compose box's height follows the preview rows of the typed text; the stream re-sizes
+    // only when their count changes.
+    const composeKey = model.composing
+      ? String(
+          composePreviewCountOf(
+            model.composingText,
+            model.composing.hunk !== undefined && capabilities.canPick,
+            composeInnerWidthOf(width),
+          ),
+        )
+      : ''
 
     if (
       cache &&
@@ -476,12 +571,15 @@ export function createDiffView(
       cache.hunks === model.hunks &&
       cache.comments === comments &&
       cache.composing === model.composing &&
+      cache.composeKey === composeKey &&
       cache.readOnly === readOnly &&
       cache.capabilities.canType === capabilities.canType &&
       cache.capabilities.canPick === capabilities.canPick &&
       cache.isLoaded === model.isLoaded &&
       cache.gonePaths === model.gonePaths &&
-      cache.width === width
+      cache.width === width &&
+      cache.cardStyle === style.cardStyle &&
+      cache.isSplit === isSplit
     ) {
       return cache.stream
     }
@@ -495,6 +593,9 @@ export function createDiffView(
         readOnly,
         capabilities,
         width,
+        style,
+        split: isSplit,
+        composeText: model.composingText,
         // Once the repository has loaded, a file absent from `model.hunks` was genuinely not
         // read (an untracked file past the cap, or a failed `git diff`), not still loading.
         unreadText: model.isLoaded ? 'Not read' : undefined,
@@ -506,32 +607,62 @@ export function createDiffView(
       hunks: model.hunks,
       comments,
       composing: model.composing,
+      composeKey,
       readOnly,
       capabilities,
       isLoaded: model.isLoaded,
       gonePaths: model.gonePaths,
       width,
+      cardStyle: style.cardStyle,
+      isSplit,
       stream,
     }
     return stream
   }
 
-  /** A note's card, indented one cell after the rail; its lines were wrapped when it was sized. */
+  /** A note's card; its lines were wrapped when it was sized. */
   function noteRowOf(kit: Kit, item: Extract<BodyItem, { kind: 'note' }>): RenderElement {
+    return note(kit, item.comment, item.lines, now(), id => review.remove(id), review.resend)
+  }
+
+  /** A file's title: icon, bold path, status mark, counts, then the inline `<note glyph> note` chip two columns after. */
+  function titleRowOf(
+    kit: Kit,
+    item: Extract<BodyItem, { kind: 'title' }>,
+    color: string,
+    style: Style,
+  ): RenderElement {
     const { Box, Text } = kit.ui
-    return (
-      <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        <Text> </Text>
-        <Box flexGrow={1} overflow="hidden">
-          {note(kit, item.comment, item.lines, now(), id => review.remove(id), review.resend)}
-        </Box>
-      </Box>
+    const mark = statusMarkOf(item.file.status)
+    const icon = iconOf(item.file.path)
+    const tag = fileTagOf(item.file.status)
+    const title = (
+      <Text wrap="truncate-end">
+        <Text color={icon.color}>{icon.glyph}</Text>
+        <Text bold>{`${ICON_GAP}${item.file.path}`}</Text>
+        <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
+        {item.file.adds > 0 ? <Text color={COLORS.added}>{` +${item.file.adds}`}</Text> : null}
+        {item.file.dels > 0 ? <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text> : null}
+        {tag ? <Text dimColor>{`  ${tag}`}</Text> : null}
+      </Text>
     )
+    const anchor: Anchor = { path: item.file.path }
+    const titleKey = `title-row:${item.file.path}`
+    let chips: RenderElement | undefined
+    if (item.canNote) {
+      const chip = noteChip(anchor, startComposing)
+      // The same HEADER_MIN the hunk label row reserves for its own label, so the title's single
+      // note pill shrinks to its bare icon under the same pressure, the path (which already
+      // truncates on its own) giving way first.
+      const mode = chipsFit([chip], ruleRoomFor(kit.columns, HEADER_MIN))
+      chips = pillRow(kit, [chip], mode, titleKey)
+    }
+    return <Box key={titleKey}>{cardTitle(kit, style, { color, title, chips })}</Box>
   }
 
   /**
    * One fixed row's element, by its payload kind: a `gap` draws one blank row, between files.
-   * `contentWidth` is the row's room beside the file's left rail (`kit.columns - 2`), for whatever
+   * `contentWidth` is the row's room beside the file's left rail (`contentWidthOf`), for whatever
    * here measures text instead of `kit.columns`; the rail itself is drawn by the caller,
    * `placedRowOf`.
    */
@@ -545,42 +676,22 @@ export function createDiffView(
     const { Box, Text } = kit.ui
     switch (item.kind) {
       case 'close':
-        return closeRow(kit, color)
-      case 'title': {
-        const mark = statusMarkOf(item.file.status)
-        const icon = iconOf(item.file.path)
-        const left = (
-          <Text wrap="truncate-end">
-            <Text color={icon.color}>{icon.glyph}</Text>
-            <Text bold>{` ${item.file.path}`}</Text>
-            <Text color={mark.color}>{`  ${mark.glyph}`}</Text>
-            <Text color={COLORS.added}>{` +${item.file.adds}`}</Text>
-            <Text color={COLORS.removed}>{` −${item.file.dels}`}</Text>
+        return frameBottom(kit, kit.style, color) ?? <Box />
+      case 'title':
+        return titleRowOf(kit, item, color, kit.style)
+      case 'status':
+        return (
+          <Text dimColor wrap="truncate-end">
+            {item.text}
           </Text>
         )
-        const anchor: Anchor = { path: item.file.path }
-        const titleKey = `title-row:${item.file.path}`
-        let right: RenderElement | undefined
-        if (item.canNote) {
-          const chip = noteChip(anchor, startComposing)
-          // The same HEADER_MIN the hunk toolbar reserves for its own label, so the heading's
-          // single note pill shrinks to its bare icon under the same pressure, the path (which
-          // already truncates on its own) giving way first.
-          const mode = chipsFit([chip], ruleRoomFor(kit.columns, HEADER_MIN))
-          right = pillRow(kit, [chip], mode, titleKey)
-        }
-        return (
-          <Box key={titleKey}>{ruleRow(kit, { color, start: RULE_START.open, left, right })}</Box>
-        )
-      }
-      case 'status':
-        return <Text dimColor>{item.text}</Text>
       case 'gap':
+      case 'blank':
         return <Text> </Text>
       case 'outdated-title':
-        return outdatedTitle(kit)
-      // The orphans group's own rows never pass through here: `placedRowOf` dispatches any key
-      // prefixed `orphans#` to `orphanRowOf` before a file is ever looked up for `bodyRowOf`.
+        return outdatedHeading(kit)
+      // The orphans group's own rows never pass through here: `placedRowOf` dispatches any block
+      // flagged `orphan` to `orphanRowOf` before a file is ever looked up for `bodyRowOf`.
       case 'orphans-title':
       case 'orphan-path':
         return <Box />
@@ -589,38 +700,42 @@ export function createDiffView(
       case 'note':
         return noteRowOf(kit, item)
       case 'comment-box':
-        // Indented one cell after the border, like a note card.
-        return (
-          <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
-            <Text> </Text>
-            <Box flexGrow={1} overflow="hidden">
-              {commentBox(kit, {
-                anchor: item.anchor,
-                inputKey: inputKeyOf(item.anchor),
-                hunk: item.hunk,
-                hasPicker: item.hasPicker,
-                line: model.composingLine,
-                columns: Math.max(1, contentWidth - 1),
-                onLineChange: line => update({ composingLine: line }),
-                onSubmit: text => submitComment(item.anchor, text),
-                onCancel: () => stopComposing(item.anchor),
-              })}
-            </Box>
-          </Box>
-        )
+        return commentBox(kit, {
+          anchor: item.anchor,
+          inputKey: inputKeyOf(item.anchor),
+          hunk: item.hunk,
+          hasPicker: item.hasPicker,
+          // The stream caches on the preview's row count, so its lines come from the live text here
+          // (same text, width and picker, so the same count the block was sized with).
+          preview: composePreviewLinesOf(
+            model.composingText,
+            item.hasPicker,
+            composeInnerWidthOf(contentWidth),
+          ),
+          isSplit: item.isSplit,
+          draft: model.composingText,
+          line: effectiveLineOf(model.composingLine, item.isSplit ?? false),
+          columns: contentWidth,
+          onInput: text => {
+            if (text !== model.composingText) update({ composingText: text })
+          },
+          onLineChange: line => update({ composingLine: line }),
+          onSubmit: text => submitComment(item.anchor, text, item.isSplit ?? false),
+          onCancel: () => stopComposing(item.anchor),
+        })
       case 'hunk-header':
         return (
           <Box flexDirection="row" overflow="hidden" flexWrap="nowrap">
             <Box flexGrow={1} overflow="hidden">
               {hunkToolbar(kit, {
                 anchor: item.anchor,
+                path: file.path,
                 hunk: item.hunk,
                 canNote: item.canNote,
                 isReadOnly: item.isReadOnly,
                 isStaged: (model.stagedHunks.get(file.path) ?? EMPTY_STAGED).has(item.hunk.header),
                 confirmingRevert: isArmed(anchorKeyOf(item.anchor)),
                 columns: contentWidth,
-                color,
                 onStartNote: startComposing,
                 onStage: () => void applyHunk(file, item.hunk, 'stage'),
                 onRevert: () => pressRevert(file, item.hunk, item.anchor),
@@ -655,11 +770,10 @@ export function createDiffView(
 
   /**
    * One block of the trailing orphans group: no `ChangedFile` backs these rows, so they never go
-   * through `bodyRowOf`/`placedRowOf`'s file-rail logic; the rail is a flat `COLORS.inactive`
-   * instead of a status colour. Only the item kinds `orphanBlocksOf` ever emits reach here.
+   * through `bodyRowOf`/`placedRowOf`'s file-rail logic; no rail is drawn (the group is not a card). Only the item kinds `orphanBlocksOf` ever emits reach here.
    */
   function orphanRowOf(kit: Kit, placed: Placed<BodyItem>): RenderElement {
-    const { Box } = kit.ui
+    const { Box, Text } = kit.ui
     const { block } = placed
     if (block.kind !== 'fixed') return <Box key={block.key} />
     const { item } = block
@@ -678,15 +792,20 @@ export function createDiffView(
       case 'note':
         content = noteRowOf(kit, item)
         break
+      case 'blank':
+        content = <Text> </Text>
+        break
       default:
         content = <Box />
     }
 
+    // The trailing group is not a file's card: no rail, indented to line up with the cards' text.
+    const indent = groupCellsOf(kit.style)
     return clippedOf(
       kit,
       block.key,
       <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        {railOf(kit, block.rows, COLORS.inactive)}
+        {indent > 0 ? <Text>{' '.repeat(indent)}</Text> : null}
         <Box flexGrow={1} overflow="hidden">
           {content}
         </Box>
@@ -697,52 +816,69 @@ export function createDiffView(
 
   /**
    * A placed block's element; the file it belongs to is found by its key's `path#...` prefix.
-   * Every row of a file's section carries a 2-column left rail, `▌ ` in the file's status
-   * colour, drawn here rather than by `bodyRowOf` so that function stays about one row's content.
-   * A hunk `Code` slice spans several terminal rows at once, so its rail is a `Text` of that many
-   * `▌ ` lines; the blank gap row between files carries no rail at all. D10 point 2: the file
-   * being edited this turn draws its rail in the accent instead, so the live feed is visible
-   * from across the room. The trailing orphans group (`orphans#` prefixed keys) has no file at
-   * all, so it is dispatched to `orphanRowOf` before the file lookup below.
+   * Every body row of a file's card draws behind the style's mark (`groupRows`): `▌ ` in the
+   * file's status colour under `bar`, nothing under `none`, `│ ` and ` │` under a frame. A hunk
+   * `Code` slice spans several terminal rows at once, so its rail is that many rows tall. The
+   * title, the frame's closing row and the blank row between files span the whole width and carry
+   * no rail. D10 point 2: the file being edited this turn draws its rail (or frame) in the accent
+   * instead, so the live feed is visible from across the room. The trailing orphans group
+   * (blocks flagged `orphan`) has no file at all, so it is dispatched to `orphanRowOf` first.
    */
   function placedRowOf(
     kit: Kit,
     placed: Placed<BodyItem>,
     filesByPath: ReadonlyMap<string, ChangedFile>,
   ): RenderElement {
-    const { Box, Code } = kit.ui
+    const { Box, Code, Text } = kit.ui
+    const { style } = kit
     const { block } = placed
-    if (block.key.startsWith('orphans#')) return orphanRowOf(kit, placed)
-    const path = block.key.slice(0, block.key.indexOf('#'))
+    if (block.kind === 'fixed' && block.orphan) return orphanRowOf(kit, placed)
+    const path = block.card ?? sepPathOf(block.key) ?? ''
     const file = filesByPath.get(path)
     if (!file) return <Box key={block.key} />
 
-    const contentWidth = contentWidthOf(kit.columns)
+    const contentWidth = contentWidthOf(kit.columns, style)
     const railColor = model.edited.has(file.path) ? COLORS.accent : statusMarkOf(file.status).color
 
     if (block.kind === 'hunk') {
       // A segment ending at a commented line draws its ◆ only once that last row is in view.
       const isMarked = block.mark !== undefined && placed.to === rowsOf(block)
       const mark = isMarked && block.mark ? NOTE_STATE_COLORS[block.mark] : undefined
+      const bodyOf = (): RenderElement => {
+        if (block.split) {
+          // Windowed by split-row index, so there is no unified slice to take.
+          return splitHunk(kit, {
+            key: `split:${block.key}`,
+            split: block.split,
+            from: placed.from,
+            to: placed.to,
+            width: contentWidth,
+          })
+        }
+        const sliced = sliceHunk(block.hunk, placed.from, placed.to)
+        const whole = block.whole ? wholeSourceOf(sliced, block.whole) : null
+        return whole ? (
+          wholeCodeOf(kit, file.path, whole)
+        ) : (
+          <Code source={sliced.text} format="diff" path={file.path} wrap="truncate-end" />
+        )
+      }
       return (
-        <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-          {railOf(kit, placed.to - placed.from, railColor, mark)}
-          <Box flexGrow={1} overflow="hidden">
-            <Code
-              source={sliceHunk(block.hunk, placed.from, placed.to).text}
-              format="diff"
-              path={file.path}
-              wrap="truncate-end"
-            />
-          </Box>
+        <Box key={block.key}>
+          {groupRows(kit, style, {
+            color: railColor,
+            rows: placed.to - placed.from,
+            mark,
+            children: bodyOf(),
+          })}
         </Box>
       )
     }
 
     const { item } = block
-    // The gap between cards has no border, and a card's own top and bottom rows (`╭─`, `╰`) span
-    // the whole width: none of them draws behind the `│ ` left border.
-    if (item.kind === 'gap' || item.kind === 'title' || item.kind === 'close') {
+    // The blank row under a title carries no rail outside a frame: the rail starts at the label.
+    const isOpenTitleGap = block.key.endsWith(`#${TITLE_GAP_KEY}`) && !style.frame
+    if (isOpenTitleGap || item.kind === 'gap' || item.kind === 'title' || item.kind === 'close') {
       return clippedOf(
         kit,
         block.key,
@@ -751,17 +887,91 @@ export function createDiffView(
       )
     }
 
+    // The compose box is the one frame: under bar and none the rail does not run through its rows;
+    // it sits on the code's left edge instead (inside the rails under a frame style).
+    if (item.kind === 'comment-box' && !style.frame) {
+      const indent = groupCellsOf(style)
+      return clippedOf(
+        kit,
+        block.key,
+        <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
+          {indent > 0 ? <Text>{' '.repeat(indent)}</Text> : null}
+          <Box flexGrow={1} overflow="hidden">
+            {bodyRowOf(kit, item, file, contentWidth, railColor)}
+          </Box>
+        </Box>,
+        placed,
+      )
+    }
+
     return clippedOf(
       kit,
       block.key,
-      <Box key={block.key} flexDirection="row" overflow="hidden" flexWrap="nowrap">
-        {railOf(kit, block.rows, railColor)}
-        <Box flexGrow={1} overflow="hidden">
-          {bodyRowOf(kit, item, file, contentWidth, railColor)}
-        </Box>
+      <Box key={block.key}>
+        {groupRows(kit, style, {
+          color: railColor,
+          rows: block.rows,
+          children: bodyRowOf(kit, item, file, contentWidth, railColor),
+        })}
       </Box>,
       placed,
     )
+  }
+
+  /**
+   * The pinned title: the scrolled card's title as the body's first row, drawn as the title line
+   * alone (no rule under `none`) under its own key, so `<path>#title` is still absent deep in a
+   * scroll. Its chips are the real title's (same keys and press ids): the real title is not placed
+   * while this is. Frame styles draw the title line as the card kit does.
+   */
+  function pinnedRowOf(
+    kit: Kit,
+    block: FixedBlock<BodyItem>,
+    filesByPath: ReadonlyMap<string, ChangedFile>,
+  ): RenderElement {
+    const { Box } = kit.ui
+    const path = block.card ?? ''
+    const file = filesByPath.get(path)
+    const { item } = block
+    if (!file || item.kind !== 'title') return <Box key={`${path}#pinned`} />
+    const color = model.edited.has(file.path) ? COLORS.accent : statusMarkOf(file.status).color
+    return (
+      <Box key={`${path}#pinned`}>
+        {titleRowOf(kit, item, color, { ...kit.style, titleRule: false })}
+      </Box>
+    )
+  }
+
+  /** Whether the diff draws side by side in a pane `columns` wide whose body is `bodyWidth` wide. */
+  const isSplitAt = (columns: number, bodyWidth: number) =>
+    splitMode.canSplit(bodyWidth) && splitMode.isSplit(columns)
+
+  /**
+   * Flips the layout and keeps the person where they were: the stream's rows change with it, so
+   * `top` is re-anchored in the stream the new layout draws: to the open compose box (its Input
+   * must stay mounted), else to the selected file's title, else to the title of the file that was
+   * at `top`. A picked line survives unless the new layout does not offer it (an old-side line in
+   * split).
+   */
+  function toggleSplit(kit: Kit, bodyWidth: number) {
+    if (!splitMode.canSplit(bodyWidth)) return
+    // The file the old layout shows at `top`, read before the layout flips: with no compose box and
+    // no selected file in the stream, the new layout keeps the person at that file's title.
+    const heldFile = fileAtRow(lastTitleRows, model.top)
+    splitMode.toggle(kit.columns)
+    const isSplit = isSplitAt(kit.columns, bodyWidth)
+    const stream = streamFor(kit.capabilities, bodyWidth, kit.style, isSplit)
+    const boxRow = model.composing
+      ? rowOfKey(stream.blocks, `${model.composing.path}#${commentBoxKeyOf(model.composing)}`)
+      : null
+    const titleRow = model.selected === null ? undefined : stream.titleRows.get(model.selected)
+    const heldRow = heldFile === null ? undefined : stream.titleRows.get(heldFile)
+    const top = boxRow ?? titleRow ?? heldRow ?? model.top
+    update({
+      top,
+      selected: fileAtRow(stream.titleRows, top) ?? model.selected,
+      composingLine: effectiveLineOf(model.composingLine, isSplit),
+    })
   }
 
   function render(kit: Kit): RenderElement {
@@ -779,7 +989,11 @@ export function createDiffView(
       )
 
     const files = filesOf()
-    const stream = streamFor(kit.capabilities, contentWidthOf(kit.columns))
+    // The body and the header chip decide split from the same widths. The threshold reads the
+    // pane's columns; the minimum reads the body's, which is what the renderer lays two sides in.
+    const bodyWidth = contentWidthOf(kit.columns, kit.style)
+    const isSplit = isSplitAt(kit.columns, bodyWidth)
+    const stream = streamFor(kit.capabilities, bodyWidth, kit.style, isSplit)
     // A comment whose file left the diff still has to draw somewhere (R32 part 2's orphans
     // group): the empty-state text only wins when the stream is truly empty, not just the file
     // list.
@@ -795,6 +1009,7 @@ export function createDiffView(
 
     lastTitleRows = stream.titleRows
     lastContentRows = stream.contentRows
+    lastBlocks = stream.blocks
 
     // A `reveal` for a file not yet in the last stream (a refresh still in flight when it was
     // called) lands here once `streamFor` finally places it.
@@ -802,41 +1017,47 @@ export function createDiffView(
       model.pendingReveal !== null ? stream.titleRows.get(model.pendingReveal) : undefined
     if (pendingRow !== undefined) model = { ...model, top: pendingRow, pendingReveal: null }
 
-    const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS))
+    const headerProps: HeaderProps = {
+      files,
+      edited: model.edited,
+      pending: review.pending().length,
+      confirmingClear: isArmed('clear'),
+      sourceValue: sourceValueOf(sourceController.source()),
+      sourceOptions: sourceController.options(),
+      onSourceChange: selectSource,
+      onRefresh: () => void refresh(),
+      isSplit,
+      canSplit: splitMode.canSplit(bodyWidth),
+      onToggleSplit: () => toggleSplit(kit, bodyWidth),
+      onSend: () => {
+        resetConfirm()
+        actions.send()
+      },
+      onEditSend: () => {
+        resetConfirm()
+        actions.editAndSend()
+      },
+      onPrevious: () => stepSelection(-1),
+      onNext: () => stepSelection(1),
+      onClear: pressClear,
+    }
+    const headerPlan = headerPlanFor(kit, headerProps)
+    const bodyRows = Math.max(0, kit.rows - fixedRowsOf(files.length, MAX_ROWS, headerPlan.rows))
     lastBodyRows = bodyRows
-    const top = clampTop(model.top, stream.contentRows, bodyRows)
+    const top = clampTop(model.top, stream.contentRows, bodyRows, stream.blocks)
     if (top !== model.top) model = { ...model, top }
 
-    const placed = windowOf(stream.blocks, top, bodyRows)
+    const view = viewOf(stream.blocks, top, bodyRows)
     const filesByPath = new Map(files.map(file => [file.path, file]))
 
     return (
       <Box flexDirection="column">
-        {header(kit, {
-          files,
-          edited: model.edited,
-          pending: review.pending().length,
-          confirmingClear: isArmed('clear'),
-          sourceValue: sourceValueOf(sourceController.source()),
-          sourceOptions: sourceController.options(),
-          onSourceChange: selectSource,
-          onRefresh: () => void refresh(),
-          onSend: () => {
-            resetConfirm()
-            actions.send()
-          },
-          onEditSend: () => {
-            resetConfirm()
-            actions.editAndSend()
-          },
-          onPrevious: () => stepSelection(-1),
-          onNext: () => stepSelection(1),
-          onClear: pressClear,
-        })}
+        {header(kit, headerProps, headerPlan)}
         {fileList(kit, { files, selected: model.selected, edited: model.edited, onSelect: select })}
         {/* One short of the full width so the rule never wraps onto a row of its own. */}
         <Text dimColor>{'─'.repeat(Math.max(1, kit.columns - 1))}</Text>
-        {placed.map(p => placedRowOf(kit, p, filesByPath))}
+        {view.pinned ? pinnedRowOf(kit, view.pinned, filesByPath) : null}
+        {view.placed.map(p => placedRowOf(kit, p, filesByPath))}
       </Box>
     )
   }
@@ -849,7 +1070,7 @@ export function createDiffView(
     // A wheel tick or arrow asks for a row or two; scale it to a readable step, as the terminal's
     // own scrollable views do. A page or Home/End key already asks for a step this size or more.
     const step = size >= bodyRows ? size : size * WHEEL_ROWS
-    const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows)
+    const top = clampTop(model.top + Math.sign(by) * step, lastContentRows, bodyRows, lastBlocks)
     if (top !== model.top) {
       update({
         top,

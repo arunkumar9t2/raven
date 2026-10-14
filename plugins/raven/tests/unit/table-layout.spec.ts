@@ -31,6 +31,10 @@ const linesOf = (layout: TableLayout) =>
   drawnRowsOf(layout).map(line => line.map(piece => piece.text).join(''))
 const maxWidth = (lines: string[]) => Math.max(...lines.map(widthOf))
 
+/** A layout's drawn rows at the given corners, as plain strings. */
+const drawn = (layout: TableLayout, corners?: 'sharp' | 'rounded') =>
+  drawnRowsOf(layout, corners).map(line => line.map(piece => piece.text).join(''))
+
 describe('spansOf', () => {
   test('bold and code keep styles, markers vanish', () => {
     expect(spansOf('a **b** `c d` e')).toEqual([
@@ -173,5 +177,98 @@ describe('wide emoji in cells', () => {
     const cells = (line: string) => [...line].length + (line.match(/[✅❌⭐]/g) ?? []).length
     const widths = new Set(linesOf(layoutTable(data, 40)).map(cells))
     expect(widths.size).toBe(1)
+  })
+})
+
+describe('grid corners', () => {
+  test('rounded swaps only the four outer corners', () => {
+    const layout = layoutTable(simple, 80, 'grid')
+    expect(drawn(layout, 'rounded')).toEqual([
+      '╭──────┬───────╮',
+      '│ Path │ Note  │',
+      '├──────┼───────┤',
+      '│ a.ts │ short │',
+      '╰──────┴───────╯',
+    ])
+  })
+
+  test('sharp is the default and the old output', () => {
+    expect(drawn(layoutTable(simple, 80))).toEqual(drawn(layoutTable(simple, 80), 'sharp'))
+    expect(drawn(layoutTable(simple, 80))[0]).toBe('┌──────┬───────┐')
+  })
+})
+
+describe('rule tables', () => {
+  test('header, one rule, rows; columns two spaces apart, no verticals, aligned per column', () => {
+    expect(drawn(layoutTable(simple, 80, 'rule'))).toEqual([
+      'Path   Note',
+      '───────────',
+      'a.ts  short',
+    ])
+  })
+
+  test('the header is bold and the rule is a border piece', () => {
+    const lines = drawnRowsOf(layoutTable(simple, 80, 'rule'))
+    const header = (lines[0] ?? []).filter(piece => piece.text.trim() !== '')
+    expect(header.every(piece => piece.style === 'bold')).toBe(true)
+    expect(lines[1]).toEqual([{ text: '─'.repeat(11), style: 'border' }])
+  })
+
+  test('no vertical or corner glyph anywhere', () => {
+    const text = drawn(layoutTable(wide, 60, 'rule')).join('\n')
+    expect(text).not.toMatch(/[│┌┐└┘├┤┬┴┼╭╮╰╯]/)
+  })
+
+  test('fits the width it is given and wraps cells like a grid', () => {
+    for (const width of [40, 60, 80]) {
+      const layout = layoutTable(wide, width, 'rule')
+      if (layout.kind !== 'grid') continue
+      const lines = drawn(layout)
+      expect(maxWidth(lines)).toBeLessThanOrEqual(width)
+      // one rule line, directly under the (possibly wrapped) header
+      const headerHeight = layout.header.reduce((m, cell) => Math.max(m, cell.length), 1)
+      expect(lines.filter(line => /^─+$/.test(line))).toHaveLength(1)
+      expect(/^─+$/.test(lines[headerHeight] ?? '')).toBe(true)
+    }
+  })
+
+  test('rule needs less room than a grid, so a table that is records as a grid can still be a table', () => {
+    const table = {
+      header: ['A', 'B', 'C'],
+      align: ['left', 'left', 'left'] as ('left' | 'center' | 'right')[],
+      rows: [['aaaaaa', 'bbbbbb', 'cccccc']],
+    }
+    // grid overhead for 3 columns is 10, rule overhead is 4; 6 + 6 + 6 + 4 = 22 fits 22, 6 + 6 + 6 + 10 does not
+    expect(layoutTable(table, 22, 'grid').kind).toBe('records')
+    expect(layoutTable(table, 22, 'rule').kind).toBe('grid')
+  })
+
+  test('a narrow pane still falls back to records in rule mode', () => {
+    expect(layoutTable(wide, 14, 'rule').kind).toBe('records')
+  })
+
+  test('a header-only table is the header and its rule', () => {
+    const lines = drawn(
+      layoutTable({ header: ['A', 'B'], align: ['left', 'left'], rows: [] }, 40, 'rule'),
+    )
+    expect(lines).toEqual(['A  B', '────'])
+  })
+})
+
+describe('emoji cell widths', () => {
+  test('a VS16 and a ZWJ cell align the grid like a plain one', () => {
+    const data: TableData = {
+      header: ['Mark', 'Who'],
+      align: ['left', 'left'],
+      rows: [
+        ['⚠️', '👨‍👩‍👧'],
+        ['ok', 'plain'],
+      ],
+    }
+    const lines = drawn(layoutTable(data, 60), 'sharp')
+    const widths = lines.map(widthOf)
+    expect(new Set(widths).size).toBe(1)
+    // columns of 4 (the header) and 5 cells, plus the grid's 3n + 1 borders
+    expect(widths[0]).toBe(4 + 5 + 7)
   })
 })

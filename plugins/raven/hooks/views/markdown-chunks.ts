@@ -3,6 +3,9 @@ import type { Align, TableData } from '../ui/table-layout'
 
 const FENCE = /^\s*(`{3,}|~{3,})/
 
+/** `text` without its blank lines at both ends; the first line's own indent stays (an indented code block). */
+export const trimBlankLines = (text: string) => text.replace(/^(?:[ \t\r]*\n)+/, '').trimEnd()
+
 /**
  * CommonMark: a fence closes on a line that is only the marker's character, at least as long as
  * the opener, with nothing but whitespace around it: an info string (e.g. a ```ts` line nested
@@ -26,8 +29,8 @@ export function markdownChunksOf(markdown: string, max = ELEMENT_TEXT_LIMIT): st
   let fence: string | null = null
 
   const flush = () => {
-    const text = lines.join('\n').trim()
-    if (text !== '') chunks.push(text)
+    const text = trimBlankLines(lines.join('\n'))
+    if (text.trim() !== '') chunks.push(text)
     lines = []
     size = 0
   }
@@ -117,8 +120,8 @@ function proseBlocksOf(lines: readonly string[]): DocBlock[] {
   const blocks: DocBlock[] = []
   let prose: string[] = []
   const flush = () => {
-    const text = prose.join('\n').trim()
-    if (text !== '') blocks.push({ kind: 'markdown', text })
+    const text = trimBlankLines(prose.join('\n'))
+    if (text.trim() !== '') blocks.push({ kind: 'markdown', text })
     prose = []
   }
   for (let i = 0; i < lines.length; i++) {

@@ -6,10 +6,11 @@ import { badge } from '../hooks/ui/badge'
 import type { Chip } from '../hooks/ui/chips'
 import { diffStat } from '../hooks/ui/diff-stat'
 import { dot } from '../hooks/ui/dot'
+import { NOTE_GLYPH } from '../hooks/ui/icon-text'
 import { progressBar } from '../hooks/ui/progress-bar'
 import { sectionHeader } from '../hooks/ui/section-header'
-import { statBar } from '../hooks/ui/stat-bar'
 import { pillRow } from '../hooks/ui/strip'
+import { styleOf } from '../hooks/ui/style'
 import { baseWorld, SESSION } from './helpers'
 
 tier('user')
@@ -34,6 +35,7 @@ async function mountKit($: Engine, on: On, draw: (kit: Kit) => RenderElement) {
       columns: 40,
       rows: 20,
       capabilities: KEYBOARD,
+      style: styleOf('bar'),
       press: () => {},
     }
     return draw(kit)
@@ -56,7 +58,7 @@ const pillRowWorld = (
   key: string,
 ) => mountKit($, on, kit => pillRow(kit, chips, mode, key))
 
-const NOTE: Chip = { key: 'note', label: 'note', icon: '✎', onPress: () => {} }
+const NOTE: Chip = { key: 'note', label: 'note', icon: NOTE_GLYPH, onPress: () => {} }
 
 describe('the UI kit draws on the terminal surface', () => {
   test('every component draws once, with no refusal', async ($: Engine, on: On) => {
@@ -71,7 +73,6 @@ describe('the UI kit draws on the terminal surface', () => {
             dot(kit, COLORS.accent),
             badge(kit, 6, COLORS.accent),
             diffStat(kit, 15, 12),
-            statBar(kit, 3, 3, 5),
             progressBar(kit, 3, 5, 5),
             sectionHeader(kit, {
               dot: COLORS.added,
@@ -92,7 +93,7 @@ describe('the UI kit draws on the terminal surface', () => {
 
 describe("pillRow's pills", () => {
   const CHIPS: Chip[] = [
-    { key: 'quiet', label: 'note', icon: '✎', onPress: () => {} },
+    { key: 'quiet', label: 'note', icon: NOTE_GLYPH, onPress: () => {} },
     { key: 'armed', label: 'sure?', icon: '↺', forceWords: true, onPress: () => {} },
   ]
 

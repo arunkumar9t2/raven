@@ -20,7 +20,7 @@ Read in this order. This README plus the eight specs below make up the full doc 
 4. **[diff-pane.md](./diff-pane.md)** and **[review.md](./review.md)**: the diff pane itself:
    sources, hunks, staging and reverting, and the full review-comment lifecycle.
 5. **[views.md](./views.md)**: the Doc, Files and Tasks views, plus the chrome shared across every
-   view: the status band, the command row, pane tabs and `/raven` subcommands.
+   view: the drawing kit and `cardStyle`, the status band, the command row, pane tabs and `/raven` subcommands.
 6. **[settings-and-surfaces.md](./settings-and-surfaces.md)**: the `/config` fields and how a view
    degrades on a surface whose element table is missing `Image`, `Input` or `Select`.
 7. **[development.md](./development.md)**: building, testing, and the closed-loop tmux harness used

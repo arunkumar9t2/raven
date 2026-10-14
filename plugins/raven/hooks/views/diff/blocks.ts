@@ -9,6 +9,9 @@ import {
   lineRowsOf,
   splitAddressed,
 } from '../../review/comments'
+import { titleRowsOf } from '../../ui/card'
+import { groupCellsOf } from '../../ui/chrome'
+import { type Style, styleOf } from '../../ui/style'
 import {
   type Anchor,
   addressedKeyOf,
@@ -19,26 +22,50 @@ import {
 } from './anchor'
 import type { Block } from './layout'
 import { rowsOf, sliceHunk } from './layout'
-import { composeRowsOf, noteLinesOf, noteRowsOf } from './note-layout'
+import {
+  composeInnerWidthOf,
+  composePreviewLinesOf,
+  composeRowsOf,
+  noteLinesOf,
+  noteRowsOf,
+} from './note-layout'
+import { gutterWidthOf, runEndOf, splitHunkOf, splitsAsColumns } from './split'
+import { type WholeSide, wholeSideOf } from './whole-file'
 
 export const TITLE_KEY = 'title'
 export const STATUS_KEY = 'status'
-/** The block key of a file card's closing `╰────` row. */
+/** The block key of a framed card's closing row (`└────┘` / `╰────╯`, drawn by the card kit); frame styles only. */
 export const CLOSE_KEY = 'close'
+/** The blank row under a file's title. */
+export const TITLE_GAP_KEY = 'title-gap'
+/** The blank row between a file's own notes (or compose box) and its first hunk. */
+export const FILE_GAP_KEY = 'file-gap'
+/** The blank row before hunk `index`, for every hunk but the first. */
+export const hunkGapKeyOf = (index: number) => `hunk-gap:${index}`
+const OUTDATED_GAP_KEY = 'outdated-gap'
 export const OUTDATED_TITLE_KEY = 'outdated-title'
+const ORPHANS_GAP_KEY = 'orphans-gap'
 export const ORPHANS_TITLE_KEY = 'orphans-title'
 /** The block key of an orphaned path's own heading row, inside the `orphans#` group. */
 export const orphanPathKeyOf = (path: string) => `orphan-path:${path}`
 
 const EMPTY_GONE: ReadonlySet<string> = new Set()
 
-/** The card's closing row: one `╰────` line ending every file's section. */
+/** A framed card's closing row (`frameBottom`); bar and none draw none. */
 const closeBlock: Block<BodyItem> = {
   kind: 'fixed',
   key: CLOSE_KEY,
   rows: 1,
   item: { kind: 'close' },
 }
+
+/** One blank row inside a card (or above a trailing group): the rails run through it. */
+const blankBlock = (key: string): Block<BodyItem> => ({
+  kind: 'fixed',
+  key,
+  rows: 1,
+  item: { kind: 'blank' },
+})
 
 /**
  * Whether `comment` is this file's own: a diff comment (never a doc comment: `section` is the
@@ -50,26 +77,20 @@ const closeBlock: Block<BodyItem> = {
 const belongsTo = (comment: Comment, file: ChangedFile): boolean =>
   comment.section === undefined && (comment.path === file.path || comment.path === file.oldPath)
 
-/** The header's fixed row count (counts+source, then the action buttons) and the rule below it. */
-const HEADER_ROWS = 2
+/** The rule row below the file list. */
 const RULE_ROWS = 1
 
-/** The fixed rows above the scrolling body: the header, the (capped) file list, and the rule. */
-export function fixedRowsOf(fileCount: number, maxListRows: number): number {
-  return HEADER_ROWS + Math.min(fileCount, maxListRows) + RULE_ROWS
+/**
+ * The fixed rows above the scrolling body: the header (`headerRows`: 1, or 2 on a pane too narrow
+ * for one row, see `headerPlanOf`), the (capped) file list, and the rule.
+ */
+export function fixedRowsOf(fileCount: number, maxListRows: number, headerRows: number): number {
+  return headerRows + Math.min(fileCount, maxListRows) + RULE_ROWS
 }
 
-/** The 2-column left border (`│ `) every body row of a file's card draws behind. */
-const RAIL_CELLS = 2
-/** The one-cell indent a note card draws after the border. */
-const NOTE_INDENT = 1
-
-/** A row's room beside the file card's left border, for a pane `columns` wide. */
-export const contentWidthOf = (columns: number): number => Math.max(1, columns - RAIL_CELLS)
-
-/** A note card's (or hunk toolbar's) room: the content width less the indent after the rail. */
-export const indentedWidthOf = (contentWidth: number): number =>
-  Math.max(1, contentWidth - NOTE_INDENT)
+/** A row's room beside the style's group rails (bar 2, none 0, frame 4), for a pane `columns` wide. */
+export const contentWidthOf = (columns: number, style: Style): number =>
+  Math.max(1, columns - groupCellsOf(style))
 
 /** The fixed rows' payload: one variant per row kind a `Block` can carry. */
 export type BodyItem =
@@ -77,9 +98,18 @@ export type BodyItem =
   | { kind: 'note'; comment: Comment; lines: string[] }
   | { kind: 'addressed'; anchor: Anchor; count: number }
   | { kind: 'outdated-title' }
-  | { kind: 'comment-box'; anchor: Anchor; hunk?: Hunk; hasPicker: boolean }
+  | {
+      kind: 'comment-box'
+      anchor: Anchor
+      hunk?: Hunk
+      hasPicker: boolean
+      /** The wrapped preview of the typed text, drawn under the Input; its length is in `rows`. */
+      preview: readonly string[]
+      isSplit?: boolean
+    }
   | { kind: 'hunk-header'; anchor: Anchor; hunk: Hunk; canNote: boolean; isReadOnly: boolean }
   | { kind: 'gap' }
+  | { kind: 'blank' }
   | { kind: 'close' }
   | { kind: 'status'; text: string }
   | { kind: 'orphans-title' }
@@ -115,32 +145,61 @@ function splitInline(hunk: Hunk, notes: Comments): { inline: InlineNotes[]; rest
  * A hunk as blocks: whole when nothing sits under one of its lines, else a segment per commented
  * line: the lines up to and including it (its rail cell marked with the first note's status),
  * then that line's cards, and a last segment for the rest. Row-exact: the segments' lines and
- * the cards' rows add up to the hunk plus the notes.
+ * the cards' rows add up to the hunk plus the notes. Side by side the cut moves to the end of the
+ * line's change run (notes on one run share it), so the segments' split rows concatenate to the
+ * whole hunk's split rows.
  */
 function hunkSegmentsOf(
   index: number,
   hunk: Hunk,
   inline: readonly InlineNotes[],
   width: number,
+  whole?: WholeSide,
+  isSplit = false,
 ): Block<BodyItem>[] {
   const key = hunkKeyOf(index, hunk)
-  if (inline.length === 0) return [{ kind: 'hunk', key, hunk }]
+  const stamp = whole ? { whole } : {}
+  // A whole-file hunk is source, never side by side. The gutter is the whole hunk's, so a sliced
+  // segment keeps its siblings' width.
+  // A hunk with nothing on one side (a turn's Write) stays unified too.
+  const asSplit = isSplit && !whole && splitsAsColumns(hunk)
+  const gutter = asSplit ? gutterWidthOf(hunk) : null
+  const blockOf = (blockKey: string, shown: Hunk, mark?: CommentStatus): Block<BodyItem> => ({
+    kind: 'hunk',
+    key: blockKey,
+    hunk: shown,
+    ...(mark === undefined ? {} : { mark }),
+    ...stamp,
+    ...(gutter === null ? {} : { split: splitHunkOf(shown, gutter) }),
+  })
+  if (inline.length === 0) return [blockOf(key, hunk)]
 
   // Each segment is a plain hunk block over a pre-sliced hunk (gutter renumbered by `sliceHunk`).
-  const segmentOf = (from: number, to: number, mark?: CommentStatus): Block<BodyItem> => ({
-    kind: 'hunk',
-    key: from === 0 ? key : `${key}~${from}`,
-    hunk: sliceHunk(hunk, from, to),
-    mark,
-  })
+  const segmentOf = (from: number, to: number, mark?: CommentStatus): Block<BodyItem> =>
+    blockOf(from === 0 ? key : `${key}~${from}`, sliceHunk(hunk, from, to), mark)
   const body = bodyLinesOf(hunk)
   const total = body.length
-  const blocks: Block<BodyItem>[] = []
-  let from = 0
-  for (const { at, notes } of inline) {
+  // Where the segment holding a commented row ends: right under it in unified; in split, under
+  // the end of the change run it belongs to, so the segments partition the hunk's split rows
+  // exactly (a cut inside a run would re-pair its lines). A context line still ends at itself.
+  const cutOf = (at: number): number => {
+    if (asSplit) return runEndOf(body, at)
     // A `\ No newline` marker belongs to the line above it: the segment takes it along.
     let to = at + 1
     while (body[to]?.startsWith('\\')) to += 1
+    return to
+  }
+  const cuts: { to: number; notes: Comment[] }[] = []
+  for (const { at, notes } of inline) {
+    const to = cutOf(at)
+    const last = cuts.at(-1)
+    if (last && last.to === to) last.notes.push(...notes)
+    else cuts.push({ to, notes: [...notes] })
+  }
+
+  const blocks: Block<BodyItem>[] = []
+  let from = 0
+  for (const { to, notes } of cuts) {
     blocks.push(segmentOf(from, to, notes[0]?.status))
     blocks.push(...notesBlocksOf(notes, { path: notes[0]?.path ?? '' }, width))
     from = to
@@ -184,7 +243,8 @@ function notesBlocksOf(notes: Comments, anchor: Anchor, width: number): Block<Bo
  * while idle, the "＋ note" control lives on the heading or the hunk's actions row instead, so no
  * block is emitted at all. A surface without `canType` drops the box entirely (no controls to
  * draw); `hasPicker` (whether the box draws its line-picker row) is carried on the block itself
- * so the row count here and `commentBox`'s own drawing never disagree.
+ * so the row count here and `commentBox`'s own drawing never disagree. The wrapped `preview` of
+ * the text typed so far is computed once here; the box's rows count it (`composeRowsOf`).
  */
 function anchorBlocksOf(
   notes: Comments,
@@ -192,13 +252,16 @@ function anchorBlocksOf(
   composing: Anchor | null,
   capabilities: Capabilities,
   width: number,
+  composeText: string,
   hunk?: Hunk,
+  isSplit = false,
 ): Block<BodyItem>[] {
   const notesBlocks = notesBlocksOf(notes, anchor, width)
   if (!capabilities.canType || !sameAnchor(composing, anchor)) return notesBlocks
 
   const hasPicker = hunk !== undefined && capabilities.canPick
-  const rows = composeRowsOf(hasPicker)
+  const preview = composePreviewLinesOf(composeText, hasPicker, composeInnerWidthOf(width))
+  const rows = composeRowsOf(hasPicker, width, preview.length)
   return [
     ...notesBlocks,
     {
@@ -207,7 +270,14 @@ function anchorBlocksOf(
       rows,
       // The Input must stay mounted (its text would be lost), so it is never clipped at the top.
       pinned: true,
-      item: { kind: 'comment-box', anchor, hunk, hasPicker },
+      item: {
+        kind: 'comment-box',
+        anchor,
+        hunk,
+        hasPicker,
+        preview,
+        ...(isSplit ? { isSplit: true } : {}),
+      },
     },
   ]
 }
@@ -224,6 +294,7 @@ function outdatedBlocksOf(outdated: Comments, width: number): Block<BodyItem>[] 
   }
 
   const blocks: Block<BodyItem>[] = [
+    blankBlock(OUTDATED_GAP_KEY),
     { kind: 'fixed', key: OUTDATED_TITLE_KEY, rows: 1, item: { kind: 'outdated-title' } },
   ]
   for (const [hunk, group] of byHunk) {
@@ -256,6 +327,7 @@ function orphanBlocksOf(
   }
 
   const blocks: Block<BodyItem>[] = [
+    blankBlock(ORPHANS_GAP_KEY),
     { kind: 'fixed', key: ORPHANS_TITLE_KEY, rows: 1, item: { kind: 'orphans-title' } },
   ]
   for (const [path, group] of byPath) {
@@ -282,15 +354,22 @@ export type BlocksOptions = {
   width: number
   /** The status for a file whose hunks are undefined; `Loading…` when omitted. */
   unreadText?: string
+  /** The border style: what a title takes (2 rows under `none`) and whether a close row ends the card. Bar when omitted. */
+  style?: Style
+  /** The text typed in the open compose box: its wrapped preview rows count in the box's height. */
+  composeText?: string
+  /** Draws each hunk side by side: hunk blocks carry `split` rows and count them as their height. */
+  split?: boolean
 }
 
 /**
- * A file card's body as fixed-height and hunk blocks, top to bottom: the title row (`╭─`, carrying
- * the file's own note pill), the file-level notes and comment box, then each hunk preceded by its
- * toolbar row (`├─`, its header label and, unless read-only, the note/stage/revert pills) and
- * followed by its own notes and comment box, then an "Outdated" group for comments whose hunk no
- * longer exists, and the closing `╰` row. A file with no hunks (loading, binary, or no textual
- * changes) has one status row instead of hunks, inside the card.
+ * A file card's body as fixed-height and hunk blocks, top to bottom: the title row (`titleRowsOf`
+ * rows, carrying the file's own note chip), a blank row, the file-level notes and comment box
+ * (then a blank row, only when there are any), then each hunk behind its label row (the
+ * range, the note/stage/revert chips; a blank row before every hunk but the first) followed by
+ * its own notes and comment box, an "Outdated" group for comments whose hunk no longer exists,
+ * and, under a frame style only, the closing row. A file with no hunks (loading, binary, or no
+ * textual changes) has one status row instead of hunks, inside the card.
  */
 export function blocksOf(
   file: ChangedFile,
@@ -301,7 +380,11 @@ export function blocksOf(
 ): Block<BodyItem>[] {
   const isReadOnly = options.readOnly ?? false
   const capabilities = options.capabilities ?? FULL_CAPABILITIES
-  const width = indentedWidthOf(options.width)
+  const style = options.style ?? styleOf('bar')
+  const width = options.width
+  const composeText = options.composeText ?? ''
+  const whole = wholeSideOf(file.status)
+  const isSplit = options.split ?? false
   const fileAnchor: Anchor = { path: file.path }
   const own = comments.filter(comment => belongsTo(comment, file))
   const grouped = groupByAnchor(own, hunks?.map(hunk => hunk.header) ?? [])
@@ -311,11 +394,16 @@ export function blocksOf(
     {
       kind: 'fixed',
       key: TITLE_KEY,
-      rows: 1,
+      rows: titleRowsOf(style),
       item: { kind: 'title', file, canNote: canNoteFile },
+      title: true,
     },
-    ...(isReadOnly ? [] : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width)),
+    blankBlock(TITLE_GAP_KEY),
   ]
+  const fileLevel = isReadOnly
+    ? []
+    : anchorBlocksOf(grouped.file, fileAnchor, composing, capabilities, width, composeText)
+  if (fileLevel.length > 0) blocks.push(...fileLevel, blankBlock(FILE_GAP_KEY))
 
   if (hunks === undefined || hunks.length === 0) {
     const text =
@@ -325,11 +413,12 @@ export function blocksOf(
           ? 'Binary file'
           : 'No textual changes'
     blocks.push({ kind: 'fixed', key: STATUS_KEY, rows: 1, item: { kind: 'status', text } })
-    blocks.push(closeBlock)
+    if (style.frame) blocks.push(closeBlock)
     return blocks
   }
 
   hunks.forEach((hunk, index) => {
+    if (index > 0) blocks.push(blankBlock(hunkGapKeyOf(index)))
     const anchor: Anchor = { path: file.path, hunk: hunk.header }
     blocks.push({
       kind: 'fixed',
@@ -344,16 +433,27 @@ export function blocksOf(
       },
     })
     if (isReadOnly) {
-      blocks.push({ kind: 'hunk', key: hunkKeyOf(index, hunk), hunk })
+      blocks.push(...hunkSegmentsOf(index, hunk, [], width, whole, isSplit))
       return
     }
     const { inline, rest } = splitInline(hunk, grouped.byHunk.get(hunk.header) ?? [])
-    blocks.push(...hunkSegmentsOf(index, hunk, inline, width))
-    blocks.push(...anchorBlocksOf(rest, anchor, composing, capabilities, width, hunk))
+    blocks.push(...hunkSegmentsOf(index, hunk, inline, width, whole, isSplit))
+    blocks.push(
+      ...anchorBlocksOf(
+        rest,
+        anchor,
+        composing,
+        capabilities,
+        width,
+        composeText,
+        hunk,
+        isSplit && !whole && splitsAsColumns(hunk),
+      ),
+    )
   })
 
   if (!isReadOnly) blocks.push(...outdatedBlocksOf(grouped.outdated, width))
-  blocks.push(closeBlock)
+  if (style.frame) blocks.push(closeBlock)
 
   return blocks
 }
@@ -365,8 +465,17 @@ export type Stream = {
   contentRows: number
 }
 
+const SEP_SUFFIX = '#sep'
+
+/** The key of the gap row `streamOf` puts before `path`'s card (it carries no `card`). */
+const sepKeyOf = (path: string): string => `${path}${SEP_SUFFIX}`
+
+/** The path a `sepKeyOf` key was made for, or undefined for any other key. */
+export const sepPathOf = (key: string): string | undefined =>
+  key.endsWith(SEP_SUFFIX) ? key.slice(0, -SEP_SUFFIX.length) : undefined
+
 /**
- * The files' `blocksOf` (each a card, `╭` to `╰`) one after another, a blank gap row between cards; each block's key is
+ * The files' `blocksOf` (each a card) one after another, a blank gap row between cards; each block's key is
  * prefixed with its file's path so keys stay unique across the stream.
  */
 export function streamOf(
@@ -383,12 +492,12 @@ export function streamOf(
   let row = 0
   files.forEach((each, index) => {
     if (index > 0) {
-      blocks.push({ kind: 'fixed', key: `${each.path}#sep`, rows: 1, item: { kind: 'gap' } })
+      blocks.push({ kind: 'fixed', key: sepKeyOf(each.path), rows: 1, item: { kind: 'gap' } })
       row += 1
     }
     titleRows.set(each.path, row)
     for (const block of blocksOf(each, hunksFor(each), comments, composing, options)) {
-      blocks.push({ ...block, key: `${each.path}#${block.key}` })
+      blocks.push({ ...block, key: `${each.path}#${block.key}`, card: each.path })
       row += rowsOf(block)
     }
   })
@@ -397,8 +506,8 @@ export function streamOf(
   // belongs here when its path matches a current file's path or (a rename) oldPath.
   const isOwned = (comment: Comment) => files.some(file => belongsTo(comment, file))
   const orphans = comments.filter(comment => comment.section === undefined && !isOwned(comment))
-  for (const block of orphanBlocksOf(orphans, gonePaths, indentedWidthOf(options.width))) {
-    blocks.push({ ...block, key: `orphans#${block.key}` })
+  for (const block of orphanBlocksOf(orphans, gonePaths, options.width)) {
+    blocks.push({ ...block, key: `orphans#${block.key}`, orphan: true })
     row += rowsOf(block)
   }
 

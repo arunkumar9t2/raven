@@ -141,3 +141,9 @@ describe('docBlocksOf tables', () => {
     expect(blocks).toEqual([{ kind: 'markdown', text: 'a | b\njust text' }])
   })
 })
+
+describe('CRLF blank lines', () => {
+  test('leading CRLF blank lines are dropped from a chunk', () => {
+    expect(markdownChunksOf('\r\nfoo\r\n\r\nbar\r\n')).toEqual(['foo\r\n\r\nbar'])
+  })
+})

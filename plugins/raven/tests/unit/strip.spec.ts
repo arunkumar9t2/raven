@@ -1,7 +1,15 @@
 import { describe, expect, test } from 'bun:test'
 import { createPresses } from '../../hooks/core/presses'
-import { cellsOf, focusAfter, pillAt, type StripRow, targetsOf } from '../../hooks/surface/strip'
-import { pill } from '../../hooks/ui/strip'
+import {
+  cellsOf,
+  focusAfter,
+  pillAt,
+  rowBackgroundOf,
+  type StripRow,
+  targetsOf,
+} from '../../hooks/surface/strip'
+import { ICON_GAP, NOTE_GLYPH } from '../../hooks/ui/icon-text'
+import { iconGap, pill } from '../../hooks/ui/strip'
 import { widthOf } from '../../hooks/ui/wrap'
 
 describe('cellsOf', () => {
@@ -30,7 +38,7 @@ describe('cellsOf parity', () => {
       '\u{f0214}',
       '\u{e628}',
       '↺',
-      '✎',
+      NOTE_GLYPH,
       '➤',
       '■',
       '█',
@@ -161,5 +169,40 @@ describe('the press registry', () => {
     presses.begin('doc')
     expect(presses.dispatch('diff', 'a')).toBe(true)
     expect(presses.dispatch('doc', 'a')).toBe(false)
+  })
+})
+
+describe('icon gap', () => {
+  test('iconGap is a plain segment as wide as ICON_GAP', () => {
+    expect(iconGap()).toEqual({ t: ICON_GAP })
+  })
+
+  test('a pill pairs its icon and label through the icon gap', () => {
+    expect(pill('x', NOTE_GLYPH, 'note', 'normal', () => {}).t).toBe(
+      ` ${NOTE_GLYPH}${ICON_GAP}note `,
+    )
+    expect(pill('x', '', 'note', 'normal', () => {}).t).toBe(' note ')
+    expect(pill('x', '✕', '', 'normal', () => {}).t).toBe(' ✕ ')
+  })
+})
+
+describe('rowBackgroundOf', () => {
+  const props = { activeId: 'file:a', activeBg: 'selectionBg', rowHoverBg: 'hoverBg' }
+
+  test('the selected row holds the selection tint, hovered or not', () => {
+    const row: StripRow = { id: 'file:a', left: [] }
+    expect(rowBackgroundOf(row, props, '')).toBe('selectionBg')
+    expect(rowBackgroundOf(row, props, 'file:a')).toBe('selectionBg')
+  })
+
+  test('another row lights on hover only', () => {
+    const row: StripRow = { id: 'file:b', left: [] }
+    expect(rowBackgroundOf(row, props, 'file:b')).toBe('hoverBg')
+    expect(rowBackgroundOf(row, props, 'file:a')).toBeUndefined()
+    expect(rowBackgroundOf(row, props, '')).toBeUndefined()
+  })
+
+  test('a row with no id never lights', () => {
+    expect(rowBackgroundOf({ left: [] }, props, '')).toBeUndefined()
   })
 })

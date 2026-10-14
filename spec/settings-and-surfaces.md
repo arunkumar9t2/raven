@@ -7,7 +7,7 @@ them.
 
 ## Settings
 
-`.claude-plugin/plugin.json` declares four `userConfig` fields, which `/config` lists for this
+`.claude-plugin/plugin.json` declares seven `userConfig` fields, which `/config` lists for this
 plugin and which `register`'s `options` argument carries at `session.start`:
 
 | Field | Type | Default | Does |
@@ -16,10 +16,15 @@ plugin and which `register`'s `options` argument carries at `session.start`:
 | `autoOpen` | boolean | `true` | Opens panes nobody asked for: the diff on the main loop's first edit, a plan or watched doc the first time it is written, Tasks on the first task list. Off, a pane opens only when asked (`/raven`, the Files view, Claude's `raven` CLI). |
 | `autoOpenColumns` | number | `144` | Skips those opens below this terminal width, in columns. |
 | `keyboardControls` | boolean | `false` | Draws plain Tab-reachable buttons instead of interactive pills: `canClient` is forced false on every surface, so the bracket-free `Button` fallback draws and every control is in the Tab ring again (R42). |
+| `cardStyle` | string | `'bar'` | `bar`, `none`, `sharp` or `rounded`: how files, doc sections, the compose box and tables are framed. The field declares these as its `options`, so `/config` draws a picker over them; any other stored value falls back to `bar`. See [`views.md`](./views.md#the-drawing-kit). |
+| `splitColumns` | number | `160` | Pane width, in columns, at which the diff switches to side-by-side unless the header chip forced a mode ([`diff-pane.md`](./diff-pane.md#side-by-side)). |
+| `paneBackground` | string | `''` | An opt-in colour painted behind every Raven pane so it matches the terminal: `#rgb`, `#rrggbb`, `rgb(r, g, b)` or a theme colour name. Empty leaves the engine's own pane colour. |
 
 `plugins/raven/hooks/core/settings.ts` parses `options` defensively into a `RavenSettings`: a field
 of the wrong type (a non-string `watchedPaths`, a non-boolean `autoOpen` or `keyboardControls`, a non-numeric or
-non-positive `autoOpenColumns`) falls back to its default rather than raising. `watchedPaths` splits
+non-positive `autoOpenColumns` or `splitColumns`, a `cardStyle` that is not one of the four names, a
+`paneBackground` that is not a colour) falls back to its default rather than raising. `cardStyle` and
+`paneBackground` are trimmed first, so a stray space around one in a settings file is not a typo. `watchedPaths` splits
 on commas, trims each fragment, and drops empty ones; an all-empty result also falls back to the
 default (no extra watched fragments). `register.ts` builds this parsed settings object once and
 passes it into `createRaven`, which threads it to the trigger registry described below and to the
@@ -35,12 +40,27 @@ multi-segment fragment like `notes/drafts` matches across exactly those two adja
 check runs alongside, not instead of, the always-on built-in watched paths, which
 [`views.md`](./views.md) documents as the Doc view's own default behavior.
 
+### `paneBackground`
+
+The pane's chrome and background are the engine's ([`mod-api.md`](./mod-api.md#colours-and-the-theme)),
+and on some terminals the pane draws lighter than the transcript. `paneBackground` is the workaround:
+when set, every view's render is wrapped in a full-pane `Box` with that `backgroundColor` and a
+`minHeight` of the pane's rows (`paneFill` in `plugins/raven/hooks/ui/pane-fill.tsx`, applied in
+`core/raven.ts`'s `render`). It accepts a 3 or 6 digit hex colour, `rgb(r, g, b)` with each part at
+most 255, or an identifier read as a theme colour key; anything else reads as empty. Any identifier
+passes as a key on purpose: the engine's theme keys are open-ended, so an unknown name is the engine's
+to resolve, not Raven's to second-guess. Raven cannot read the terminal's background, so the person
+sets the colour to match it; on Omarchy that is `colors.primary.background` in
+`~/.local/state/omarchy/current/theme/alacritty.toml`. Empty, the default, paints nothing.
+
 ### Reaching `register`
 
 `options` arrives as `register`'s second parameter, straight from the engine; nothing upstream of
 `settingsOf` validates it, which is why every field is parsed defensively rather than trusted. The
 parsed `RavenSettings` is immutable for the session: a change to `/config` takes effect on the next
-session, not the current one, since `createRaven` and its triggers are built once at `session.start`.
+session, not the current one, since `register` parses the settings once and `createRaven` and its triggers are built at
+`session.start`. `cardStyle` (resolved once into `kit.style`), `splitColumns` and `paneBackground` are read
+the same way, so a change to any of them also waits for the next session.
 
 ## Surfaces
 
@@ -75,7 +95,7 @@ just with no typed, picking, or imaging controls.
 A view checks a capability before drawing the element that needs it, and degrades rather than
 crashing or drawing nothing useful:
 
-- Without `canType`, neither the diff pane nor the Doc view draws a ` ✎ note ` chip anywhere (not on a diff file's heading, a hunk's toolbar row, or a doc section's own row), and no compose
+- Without `canType`, neither the diff pane nor the Doc view draws a ` <note glyph> note ` chip anywhere (not on a diff file's title, a hunk's label row, or a doc section's heading row), and no compose
   box opens anywhere; a hunk's stage and revert pills still draw and work, since
   staging and reverting need no typing. An anchor's existing notes still render normally either
   way, on either view.
@@ -85,7 +105,7 @@ crashing or drawing nothing useful:
   view's history picker (its 3 most recent documents instead of the full list). A hunk's compose box
   without `canPick` also drops its line picker, so every comment on that surface anchors to the
   whole hunk rather than one line.
-- Without `canClient`, a strip (the hunk toolbar's pills) draws the same text with each pill as a
+- Without `canClient`, a strip (the hunk label row's pills) draws the same text with each pill as a
   `plain` `Button` carrying its label, keyed by the pill's id, no brackets, no hover tint, the same
   handler (`plugins/raven/hooks/ui/strip.tsx`; see [mod-api](./mod-api.md#client-and-uimessage)).
 - Without `canShowImage`, or for any non-PNG image format even with it, the Doc view shows the

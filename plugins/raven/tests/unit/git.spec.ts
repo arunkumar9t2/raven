@@ -163,8 +163,8 @@ describe('lineKindOf', () => {
     expect(lineKindOf(' context')).toBe('context')
   })
 
-  test('treats an empty line and the no-newline marker as neither', () => {
-    expect(lineKindOf('')).toBeNull()
+  test('an empty line is a blank context line (diff.suppressBlankEmpty); the no-newline marker is no line', () => {
+    expect(lineKindOf('')).toBe('context')
     expect(lineKindOf('\\ No newline at end of file')).toBeNull()
   })
 })

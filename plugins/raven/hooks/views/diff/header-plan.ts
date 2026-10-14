@@ -1,0 +1,214 @@
+import { countOf } from '../../core/format'
+import { type Chip, chipsIconsWidthOf } from '../../ui/chips'
+import { iconText, NOTE_GLYPH } from '../../ui/icon-text'
+import { cutToCells, widthOf } from '../../ui/wrap'
+import { splitChipOf } from './split-mode'
+
+/** What each header chip does; `NO_HANDLERS` for the width math, which never presses anything. */
+export type HeaderHandlers = {
+  onPrevious: () => void
+  onNext: () => void
+  onRefresh: () => void
+  onToggleSplit: () => void
+  onSend: () => void
+  onEditSend: () => void
+  onClear: () => void
+}
+
+const NOTHING = () => {}
+const NO_HANDLERS: HeaderHandlers = {
+  onPrevious: NOTHING,
+  onNext: NOTHING,
+  onRefresh: NOTHING,
+  onToggleSplit: NOTHING,
+  onSend: NOTHING,
+  onEditSend: NOTHING,
+  onClear: NOTHING,
+}
+
+export type HeaderChipArgs = {
+  pending: number
+  confirmingClear: boolean
+  /** The two-row fallback drops `refresh` when even the icons floor does not fit. */
+  includeRefresh: boolean
+  /** Whether the body draws side by side now; the split chip offers the other layout. */
+  isSplit: boolean
+  /** Whether the body is wide enough to split; below that the chip is not offered. */
+  canSplit: boolean
+}
+
+/**
+ * The header's controls as data, in drawing order. `chipsLayout` shrinks the lowest `priority`
+ * to a bare icon first: nav (0, never gives way: the file list's only chord carriers), refresh
+ * (1), the side-by-side toggle (1.5, so it gives way right after refresh), clear (2), edit & send
+ * (3), send (4). The toggle names the mode a press switches to.
+ */
+export function headerChipsOf(args: HeaderChipArgs, on: HeaderHandlers = NO_HANDLERS): Chip[] {
+  const { pending, confirmingClear } = args
+  const chips: Chip[] = []
+  if (!confirmingClear) {
+    chips.push(
+      {
+        key: 'previous',
+        action: 'app:diffFileListUp',
+        icon: '↑',
+        label: '',
+        priority: 0,
+        onPress: on.onPrevious,
+      },
+      {
+        key: 'next',
+        action: 'app:diffFileListDown',
+        icon: '↓',
+        label: '',
+        priority: 0,
+        onPress: on.onNext,
+      },
+    )
+    if (args.includeRefresh) {
+      chips.push({
+        key: 'refresh',
+        icon: '↻',
+        label: 'refresh',
+        priority: 1,
+        onPress: on.onRefresh,
+      })
+    }
+    // Outside the refresh block: the two-row fallback drops refresh, never the way back from split.
+    if (args.canSplit) chips.push(splitChipOf(args.isSplit, on.onToggleSplit))
+  }
+  if (pending > 0) {
+    chips.push(
+      {
+        key: 'edit-send',
+        icon: NOTE_GLYPH,
+        label: 'edit & send',
+        priority: 3,
+        onPress: on.onEditSend,
+      },
+      {
+        key: 'send',
+        icon: '➤',
+        short: iconText('➤', `${pending}`),
+        label: `send ${pending}`,
+        kind: 'primary',
+        priority: 4,
+        onPress: on.onSend,
+      },
+    )
+  }
+  chips.push({
+    key: 'clear',
+    icon: '⌫',
+    label: confirmingClear ? 'clear all?' : 'clear',
+    kind: confirmingClear ? 'armed' : 'danger',
+    forceWords: confirmingClear,
+    priority: 2,
+    onPress: on.onClear,
+  })
+  return chips
+}
+
+/** The reserved minimum the change map keeps at the narrowest docked body (rulings R28, R30). */
+export const MIN_MAP_CELLS = 2
+/** The most cells the one-row header gives the change map. */
+const ONE_ROW_MAP_CELLS = 12
+
+const GIT_ICON_CELLS = 1
+const DOT_CELLS = 1
+/** The gap between the left cluster's items (`gap={2}` on the row). */
+const ITEM_GAP = 2
+/** `source ` before the value and ` ▾` after it. */
+const SOURCE_CHROME_CELLS = 9
+/** The most cells of a source label the width estimate counts. */
+const SOURCE_LABEL_MAX = 24
+/**
+ * The source label as the picker draws it: cut to `SOURCE_LABEL_MAX` cells with a trailing `…`.
+ * The width estimate and the drawn `Select` both use this, so a long turn label cannot be wider
+ * on screen than it was counted.
+ */
+export function sourceLabelOf(label: string): string {
+  if (widthOf(label) <= SOURCE_LABEL_MAX) return label
+  return `${cutToCells(label, SOURCE_LABEL_MAX - 1)}…`
+}
+
+/** A surface without a `Select` draws HEAD / session start / branch point as plain buttons. */
+const SOURCE_BUTTONS_CELLS = 40
+
+export type HeaderPlanInput = {
+  columns: number
+  fileCount: number
+  adds: number
+  dels: number
+  pending: number
+  confirmingClear: boolean
+  /** The current source option's label (`HEAD`, `turn 3: …`). */
+  sourceLabel: string
+  canPick: boolean
+}
+
+export type HeaderPlan =
+  | {
+      rows: 1
+      /** The change map's cells in the one-row form. */
+      mapCells: number
+      /** `<note glyph> N notes pending`, or '' when the row has no room for it. */
+      notesText: string
+      /** The cells the left cluster takes; the chips get `columns - leftCells - 2`. */
+      leftCells: number
+    }
+  | { rows: 2 }
+
+/** `+a −d` with a zero side left out, as `diffStat` draws it. */
+const statCellsOf = (adds: number, dels: number): number =>
+  (adds > 0 ? widthOf(`+${adds}`) : 0) +
+  (adds > 0 && dels > 0 ? 1 : 0) +
+  (dels > 0 ? widthOf(`−${dels}`) : 0)
+
+function leftCellsOf(input: HeaderPlanInput, mapCells: number, notesText: string): number {
+  const source = input.canPick
+    ? SOURCE_CHROME_CELLS + widthOf(sourceLabelOf(input.sourceLabel))
+    : SOURCE_BUTTONS_CELLS
+  const items = [
+    GIT_ICON_CELLS,
+    widthOf(countOf(input.fileCount, 'file')),
+    statCellsOf(input.adds, input.dels),
+    mapCells,
+    DOT_CELLS,
+    source,
+    notesText === '' ? 0 : widthOf(notesText),
+  ].filter(cells => cells > 0)
+  return items.reduce((sum, cells) => sum + cells, 0) + ITEM_GAP * (items.length - 1)
+}
+
+/**
+ * One row when the left cluster (git mark, counts, change map, `·`, source picker) plus every
+ * chip as a bare icon fits `columns`; the map and the notes summary take the spare room. Otherwise
+ * the two-row form (counts and source on top, map and chips below) the narrow-pane rulings were
+ * built for.
+ */
+export function headerPlanOf(input: HeaderPlanInput): HeaderPlan {
+  const chips = headerChipsOf({
+    pending: input.pending,
+    confirmingClear: input.confirmingClear,
+    includeRefresh: true,
+    isSplit: false,
+    canSplit: true,
+  })
+  // A forceWords chip (the armed clear) never shrinks, so the floor counts it at its words.
+  const floor = chipsIconsWidthOf(chips)
+  const fits = (left: number) => left + ITEM_GAP + floor <= input.columns
+
+  const mapMax = Math.min(input.fileCount, ONE_ROW_MAP_CELLS)
+  const mapMin = Math.min(mapMax, MIN_MAP_CELLS)
+  const notes =
+    input.confirmingClear || input.pending === 0
+      ? ''
+      : iconText(NOTE_GLYPH, `${countOf(input.pending, 'note')} pending`)
+
+  const sparse = leftCellsOf(input, mapMin, '')
+  if (!fits(sparse)) return { rows: 2 }
+  const full = leftCellsOf(input, mapMax, notes)
+  if (fits(full)) return { rows: 1, mapCells: mapMax, notesText: notes, leftCells: full }
+  return { rows: 1, mapCells: mapMin, notesText: '', leftCells: sparse }
+}

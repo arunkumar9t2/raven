@@ -158,6 +158,20 @@ export function focusAfter(rows: readonly StripRow[], from: string, key: string)
   return from
 }
 
+/**
+ * The background a row draws: the selected row's `activeBg`, which hover never stacks a second
+ * tint on, else the hovered row's `rowHoverBg`, else none.
+ */
+export function rowBackgroundOf(
+  row: StripRow,
+  props: Pick<StripProps, 'activeId' | 'activeBg' | 'rowHoverBg'>,
+  hovered: string,
+): string | undefined {
+  if (row.id && row.id === props.activeId) return props.activeBg
+  if (row.id && row.id === hovered) return props.rowHoverBg
+  return undefined
+}
+
 const Strip: ClientModule<StripProps, Local> = (props, surface) => {
   const { Box, Text } = surface.elements
   const state = surface.state ?? IDLE
@@ -237,13 +251,7 @@ const Strip: ClientModule<StripProps, Local> = (props, surface) => {
           flexDirection="row"
           height={1}
           overflow="hidden"
-          backgroundColor={
-            r.id && r.id === props.activeId
-              ? props.activeBg
-              : r.id && r.id === state.row
-                ? props.rowHoverBg
-                : undefined
-          }
+          backgroundColor={rowBackgroundOf(r, props, state.row)}
         >
           <Box flexShrink={1} overflow="hidden">
             {r.left.filter(s => s.t !== '').map((s, j) => draw(s, `l${j}`))}

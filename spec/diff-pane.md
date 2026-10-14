@@ -8,73 +8,156 @@ Claude to describe what it changed.
 
 ## Layout
 
-Two fixed rows form the header (`plugins/raven/hooks/views/diff/header.tsx`): row 1 is a Nerd Font git mark (`COLORS.git`), counts and
-source: `󰊢 N files  +adds −dels ■■■□□ · source <picker>`, the stat bar scaled to the whole diff's
-own total (no `max`); row 2 is the change map (one glyph per file, the shape of the whole change
-at a glance, see [below](#the-change-map)), the pending-notes summary, and the action chips (` ↑ ` ` ↓ ` ` ↻ refresh `, then, once a comment is pending, ` ✎ edit & send ` and the
-primary ` ➤ send N ` (the pane's main action), then ` ⌫ clear `), laid out by `chipsLayout` and drawn as one pill strip (`pillRow`), clear in the danger colours (armed: filled error),
-which shrinks the lowest-priority chip to its bare icon first so `send N` keeps its words longest.
-While a clear is armed, row 2 drops the nav/refresh chips and the map/notes summary entirely;
-nothing competes with the confirm while the person decides. With nothing armed, the same row
-degrades instead of vanishing as the pane narrows: ` ↑ ` ` ↓ ` never give way, in words, icons,
-or by dropping, since they are the file list's only carriers of the person's own list chords (a `Client` cannot bind an engine chord, so these two draw as `plain` Buttons beside the strip, padded like pills), so
-`refresh` gives way first; the change map's own cell count caps at 2 instead of scaling to the
-pane's width (two changed files each still draw their own glyph; more than two draw one glyph plus
-the overflow `…`); and the notes summary compacts from `✎ N pending` to a bare `✎` (the send chip's
-own `➤ N` still carries the count). Beneath it sits the file list
-(`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8 rows: within that cap every changed
-file gets a row, and beyond it the list shows a window centered on the selected file plus a
-trailing "… N more" row. The rows are one `strip` (`Client`): each draws `❯` on the selected file,
-the status dot and letter, the coloured file-type icon, the path, and right-aligned `+a −d` and the stat
-bar; a row lights on `userMessageBackgroundHover` under the pointer, the selected file's row holds
-`selectionBg`, and a click anywhere on a row jumps to that file (without a `Client`, the path is a plain
-Button). A one-row rule follows, then the body: **one review stream**, holding
-every changed file as a **card** at once. The card opens with a title row,
-`╭─ <icon> <path>  <status> +adds −dels ──── pills`: a Nerd Font file-type icon coloured by type
-(`views/icons.ts`, rainbow theme keys), the bold path, the status mark, the counts, a `─` fill in the
-card's border colour and the file's ` ✎ note ` pill at the right. Then come its file-level notes, and
-each hunk in turn: a toolbar row, `├─ ƒ name  L1–7 ──── pills` (the hunk's function context and line
-range, and (unless read-only) right-aligned ` ✎ note `, ` ✓ stage `, ` ↺ revert ` pills), its code,
-its own notes, then (only while that hunk is being composed) its compose box. The card ends with a
-closing row, `╰────`; a blank row separates one card from the next, and none sits between hunks
-(`streamOf` in `plugins/raven/hooks/views/diff/blocks.ts`). Every body row (notes, each hunk's
-toolbar and code, a status line) draws behind a 2-column left border, `│ `, in the file's status
-colour; the file being edited this turn draws the whole card's border (title, `│`, `╰`) in the accent
-colour instead, so the live feed is visible without reading any text (see [Live feed](#live-feed)).
-A file's title carries the same status mark, icon and `+adds`/`−dels` as its file-list row and the
-same bold path (`bodyRowOf`'s `'title'` case in `diff-view.tsx`), except for a renamed file, whose
-title shows only its new path; the `old → new` label is the file-list row's alone. A status line
-("Loading…", "Not read", "Binary file") sits inside the card, between title and close. The whole stream is laid out into one scrollable window so wheel and
-arrow-key scrolling moves through it without redrawing the header or file list
-(`plugins/raven/hooks/views/diff/layout.ts`). The fixed rows above that scrolling body total 2
-(header) + min(file count, 8) (file list) + 1 (rule). Within the body, a title, a closing row, a status line, the
-collapsed "✓ N addressed" row, a hunk's toolbar row, the "Outdated" title, the "Not in
-this diff" title, an orphan path's own row, and the blank row between files are each one row; a
-note is a boxed card of its wrapped text lines plus a top and a bottom border (1 to 6 lines, so
-3 to 8 rows, see [review](review.md#status)); a note chip draws idle on the heading or a hunk's toolbar row
-rather than as a row of its own, and opens a compose box in its place: five rows (two borders,
-the Input's two rows, the ` ✕ cancel ` hint row), six when a hunk's line picker draws above
-the Input, only while that anchor is being composed. A multi-row fixed block's border runs its full height. A card the scroll position cuts through stays
-placed and is clipped at the top (`windowOf` places it from its first visible row), so the rows
-below never shift; the compose box is `pinned` and always placed whole. A hunk with line notes is several `hunk`
-blocks, each a body-line `range` (the lines up to and including a commented line, that line's
-cards, then the rest) keyed `hunk:<i>:<header>` and `…~<from>`; rows stay exact because the
-segments' lines and the cards' rows sum to the hunk plus the notes, and `sliceHunk` renumbers each
-segment's gutter. See [review](review.md#status) for what draws on the commented line. A hunk itself takes as many rows as its body has lines, sliced into whatever range the
-current scroll position exposes, and a fixed row only draws once its first row falls inside that
-range. Element caps, focus, and the scroll contract these elements draw under are engine facts
-owned by [`mod-api.md`](./mod-api.md).
+From the top, the pane is the header, the file list, a one-row rule, and the body: **one review
+stream** holding every changed file as a card. Everything above the body is fixed; the body
+scrolls. The drawing kit that frames cards, notes and chips (`Style`, `cardStyle`) is
+[`views.md`](./views.md#the-drawing-kit)'s concern; this spec names the rows each piece takes.
+
+### Header
+
+The header (`plugins/raven/hooks/views/diff/header.tsx`, plan in `header-plan.ts`) is **one row** when
+it fits: a Nerd Font git mark (`COLORS.git`), `N files`, `+adds −dels`, the [change
+map](#the-change-map), a dim `·`, the source picker (`source <value> ▾`), the notes summary once a
+comment is pending (`<note glyph> N notes pending`, given up first; the note glyph is `NOTE_GLYPH`, U+F036A, drawn wherever a note is marked), and, flush right, the action chips. The
+chips are ` ↑ ` ` ↓ ` ` ↻ refresh `, the [side-by-side toggle](#side-by-side) ` ◫ split ` or ` ≡ unified `,
+then, once a comment is pending, ` <note glyph> edit & send ` and the primary ` ➤ send N ` (the pane's main
+action), then ` ⌫ clear ` (`headerChipsOf`). `chipsLayout` sizes them in the room the left cluster
+leaves and shrinks the lowest-priority chip to its bare icon first: refresh (1), split (1.5), clear
+(2), edit & send (3), send (4), so `send N` keeps its words longest. A stat bar is not drawn here;
+the map shows the shape of the change and each file-list row keeps its own bar.
+
+`headerPlanOf` picks the form. The one-row form is used when the left cluster at its sparest (map
+at 2 cells, no notes summary) plus every chip as a bare icon fits `columns`; spare room goes first to
+the map (up to 12 cells, one per file) and then to the notes summary. Otherwise the header takes
+**two rows**: counts and source on the first, the map and notes summary on the left of the second
+with the chips right-aligned. The two-row form keeps the narrow-pane rules: with a clear armed it drops
+nav, refresh, split and the map and notes summary entirely, so nothing competes with the confirm;
+with nothing armed it degrades instead of vanishing, and ` ↑ ` ` ↓ ` never give way, in words, icons or by
+dropping, since they are the file list's only carriers of the person's own list chords (a `Client`
+cannot bind an engine chord, so these two draw as `plain` Buttons beside the strip, padded like
+pills); `refresh` gives way first; the map caps at 2 cells instead of a third of the width (two
+changed files each still draw their glyph; more than two draw one glyph plus the overflow `…`); and
+the notes summary compacts to a bare note glyph. Armed clear is drawn in the error colours, filled, and
+keeps its words in either form. The source label is cut to 24 cells with a trailing `…`
+(`sourceLabelOf`) so a long turn prompt cannot outgrow its counted width.
+
+### File list
+
+Beneath the header sits the file list (`plugins/raven/hooks/views/diff/file-list.tsx`), capped at 8
+rows: within that cap every changed file gets a row, and beyond it the list shows 7 files centered on
+the selected one plus a trailing "… N more" row. The rows are one `strip` (`Client`): each draws `❯`
+on the selected file, the status dot and letter, the coloured file-type icon, the path, and
+right-aligned `+a −d` and the stat bar. A row lights on `userMessageBackgroundHover` under the
+pointer and the selected file's row holds `selectionBg`; the selected row takes no second tint from
+hover (`rowBackgroundOf` in `plugins/raven/hooks/surface/strip.tsx`). A click anywhere on a row jumps to
+that file (without a `Client`, the path is a plain Button). The fixed rows above the body total the
+header (1 or 2) + min(file count, 8) + 1 (the rule), `fixedRowsOf` in
+`plugins/raven/hooks/views/diff/blocks.ts`.
+
+### File cards
+
+Each file is a card built by `blocksOf`; `streamOf` strings the cards together with one blank row
+between neighbours (a `#sep` block that belongs to no card), so air, not a rule, separates files.
+Content is never boxed. The card's rows, top to bottom, are:
+
+- **Title**, 1 row (2 under `cardStyle: none`, which adds a dim `─` rule row; under `sharp` and
+  `rounded` the title is the frame's top border). It reads `<icon> <path>  <status> +adds −dels`,
+  then a dim `new file` or `deleted` tag for a [whole file](#whole-files): a Nerd Font file-type icon
+  coloured by type (`views/icons.ts`), a gap (`ICON_GAP`), the bold path, the status mark and the
+  counts (a zero side is left out). A renamed file's title shows only its new path; the `old → new`
+  label is the file-list row's alone (`titleRowOf` in `diff-view.tsx`). The file's ` <note glyph> note ` chip
+  draws **inline**, two columns after the title, never at the pane's edge; it shrinks to its bare
+  icon when the row is too narrow for the words, the path (which truncates) giving way first.
+- A blank row (`title-gap`), always.
+- The file's own notes and, only while it is being composed, its compose box, then a blank row
+  (`file-gap`); absent when there are none.
+- Each hunk in turn: a blank row before every hunk but the first, a **label row**, the code, its own
+  notes, then (only while that hunk is being composed) its compose box. The label row (`hunkToolbar`)
+  is plain text with no rule: `ƒ name  L1–7`, and, unless read-only, the ` <note glyph> note `, ` ✓ stage `,
+  ` ↺ revert ` pills two columns after it, shrinking to icons together under `chipsFit`. The label is
+  the function context git gives, and the line range, which is the new side's, or the old side's when
+  the new side is empty (a pure deletion, a deleted file). A trailing `{` or `(` on the context is
+  dropped. A prose file (`isProsePath` in `views/diff/hunk-label.ts`: a markdown, text, rst or adoc
+  extension, no extension at all, or any extension not on the code list; named build files such as
+  `Makefile` are code) draws the bare range, since git's heuristic picks an arbitrary sentence there.
+- An "Outdated" group (a blank row, a dim `Outdated` row, then the stale hunks' notes), see
+  [review](./review.md#anchors-and-composing).
+- Under `sharp` and `rounded` only, a closing row (`└────┘` / `╰────╯`).
+
+A file with no hunks has one status row ("Loading…", "Not read", "Binary file", "No textual
+changes") in place of hunks, inside the card. Body rows draw behind the style's mark: `▌ ` in the
+file's status colour under `bar` (the default), nothing under `none`, `│ ` and ` │` under a frame
+(`groupRows` in `plugins/raven/hooks/ui/card.tsx`). The rail runs through the blank rows between
+hunks, but not through the blank row under a title, the title itself, the closing row or the row
+between files, which span the width. The file being edited this turn draws its rail (or frame) in
+the accent colour instead of its status colour, so the live feed is visible without reading any
+text (see [Live feed](#live-feed)); `none` draws no rail, so there the cue is the file list and the
+map alone.
+
+The whole stream is laid out into one scrollable window so wheel and arrow-key scrolling moves
+through it without redrawing the header or file list (`plugins/raven/hooks/views/diff/layout.ts`).
+Within the body a title, a closing row, a status line, the collapsed "✓ N addressed" row, a hunk's
+label row, the "Outdated" title, the "Not in this diff" title, an orphan path's own row and every
+blank row are each one row; a note takes 2 to 7 rows and a compose box 3 to 6 (see
+[review](./review.md#status)); a hunk takes as many rows as its body has lines (as its side-by-side
+rows when [split](#side-by-side)), sliced into whatever range the current scroll position exposes,
+and a fixed row only draws once its first row falls inside that range. A card the scroll position
+cuts through stays placed and is clipped at the top (`windowOf` places it from its first visible
+row), so the rows below never shift; the compose box is `pinned` and always placed whole. A hunk with
+line notes is several `hunk` blocks, each a body-line `range` (the lines up to and including a
+commented line, that line's cards, then the rest) keyed `hunk:<i>:<header>` and `…~<from>`; rows
+stay exact because the segments' lines and the cards' rows sum to the hunk plus the notes, and
+`sliceHunk` renumbers each segment's gutter. See [review](review.md#status) for what draws on the
+commented line. A card's blocks are keyed `<path>#<block key>`, but a placed row finds its file from
+the block's own `card` (the exact path) rather than by parsing the key, so a path containing `#`
+works. Element caps, focus, and the scroll contract these elements draw under are engine facts owned
+by [`mod-api.md`](./mod-api.md).
+
+#### Whole files
+
+An untracked file, a staged new file (`added`) and a deleted file are wholly one side, so their
+hunks draw as **source**, not as a diff: `Code` with `format: 'source'`, `startLine` (the hunk's own
+start, renumbered by `sliceHunk`, so a slice cut mid-file or by a note still numbers correctly) and
+the file's language, which gives syntax colours without a solid green or red fill. The rail takes the
+file's status colour, and the title carries `new file` or `deleted` (`wholeSourceOf`,
+`fileTagOf` in `views/diff/whole-file.ts`). A `\ No newline at end of file` marker draws dim under the
+source. A source over the `Code` cap is cut into pieces at line boundaries (`wholePiecesOf`), each
+numbered on from the one before, and one line over the cap is cut hard. Line notes anchor by line
+number exactly as on an all-`+` hunk. A hunk whose lines are not all of the one side falls back to
+the diff, and a whole file never draws [side by side](#side-by-side).
+
+#### Pinned title
+
+When the body's top row lies inside a card whose title has scrolled above it, that file's title is
+drawn as the body's first row and the stream's rows start one below (`pinnedTitleOf`, `viewOf` in
+`layout.ts`), so the file being read always stays named. The pin overlays the row at `top`, so the
+stream's last row stays reachable at the maximum scroll. It never shows on a title's first row, on
+the blank row between files or over the trailing groups (their blocks carry no `card`), so it hands
+off to the next file's title as that one reaches the top; with fewer than two body rows nothing pins.
+The pinned row is the title line alone (no rule under `none`) and carries the real title's chips,
+which are not placed while it is pinned.
+
+#### Notes and the compose box
+
+A note is a `┃` bar in its state colour on the subtle `userMessageBackground` fill, no frame in any
+style: a header row (status word, line, age, `resend` and `✕` chips) and its wrapped text lines.
+The compose box is the only frame the pane draws. Rows, widths and states are
+[review](./review.md#status)'s concern. In `bar` and `none` the compose box sits at the code's left
+edge with the rail not running through its rows; under a frame style it sits inside the frame's
+sides.
 
 ### The change map
 
-Row 2's left side draws a change map (`plugins/raven/hooks/ui/change-map.tsx`): one glyph per
+The header draws a change map (`plugins/raven/hooks/ui/change-map.tsx`; after the counts in the
+one-row header, on the left of the second row in the two-row fallback): one glyph per
 changed file, chosen from `▁▂▃▄▅▆▇█` by that file's share of the *largest single file's* change
 in the set (`max = Math.max(1, ...sizes)`, `ratio = size / max`: the file with the most changed
 lines always draws `█`, every other file scaled against it, not against the diff's total), a
 skyline of the change set before reading any of it. Each glyph is coloured by the file's status;
-the file being edited this turn draws in the accent colour, same as its card border. A changed file
+the file being edited this turn draws in the accent colour, same as its card's rail. A changed file
 never draws below `▁` even next to a much larger one, so nothing goes invisible. More files than
-fit the row's share of `kit.columns` keep the first few and end with one dim `…` cell rather than
+fit the map's cell budget (up to 12 cells in the one-row header, a third of `kit.columns` in the
+two-row form, 2 cells when that row is narrow) keep the first few and end with one dim `…` cell rather than
 wrapping or dropping files silently.
 
 A file's section shows only its own comments and, for a renamed file, comments made under its
@@ -96,13 +179,80 @@ comment's (`orphanBlocksOf` in `plugins/raven/hooks/views/diff/blocks.ts`). An e
 nothing, rather than a bare heading. [`review.md`](./review.md#delivery) owns when a comment is
 treated as live versus carried here only as something to look at later.
 
+## Side-by-side
+
+A wide body draws each hunk as two columns, removed lines on the left and added lines on the right,
+instead of one unified column. The decision, the pairing and the rows live in
+`plugins/raven/hooks/views/diff/split-mode.ts`, `split.ts` and `split-layout.ts`; the drawing is
+`split-view.tsx`.
+
+**When.** `splitModeOf` decides from three inputs. Below a body width of 40 columns
+(`SPLIT_MIN_COLUMNS`) nothing splits and the header chip is not offered, since two sides could not
+hold a gutter and some text. Otherwise a forced mode wins, and with none the diff splits when the
+pane is at least `splitColumns` wide (default 160, about 78 columns a side after the gutter and
+divider; see [`settings-and-surfaces.md`](./settings-and-surfaces.md#settings)). The threshold is
+compared with the pane's columns and the 40-column minimum with the body's width (the pane less the
+card's rail, `contentWidthOf`). Every source splits the same way, a turn's included.
+
+**The forced mode.** The header's [split chip](#header) names the layout a press switches to
+(` ◫ split ` while unified, ` ≡ unified ` while split) and forces it, in either direction. The forced
+mode persists per repository in `$.store` under `split:<toplevel>` (`splitStoreKeyOf` in
+`plugins/raven/hooks/names.ts`) with the value `split` or `unified`; any other stored value reads as
+"by width". It is read once when a repository is first seen, and a press made while that read is in
+flight wins over the late value. Below the minimum width a press does nothing, so no choice is stored
+that would change nothing now and surprise the person once the pane grows. Flipping the layout changes
+every row count, so the scroll position re-anchors in the new stream: to the open compose box if
+there is one (its Input must stay mounted), else to the selected file's title; a line picked for the
+compose box survives unless the new layout does not offer it.
+
+**Rows.** A hunk is cut into runs. A context line is one row with its text on both sides. A change
+run (consecutive removed and added lines, in any order) pairs its removed lines with its added lines
+by position, the shorter side padded with blank rows after the pairs, so the columns stay aligned. A
+`\ No newline at end of file` marker is not a row in split view (unified still shows it). Each side
+keeps its own line numbers, in a gutter as wide as the largest number in the whole hunk, so a hunk
+sliced by a note keeps its siblings' width. A hunk contributes one terminal row per split row, and
+`rowsOf` in `layout.ts` reports that count, so scrolling and the pinned title work unchanged. Lines
+truncate (`wrap: 'truncate-end'`) rather than wrap, since a wrapped line on one side would push the
+sides out of step, and a line over 1 000 characters is cut before it is drawn (`LINE_CAP`). The two
+sides share the body less a one-column `│` divider.
+
+**What never splits.** A [whole file](#whole-files) (one column would be blank) and any hunk with
+text on only one side, such as a turn's `Write`, stay unified inside an otherwise split body
+(`splitsAsColumns`).
+
+**A turn's clamp marker.** A turn source clamps an oversized synthetic hunk with a trailing
+` … (N more lines)` line (see [Long hunks](#long-hunks)). In split view that line is a marker row
+with neither side: one dim line across the whole body.
+
+**Rendering.** Each row draws as one `Text` per side (`splitHunk` in
+`plugins/raven/hooks/views/diff/split-view.tsx`): the mark, a right-aligned line number in a dim
+gutter, then the line, the whole side on the diff add or remove fill and padded to the side's edge
+(`sideCellOf`). A paired row's changed words draw on the brighter word fills, from Raven's own
+token-level diff (`wordDiffOf` in `word-diff.ts`: a longest common subsequence over word, space and
+punctuation tokens; a line over 120 tokens, or two lines that share no word, are changed whole). The
+engine draws its word highlights only in unified `Code`, which is why split view computes its own.
+Syntax colours are given up for the fills: in two narrow columns the red and green rows and the
+changed words read faster than syntax, which the person chose over a syntax-coloured drawing with a
+marker strip. A line is cut at `LINE_CAP` before it is drawn, so no element nears the 10 000-character
+cap.
+
+**Comments.** Anchors are the same as in unified, with one difference in what is offered. A new line
+note anchors to a new-side line only: the compose box's picker lists the hunk's added lines, and a
+line picked in unified that split does not offer (an old-side line) counts as "whole hunk" (`pickableLinesOf`,
+`effectiveLineOf` in `split.ts`; the picker and the submit read the same value, so what is shown is what is saved). A removed-only change is commented through its hunk. A note
+made earlier on a removed line still draws, under its run. Notes draw full width under the *end of the
+change run* their line belongs to, not under the line itself, so a note never splits a pair: the cut
+moves to the run's end (`runEndOf`), notes on one run share it, and the segments' rows concatenate to
+the hunk's rows. Hunk-wide, addressed and relocated notes, and the compose box, draw after the hunk
+as in unified.
+
 ## The file list navigates the stream
 
-Pressing a file's row (`select(path)`) scrolls the stream so that file's heading is as near the
+Pressing a file's row (`select(path)`) scrolls the stream so that file's title is as near the
 top as the stream's remaining length allows (a file with enough content below it lands exactly at
 the top; one near the end of a short stream scrolls as far as the stream goes and no further, per `clampTop` in `plugins/raven/hooks/views/diff/layout.ts`) and marks the pressed file's row with
 `❯`, without reloading anything. Scrolling the stream instead, by wheel or by the file list's `↑`/`↓`
-Buttons (below), moves the list's `❯` to whichever file's heading is now at the top of the body
+Buttons (below), moves the list's `❯` to whichever file's title is now at the top of the body
 (`fileAtRow` in `plugins/raven/hooks/views/diff/blocks.ts`): a press sets where the stream scrolls
 to; a scroll sets which file the list marks. `↑`/`↓` step the selection to the adjacent file in
 list order and scroll to it the same way pressing its row does.
@@ -112,13 +262,13 @@ list order and scroll to it the same way pressing its row does.
 A file an `Edit`/`Write`/`NotebookEdit`/`MultiEdit` call changes during the current turn (from the
 main loop or a subagent) draws a trailing `◉` in `COLORS.accent` in its file-list row, after its
 `+adds`/`−dels` counts and stat bar (`plugins/raven/hooks/views/diff/file-list.tsx`); the same file
-also draws its card's border and its change-map glyph in the accent colour, so the
+also draws its card's rail (or frame) and its change-map glyph in the accent colour, so the
 live feed is visible from the file list, the map, or the stream itself. The mark clears once the
 turn ends, on any main-loop turn-completion reason (an answer, an interrupt, or an error), not
 only a clean answer.
 
 **Follow:** while the person has not scrolled or pressed a file row this turn, a landed edit
-scrolls its file's heading into view once the refresh after it completes. A person's scroll or
+scrolls its file's title into view once the refresh after it completes. A person's scroll or
 file-list press (wheel, the file list's `↑`/`↓`, or pressing a file row) turns follow off until
 the next turn; a programmatic jump (a `diff` directive naming a path) never does. Follow never
 jumps while a comment's compose box is open: it keeps the pending target and tries again on the
@@ -143,9 +293,10 @@ Picking a turn switches the file list and hunks to that turn's edited files inst
 synthetic hunks built from the turn's `Edit`/`MultiEdit`/`Write`/`NotebookEdit` calls
 (`plugins/raven/hooks/review/turns.ts`). This source is read-only (no comment boxes, no
 stage/revert) and it replaces the file list entirely: a turn's files are the only ones shown, so
-an untracked file never appears there. Each file's heading is its own path, the same as for any
-other source: the header's source picker is what names the turn, so the heading itself only needs
-to say which file.
+an untracked file never appears there. Each file's title is its own path, the same as for any
+other source: the header's source picker is what names the turn, so the title itself only needs
+to say which file. A turn source splits side by side like a git source, see
+[Side-by-side](#side-by-side).
 
 The file list itself is always built from `git status` against HEAD, regardless of the selected
 source; only a file's hunks and add/del counts are read against that source. Selecting
@@ -195,20 +346,22 @@ checked.
 No control carries a letter hotkey. Pills on a `Client` surface are mouse-first (R42): every action is reachable by click; the keyboard reaches a strip after a click inside it (←/→ move a focus ring between its pills, ↑/↓ between its rows, Enter or space presses the focused one); and with the `keyboardControls` setting every control is a plain Button in the Tab ring again, as on a surface without a `Client`. The file
 list's `↑`/`↓` Buttons carry `action="app:diffFileListUp"`/`"app:diffFileListDown"`, so they answer
 the person's own chords for the built-in diff list (ctrl+↑/↓ by default) as well as a click. A
-file's note chip, right-aligned on its heading row, is the ` ✎ note ` pill; a hunk's, on its toolbar
-row alongside the stage and revert pills, is the ` ✎ note ` pill; the heading's shrinks to its bare
-icon (` ✎ `) under `chipsFit`/`chipsLayout` when the row is too narrow for every chip's words, the
-heading's path giving way first; the toolbar's pills shrink to bare icons the same way. Submitting or cancelling a comment returns the
+file's note chip, inline after its title, is the ` <note glyph> note ` pill; a hunk's, on its label row beside
+the stage and revert pills, is the same pill; the title's shrinks to its bare icon
+under `chipsFit` when the row is too narrow for every chip's words, the title's path giving way
+first; the label row's pills shrink to bare icons the same way. The header's [split
+chip](#side-by-side) and the rest of the header chips follow `chipsLayout`'s priority order
+(see [Header](#header)). Submitting or cancelling a comment returns the
 keyboard to that anchor's note chip, so Esc/Enter flow stays inside the pane rather than jumping
 to the composer.
 
 ## Stage and revert one hunk
 
-Each hunk in a non-read-only source carries its toolbar's right-aligned **pills**, drawn as one
-`Client` strip (`hooks/ui/strip.tsx`; [mod-api](./mod-api.md#client-and-uimessage)): ` ✎ note ` (when
+Each hunk in a non-read-only source carries **pills** on its label row, two columns after the label, drawn as one
+`Client` strip (`hooks/ui/strip.tsx`; [mod-api](./mod-api.md#client-and-uimessage)): ` <note glyph> note ` (when
 the surface has `canType` and the hunk isn't being composed), then ` ✓ stage `, then ` ↺ revert `:
 coloured text on a tinted background, no brackets, the background lighting under the pointer; icons
-only (` ✎ `, ` ✓ `, ` ↺ `) once the row is too narrow for every pill's words. A left click posts the
+only (the note glyph, ` ✓ `, ` ↺ `) once the row is too narrow for every pill's words. A left click posts the
 pill's id, which the press registry maps to the same handler a `Button` would have run. On a surface
 without `canClient` the same labels draw as `plain` Buttons. Before either runs, Raven re-reads that one file's current hunks and requires an exact
 header-and-text match against the hunk the button was drawn for. A mismatch (the working tree
@@ -251,7 +404,9 @@ hunks have no natural boundary to window against (a `Write` of a whole file beco
 no `@@` breaks to page through), so those alone are clamped at construction time to that same cap
 (see [`mod-api.md`](./mod-api.md)), cut at a line boundary with a trailing "… (N more lines)" marker
 (`plugins/raven/hooks/git/hunks.ts`, `clampHunk`, called from
-`plugins/raven/hooks/review/turns.ts`). An oversized git hunk has no equivalent safeguard.
+`plugins/raven/hooks/review/turns.ts`). An oversized git hunk has no equivalent safeguard in unified view; a [side-by-side](#side-by-side)
+hunk keeps each side's `Code`
+under the cap.
 
 ## Icons
 

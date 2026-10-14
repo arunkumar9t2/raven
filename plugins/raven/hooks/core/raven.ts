@@ -4,6 +4,7 @@ import { DIFF_PANEL_WARNING } from '../names'
 import { addressedIdsOf, type Comment, reviewTextOf } from '../review/comments'
 import { resolvePromptOf } from '../review/resolve'
 import { createReview } from '../review/review'
+import { paneFill } from '../ui/pane-fill'
 import { createDiffView } from '../views/diff-view'
 import { createDocView, type Doc } from '../views/doc-view'
 import { createTasksView } from '../views/tasks-view'
@@ -140,6 +141,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       focus: key => void focusIn(diff, key),
     },
     now,
+    { splitColumns: settings.splitColumns },
   )
   const doc = createDocView(host, review, { focus: key => void focusIn(doc, key) }, now)
   const tree = createTreeView(host, { open: path => void showDoc({ kind: 'file', path }) })
@@ -568,7 +570,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
       }
       if (view === doc) bandState.noteDocRendered()
       presses.begin(paneId)
-      return view.render(kit)
+      return paneFill(kit, settings.paneBackground, view.render(kit))
     },
     scroll: (paneId, by) => views.find(view => view.pane.id === paneId)?.scroll?.(by) ?? false,
     paneClosed: paneId => {
