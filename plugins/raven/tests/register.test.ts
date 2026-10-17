@@ -6,6 +6,7 @@ import {
   TASK_STATE_COLORS,
   TASK_STATE_GLYPHS,
 } from '../hooks/core/colors'
+import { NARROW_TEXT } from '../hooks/core/command-glyph'
 import { DIFF_NOTE, docNoteOf, planNoteOf } from '../hooks/core/raven'
 import {
   commentsStoreKeyOf,
@@ -872,6 +873,245 @@ describe('options: watched doc paths, defaults', () => {
     expect(await ui.find({ text: '✓ 2 addressed' })).toBeDefined()
     expect(await ui.find({ text: /note c1/ })).toBeUndefined()
     expect(await ui.find({ text: /note c2/ })).toBeUndefined()
+  })
+})
+
+describe('/raven off and on', () => {
+  const removeFrom = (ids: string[], id: string) => {
+    const at = ids.indexOf(id)
+    if (at >= 0) ids.splice(at, 1)
+  }
+
+  /**
+   * Like `openWorld`, but tracks which pane is in front (the last one placed, as the engine's tabs
+   * do), so `/raven off` has a front pane to remember. `isPlaced` false answers every open narrow;
+   * `placed` seeds panes the engine already shows, the last in front; `beforeOpen` runs inside
+   * each open, before it resolves.
+   */
+  function powerWorld(
+    on: On,
+    {
+      isPlaced = () => true,
+      placed = [],
+      beforeOpen = async () => {},
+    }: { isPlaced?: () => boolean; placed?: string[]; beforeOpen?: () => Promise<void> } = {},
+  ) {
+    const opened: string[] = []
+    baseWorld(on)
+    on('process.run', () => ran(128, '', 'not a repo'))
+    on('ui.status', () => ({ value: undefined }))
+    on('settings.read', () => ({ value: {} }))
+    on('ui.open', async ($, e) => {
+      opened.push(e.id)
+      await beforeOpen()
+      if (!isPlaced()) return { value: { isPlaced: false, reason: 'narrow' } }
+      removeFrom(placed, e.id)
+      placed.push(e.id)
+      return { value: { isPlaced: true } }
+    })
+    on('ui.close', ($, e) => {
+      removeFrom(placed, e.id)
+      return { value: undefined }
+    })
+    on('ui.panes', () => ({
+      value: placed.map(id => ({
+        id,
+        title: id,
+        isShown: id === placed.at(-1),
+        isFocused: false,
+        isPlaced: true,
+      })),
+    }))
+    on('ui.focus', () => ({}))
+    on('tool.call', { tool: 'Edit' }, () => ({ result: {} }))
+    on('tool.call', { tool: 'TodoWrite' }, () => ({ result: {} }))
+    on('prompt.attachment', ($, e) => ({ text: e.text }))
+    on('fs.read', () => ({ value: '# Plan\n' }))
+    return { opened, placed }
+  }
+
+  test('off closes every open pane', async ($, on) => {
+    const { placed } = powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('diff'))
+    await $.command.run(ravenCommand('files'))
+    const result = await $.command.run(ravenCommand('off'))
+
+    expect(result.text).toBe('Raven off: panes closed until /raven on')
+    expect(placed).toEqual([])
+  })
+
+  test('off closes a pane the engine shows that this instance never opened (hot reload)', async ($, on) => {
+    const { placed } = powerWorld(on, { placed: [DIFF_PANE.id] })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('off'))
+    expect(placed).toEqual([])
+
+    await $.command.run(ravenCommand('on'))
+    expect(placed).toEqual([DIFF_PANE.id])
+  })
+
+  test('off closes a background tab the engine holds that this instance never opened (hot reload)', async ($, on) => {
+    const { placed } = powerWorld(on, { placed: [TREE_PANE.id, DIFF_PANE.id] })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('off'))
+
+    expect(placed).toEqual([])
+  })
+
+  test('an open still in flight when off runs is withdrawn, and Raven stays off', async ($, on) => {
+    let hasTurnedOff = false
+    // The first open runs `/raven off` before it resolves, as a person typing it mid-open would.
+    const { placed } = powerWorld(on, {
+      beforeOpen: async () => {
+        if (hasTurnedOff) return
+        hasTurnedOff = true
+        await $.command.run(ravenCommand('off'))
+      },
+    })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+
+    expect(placed).toEqual([])
+    expect((await $.command.run(ravenCommand('off'))).text).toBe('Raven is already off')
+  })
+
+  test(
+    'with autoOpen false, a watched doc written while off is not flagged either',
+    { options: { autoOpen: false } },
+    async ($, on) => {
+      powerWorld(on)
+      // Stands in for the engine's own drawing once Raven passes with `next(e)`.
+      on('ui.render', { component: 'AbovePrompt' }, () => ({ type: 'Text', children: [''] }))
+
+      await $.session.start(SESSION)
+      await $.command.run(ravenCommand('off'))
+      await $.tool.call(editOf('/work/docs/superpowers/plans/x.md'))
+
+      const ui = await mountBand($)
+      expect(await ui.find({ text: /plan updated/ })).toBeUndefined()
+    },
+  )
+
+  test('off twice is a no-op', async ($, on) => {
+    powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('off'))
+
+    expect((await $.command.run(ravenCommand('off'))).text).toBe('Raven is already off')
+  })
+
+  test('while off, an edit, a plan or a first task list opens nothing', async ($, on) => {
+    const { opened } = powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('off'))
+    await $.tool.call(editOf('/work/a.ts'))
+    await $.tool.call(editOf('/work/docs/superpowers/plans/x.md'))
+    await $.prompt.attachment(planNote('plan_mode_exit', true))
+    await $.tool.call({ tool: 'TodoWrite', todos: [{ content: 'write tests', status: 'pending' }] })
+
+    expect(opened).toEqual([])
+  })
+
+  test('while off, a watched doc is flagged in the band, and its open chip opens it and ends off', async ($, on) => {
+    const { opened } = powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('off'))
+    await $.tool.call(editOf('/work/docs/superpowers/plans/x.md'))
+
+    const ui = await mountBand($)
+    expect(await ui.find({ text: /plan updated/ })).toBeDefined()
+    await pressPill(ui, 'band:open')
+    expect(opened).toEqual([DOC_PANE.id])
+
+    expect((await $.command.run(ravenCommand('off'))).text).toBe(
+      'Raven off: panes closed until /raven on',
+    )
+  })
+
+  test("Claude's show tool while off opens the doc and ends off", async ($, on) => {
+    const { opened } = powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('off'))
+    await $.tool.call({ tool: TOOL, op: 'show', path: '/work/x.md' })
+    expect(opened).toEqual([DOC_PANE.id])
+
+    expect((await $.command.run(ravenCommand('off'))).text).toBe(
+      'Raven off: panes closed until /raven on',
+    )
+  })
+
+  test('a pane the person opens while off ends off, and on then only opens the diff', async ($, on) => {
+    const { placed } = powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+    await $.command.run(ravenCommand('off'))
+    await $.command.run(ravenCommand('doc'))
+    await $.command.run(ravenCommand('doc'))
+    await $.command.run(ravenCommand('on'))
+
+    expect(placed).toEqual([DIFF_PANE.id])
+  })
+
+  test('on restores the closed panes with the front one in front', async ($, on) => {
+    const { placed } = powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+    await $.command.run(ravenCommand('diff'))
+    await $.command.run(ravenCommand('files'))
+    const before = [...placed]
+    await $.command.run(ravenCommand('off'))
+    const result = await $.command.run(ravenCommand('on'))
+
+    expect(result.text).toBe('Raven on')
+    expect(before.at(-1)).toBe(TREE_PANE.id)
+    expect(new Set(placed)).toEqual(new Set(before))
+    expect(placed.at(-1)).toBe(TREE_PANE.id)
+  })
+
+  test('on with nothing remembered opens the diff', async ($, on) => {
+    const { placed } = powerWorld(on)
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('off'))
+    await $.command.run(ravenCommand('on'))
+
+    expect(placed).toEqual([DIFF_PANE.id])
+  })
+
+  test('on in a terminal too narrow for any pane stays off, its panes still remembered', async ($, on) => {
+    let isWide = true
+    const { placed } = powerWorld(on, { isPlaced: () => isWide })
+
+    await $.session.start(SESSION)
+    await $.command.run(ravenCommand('files'))
+    await $.command.run(ravenCommand('off'))
+    isWide = false
+    expect((await $.command.run(ravenCommand('on'))).text).toBe(NARROW_TEXT)
+    expect((await $.command.run(ravenCommand('off'))).text).toBe('Raven is already off')
+
+    isWide = true
+    await $.command.run(ravenCommand('on'))
+    expect(placed).toEqual([TREE_PANE.id])
+  })
+
+  test('the usage line lists on and off', async ($, on) => {
+    powerWorld(on)
+
+    await $.session.start(SESSION)
+    expect((await $.command.run(ravenCommand('nonsense'))).text).toBe(
+      'Usage: /raven [diff|doc|files|tasks|send|on|off]',
+    )
   })
 })
 

@@ -129,6 +129,7 @@ export function register(on: On, options: PluginOptions) {
       closePane: id => $.ui.close({ id }),
       shownPaneIds: async () =>
         new Set((await $.ui.panes()).filter(pane => pane.isShown).map(pane => pane.id)),
+      panes: () => $.ui.panes(),
       focus: async (paneId, key) => {
         await $.ui.focus({ requestId: paneId, key })
       },

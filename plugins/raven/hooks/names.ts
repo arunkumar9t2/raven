@@ -5,7 +5,8 @@
 export const NAME = 'raven'
 
 export const COMMAND = NAME
-export const COMMAND_DESCRIPTION = 'Toggle the Raven preview pane (diff, docs, review)'
+export const COMMAND_DESCRIPTION =
+  'Toggle the Raven preview pane (diff, docs, review), or turn it off and on'
 
 export const DIFF_PANE = { id: NAME, title: 'Diff' } as const
 export const DOC_PANE = { id: `${NAME}-doc`, title: 'Doc' } as const

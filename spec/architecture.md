@@ -69,8 +69,8 @@ controller; it never draws anything or holds session state itself. `core/host.ts
 `fillPrompt`, …) that everything below `register.ts` is written against, so a fake `Host`, not a
 mocked `$`, is what makes the controller, the views and the pure git/review modules unit-testable
 under `bun test` without the engine at all. `core/raven.ts` is the one thing `register.ts` calls into:
-it owns which panes are open, debounced refreshes, the auto-open gate, and dispatches to whichever
-view or subsystem an action names. `core/triggers.ts` is a pure function of a finished tool call to a
+it owns which panes are open, whether the person turned Raven off (`core/power.ts`), debounced
+refreshes, the auto-open gate, and dispatches to whichever view or subsystem an action names. `core/triggers.ts` is a pure function of a finished tool call to a
 list of `Action`s (`refresh-diff`, `main-loop-edit`, `show-doc`, `reload-doc`, `directive`, `tasks`): adding a new reaction to a tool call is one function added to that registry, never a new case wired
 into `register.ts` by hand. `core/band-state.ts` holds the small, separate piece of bookkeeping the
 status band needs (what's pending, what's unseen) so the controller doesn't carry it inline. Each

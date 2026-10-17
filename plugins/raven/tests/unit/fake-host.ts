@@ -14,6 +14,7 @@ export function fakeHost(overrides: Partial<Host> = {}): Host {
     openPane: async () => true,
     closePane: async () => {},
     shownPaneIds: async () => new Set(),
+    panes: async () => [],
     focus: async () => {},
     storeGet: async key => store.get(key),
     storeSet: async (key, value) => {

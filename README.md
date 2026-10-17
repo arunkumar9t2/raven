@@ -65,6 +65,8 @@ a plan, or starts a task list (see [Settings](#settings) to turn that off).
 | `/raven files` | opens your repository tree |
 | `/raven tasks` | opens Claude's task list |
 | `/raven send` | sends your pending notes to Claude now |
+| `/raven off` | closes every Raven pane and stops Raven opening any by itself |
+| `/raven on` | reopens the panes `/raven off` closed (the diff if there were none) |
 
 Run a pane's command again to close it.
 

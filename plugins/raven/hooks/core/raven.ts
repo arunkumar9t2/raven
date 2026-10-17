@@ -16,6 +16,7 @@ import { type CommandKind, type CommandResult, NARROW_TEXT } from './command-gly
 import { type Directive, directiveOf } from './directive'
 import { countOf } from './format'
 import { type Host, loggedAs } from './host'
+import { createPower } from './power'
 import { createPresses } from './presses'
 import type { RavenSettings } from './settings'
 import {
@@ -36,7 +37,7 @@ export type ToolOutcome = { text?: string; notes: readonly string[] }
 
 /** The engine-facing surface of Raven; `register` forwards engine events here and nothing else. */
 export type Raven = {
-  /** The `/raven` argument hint: each view's subcommand, then `send`. */
+  /** The `/raven` argument hint: each view's subcommand, then `send`, `on` and `off`. */
   argumentHint: string
   command: (args: string) => Promise<CommandResult>
   /**
@@ -118,12 +119,20 @@ export const planNoteOf = (path: string) =>
   `Raven: the plan ${path} is shown rendered in the Raven pane beside the transcript; the user ` +
   'can comment on its sections there, and their notes arrive with their next reply.'
 
+/**
+ * `focus`: the pane takes the keyboard. `isAuto`: Raven opens it unasked, so the auto-open gate is
+ * asked again right before the open.
+ */
+type ShowOptions = { focus?: true; isAuto?: true }
+
 /** What one action did: `text` answers a directive, `note` tells the model about an unasked open. */
 type ActionOutcome = { text?: string; note?: string }
 
 const toastOfCarried = (count: number, carrier: string) =>
   `Raven: ${countOf(count, 'review comment')} sent with ${carrier}`
 const SEND = 'send'
+const ON = 'on'
+const OFF = 'off'
 
 const REFUSAL_TEXTS: Record<'no_composer' | 'dialog', string> = {
   no_composer: 'no prompt box in this session',
@@ -149,6 +158,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
   const views: readonly View[] = [diff, doc, tree, tasksView]
 
   const open = new Set<string>()
+  const power = createPower()
   let refreshTimer: Timer | null = null
   let hasAutoOpened = false
   // Every file the Doc view has shown, and whether the main loop has been told so (by a note, or by
@@ -278,7 +288,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
    */
   const isPaneShown = async (id: string) => (await host.shownPaneIds()).has(id)
 
-  async function show(view: View, focus?: true): Promise<boolean> {
+  async function show(view: View, { focus, isAuto }: ShowOptions = {}): Promise<boolean> {
+    // Asked again after the caller's awaits: a `/raven off` meanwhile must not be undone by it.
+    if (isAuto && !mayAutoOpen()) return false
+    const wasOff = power.isOff()
     if (open.has(view.pane.id)) {
       if (!focus && (await isPaneShown(view.pane.id))) return true
       // Reopening an open id only retitles it; a fresh open brings a background tab forward.
@@ -287,9 +300,15 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     // Marked before the open: the engine draws the pane while `openPane` is in flight.
     open.add(view.pane.id)
     const isPlaced = await host.openPane({ ...view.pane, holdToasts: true, focus })
+    // A `/raven off` that ran while this open was in flight wins: it already closed every pane.
+    if (isPlaced && (wasOff || !power.isOff())) {
+      // Off means no pane is open, so whoever placed this one turned Raven back on.
+      power.noteOpened()
+      return true
+    }
     // A pane left waiting would seat itself on a later resize; withdraw it instead.
-    if (!isPlaced) await host.closePane(view.pane.id)
-    return isPlaced
+    await hide(view)
+    return false
   }
 
   async function hide(view: View) {
@@ -300,7 +319,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
 
   /** The keyboard is the person's: an element can take it only once its pane asked for focus. */
   async function focusIn(view: View, key: string) {
-    if (await show(view, true)) {
+    if (await show(view, { focus: true })) {
       await host
         .focus(view.pane.id, key)
         .catch(error => host.debug(`raven: focus failed: ${String(error)}`))
@@ -316,21 +335,26 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     })
   }
 
-  async function showDiff(path?: string) {
+  async function showDiff({ path, isAuto }: { path?: string; isAuto?: true } = {}) {
     cancelRefresh()
     await diff.refresh()
     if (open.has(tree.pane.id)) void tree.refresh()
     if (path) diff.reveal(path)
-    return show(diff)
+    return show(diff, { isAuto })
   }
 
-  async function showDoc(shown: Doc) {
+  /** Loads `shown` into the Doc view and tells the band, without opening the pane. */
+  async function loadDoc(shown: Doc) {
     await doc.show(shown)
     bandState.noteDocShown(
       shown.kind === 'file' ? shown.path : undefined,
       await isPaneShown(doc.pane.id),
     )
-    const isShown = await show(doc)
+  }
+
+  async function showDoc(shown: Doc, { isAuto }: { isAuto?: true } = {}) {
+    await loadDoc(shown)
+    const isShown = await show(doc, { isAuto })
     // A show the terminal was too narrow for is not counted, so the next edit tries again.
     if (isShown && shown.kind === 'file' && !docs.has(shown.path)) docs.set(shown.path, 'shown')
     return isShown
@@ -373,7 +397,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
           directive.title ?? 'the note',
         )
       case 'diff':
-        return shownText(await showDiff(directive.path), 'the diff')
+        return shownText(await showDiff({ path: directive.path }), 'the diff')
       case 'open':
         return shownText(await showView(viewOf(directive.pane)), `the ${directive.pane} pane`)
       case 'comments':
@@ -389,8 +413,10 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     return { ...directive, path: `${await host.cwd()}/${path}` }
   }
 
+  /** Raven may open a pane unasked, setting and width permitting, whether or not it is off. */
+  const wouldAutoOpen = () => shouldAutoOpen(settings, bandState.viewportColumns())
   /** Every pane Raven opens unasked goes through this one gate. */
-  const mayAutoOpen = () => shouldAutoOpen(settings, bandState.viewportColumns())
+  const mayAutoOpen = () => !power.isOff() && wouldAutoOpen()
 
   /** `isMainLoop`: the action came from the main loop's own tool call, whose result a note can ride. */
   async function runAction(action: Action, isMainLoop: boolean): Promise<ActionOutcome> {
@@ -403,13 +429,16 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         void warnDiffPanelOnce()
         if (!hasAutoOpened) {
           hasAutoOpened = true
-          if (mayAutoOpen() && (await showDiff())) return { note: DIFF_NOTE }
+          if (mayAutoOpen() && (await showDiff({ isAuto: true }))) return { note: DIFF_NOTE }
         }
         return {}
       case 'show-doc': {
         const { path } = action
-        if ((!docs.has(path) || action.force) && mayAutoOpen())
-          await showDoc({ kind: 'file', path })
+        if ((!docs.has(path) || action.force) && wouldAutoOpen()) {
+          // Off, the doc still loads, so the band flags it unseen.
+          if (power.isOff()) await loadDoc({ kind: 'file', path })
+          else await showDoc({ kind: 'file', path }, { isAuto: true })
+        }
         if (!isMainLoop || docs.get(path) !== 'shown') return {}
         docs.set(path, 'told')
         return { note: planPaths.has(path) ? planNoteOf(path) : docNoteOf(path) }
@@ -424,7 +453,7 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
         const changed = tasksView.apply(action.tool, action.input, action.result)
         if (changed && !hasOpenedTasks && tasksView.hasTasks()) {
           hasOpenedTasks = true
-          if (open.size === 0 && mayAutoOpen()) await show(tasksView)
+          if (open.size === 0 && mayAutoOpen()) await show(tasksView, { isAuto: true })
         }
         return {}
       }
@@ -447,7 +476,39 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
     return isShown ? resultOf('shown', `${name} shown`) : resultOf('narrow', NARROW_TEXT)
   }
 
-  const argumentHint = `[${[...views.map(view => view.subcommand), SEND].join('|')}]`
+  const sortFrontLast = (closed: readonly View[], front: string | undefined) => [
+    ...closed.filter(view => view.pane.id !== front),
+    ...closed.filter(view => view.pane.id === front),
+  ]
+
+  /**
+   * Closes every open pane and remembers them for `turnOn`; auto-opens stay muted meanwhile. A pane
+   * the engine still holds counts as open even when `open` lost it (a reloaded module starts empty).
+   */
+  async function turnOff(): Promise<CommandResult> {
+    if (power.isOff()) return resultOf('hidden', 'Raven is already off')
+    const held = await host.panes()
+    const closing = views.filter(
+      view => open.has(view.pane.id) || held.some(pane => pane.id === view.pane.id),
+    )
+    const ids = closing.map(view => view.pane.id)
+    const front = held.find(pane => pane.isShown && ids.includes(pane.id))?.id
+    power.turnOff({ ids, front })
+    for (const view of closing) await hide(view)
+    return resultOf('hidden', 'Raven off: panes closed until /raven on')
+  }
+
+  /** Reopens what `turnOff` closed, front last (else the diff); `show` ends off on the first placed. */
+  async function turnOn(): Promise<CommandResult> {
+    const { ids, front } = power.snapshot() ?? { ids: [] }
+    const closed = views.filter(view => ids.includes(view.pane.id))
+    const order = closed.length === 0 ? [diff] : sortFrontLast(closed, front)
+    let isPlaced = false
+    for (const view of order) if (await showView(view)) isPlaced = true
+    return isPlaced ? resultOf('shown', 'Raven on') : resultOf('narrow', NARROW_TEXT)
+  }
+
+  const argumentHint = `[${[...views.map(view => view.subcommand), SEND, ON, OFF].join('|')}]`
 
   /** Never rejects: a thrown failure becomes an `'error'` result like usage help does. */
   async function command(args: string): Promise<CommandResult> {
@@ -461,6 +522,8 @@ export function createRaven(host: Host, settings: RavenSettings, now: () => numb
           ? resultOf('shown', 'Review sent')
           : resultOf('hidden', 'No review comments to send')
       }
+      if (word === OFF) return turnOff()
+      if (word === ON) return turnOn()
       return resultOf('error', `Usage: /raven ${argumentHint}`)
     } catch (error) {
       return resultOf('error', `Raven failed: ${String(error)}`)

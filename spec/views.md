@@ -126,8 +126,9 @@ only once (once the Doc view has shown a file, by any route, a later edit reload
 than pulling the Doc pane in front of a pane the person switched to), except that leaving or
 re-entering plan mode shows the plan again. When the main loop's own edit opened it, that edit's
 result tells Claude so ([`agentic.md`](./agentic.md#what-claude-is-told)). These opens, like Tasks
-opening on the first task list, pass the `autoOpen` and `autoOpenColumns` gate;
-[`settings-and-surfaces.md`](./settings-and-surfaces.md) owns that gate and `watchedPaths`' exact matching rule.
+opening on the first task list, pass the `autoOpen` and `autoOpenColumns` gate and stay shut while
+Raven is [off](#turning-raven-off-and-on); [`settings-and-surfaces.md`](./settings-and-surfaces.md)
+owns that gate and `watchedPaths`' exact matching rule.
 Configurable extras aside, these watched paths are the view's own built-in behavior, not something
 another doc owns.
 
@@ -268,11 +269,43 @@ can ask for that row's glyph again without re-running the command.
 pane. `/raven <subcommand>` toggles the named view: `diff`, `doc`, `files`, `tasks`; toggling a
 hidden or backgrounded view opens or brings it forward, toggling the currently visible one hides it.
 `/raven send` submits the pending review as a prompt instead of touching a pane, replying "Review
-sent" or "No review comments to send". Any other argument replies with usage, listing every view's
-subcommand plus `send`. A command that cannot dock its pane (the terminal too narrow) replies with
-the fixed "Widen the terminal to dock the Raven pane" text rather than opening nothing silently.
+sent" or "No review comments to send". `/raven off` and `/raven on` close and reopen every pane at
+once, as the next section describes. Any other argument replies with usage, listing every
+view's subcommand plus `send`, `on` and `off`. A command that cannot dock its pane (the terminal
+too narrow) replies with the fixed "Widen the terminal to dock the Raven pane" text rather than
+opening nothing silently.
 
 Opening a view when it is already open only brings it forward if it was a background tab; reopening
 a pane that is already the visible one is a no-op that still returns success. Closing any Raven pane
 removes it from the controller's open set, so a later `/raven` for that view starts from a fresh
 open rather than assuming state a closed pane no longer holds.
+
+### Turning Raven off and on
+
+`/raven off` closes every Raven pane at once, background tabs included, and turns Raven off until
+`/raven on`. Off holds one invariant: **while Raven is off, no Raven pane is open.** It remembers
+which panes it closed and which one was in front, and `/raven on` reopens them with that pane in
+front again.
+
+```
+          /raven off: remember the open panes and the front one, close them all
+   ┌────┐ ──────────────────────────────────────────────────────▶ ┌─────┐
+   │ ON │                                                         │ OFF │  Raven's own opens
+   └────┘ ◀────────────────────────────────────────────────────── └─────┘  stay shut
+          /raven on, or any pane opened on purpose
+```
+
+While off, every open Raven would make unasked stays shut, and the one-shot ones (the first edit's
+diff, the first task list) are spent, as they are with `autoOpen` off. A watched doc or plan written
+while off still loads into the Doc view, and the [status band](#status-band) flags it unseen, so its
+` open ` chip brings it forward.
+
+Any pane opened on purpose turns Raven back on: `/raven <subcommand>`, a band chip and a Files row
+open as usual, and so does Claude's `show` tool or a CLI directive ([`agentic.md`](./agentic.md)).
+The remembered panes are then forgotten, and Raven's own opens resume. Hiding the last pane, by its
+✕ or its own subcommand, never turns Raven off.
+
+`/raven on` with nothing remembered, or while Raven is already on, shows the diff. When the terminal
+is too narrow to place any remembered pane, it replies with the narrow text and Raven stays off,
+still remembering them. `/raven off` while already off replies "Raven is already off". Off does not
+survive a new session or a reload of the plugin's module.
