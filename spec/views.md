@@ -54,8 +54,10 @@ lines. A table's layout is cached per block, keyed on the width and the style's 
 resize or a `cardStyle` change lays it out again. This holds for files, notes, plans and commentable sections alike (R36). A file that is not markdown renders as one `Code` element instead, truncated at the
 same cap with a "the rest of the file is not shown" note when it overruns.
 
-Nothing frames the body: no outer border, no rail. The pane's whole width is the body's, and
-Markdown, Raven-drawn tables and notes lay out at it. A note's or a non-markdown file's body sits one
+Nothing frames the body: no outer border, no rail. The whole view (picker, title and body) is inset
+from the pane's border by `DOC_GUTTER` (2) blank cells on each side and `DOC_TOP` (1) blank row on
+top (`ui/chrome.ts`), and Markdown, Raven-drawn tables and notes lay out at the inset width, so no
+line touches the border. A note's or a non-markdown file's body sits one
 blank row under the title. An empty pane draws a dim Nerd Font icon and a line ("Nothing shown yet.
 Plans and docs Claude writes open here"); the other panes' empty states (no tasks, no changes, not a
 git repository) share that shape (`ui/empty.tsx`). A markdown file with no content draws a dim "Empty
