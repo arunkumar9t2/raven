@@ -1,6 +1,7 @@
 import { describe, expect, test } from 'bun:test'
 import type { Kit } from '../../hooks/core/view'
 import { createReview } from '../../hooks/review/review'
+import { DOC_GUTTER, DOC_TOP } from '../../hooks/ui/chrome'
 import { styleOf } from '../../hooks/ui/style'
 import { TITLE_EDGE_CELLS } from '../../hooks/views/doc-path'
 import { fakeHost } from './fake-host'
@@ -189,6 +190,25 @@ describe('doc view: the top section row', () => {
     const head = keyed(tree, 'section-head:0')[0] as Node
     const row = findAll(head, n => String(n.props.key ?? '').startsWith('section-note:'))[0] as Node
     expect(row.props.height).toBe(1)
+  })
+})
+
+describe('doc view: the pane inset', () => {
+  test('the view sits DOC_GUTTER cells in from each side and DOC_TOP rows down', async () => {
+    const { view } = await setup({ [PATH]: '# Title\n\nbody' })
+    const tree = view.render(kitOf()) as unknown as Node
+    expect(tree.props.paddingX).toBe(DOC_GUTTER)
+    expect(tree.props.paddingTop).toBe(DOC_TOP)
+  })
+
+  test('a table is fitted to the width inside the gutters', async () => {
+    const { view } = await setup({ [PATH]: `| a | b |\n|---|---|\n| ${'x'.repeat(80)} | y |\n` })
+    const tree = view.render(kitOf(40))
+    const lines = findAll(tree, n => n.type === 'Text').map(textUnder)
+    const widest = Math.max(
+      ...lines.flatMap(text => text.split('\n')).map(line => [...line].length),
+    )
+    expect(widest).toBeLessThanOrEqual(40 - 2 * DOC_GUTTER)
   })
 })
 

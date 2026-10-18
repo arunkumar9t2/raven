@@ -11,6 +11,7 @@ import type { Comment } from '../review/comments'
 import { splitAddressed } from '../review/comments'
 import type { Review } from '../review/review'
 import { fill } from '../ui/card'
+import { DOC_GUTTER, DOC_TOP } from '../ui/chrome'
 import { EMPTY_ICONS, emptyState } from '../ui/empty'
 import { ICON_GAP, iconText } from '../ui/icon-text'
 import { pillRow } from '../ui/strip'
@@ -377,8 +378,8 @@ export function createDocView(
    * end under a dim `Outdated` row instead of being dropped. Only comments carrying a `section`
    * ever draw here (the same discriminator `blocks.ts`'s orphan group uses), so a diff comment
    * (hunk- or file-level) on this same path, which carries none, stays out of the Doc pane
-   * entirely and is left for the diff stream alone. There is no frame or rail: the pane's whole
-   * width is the body's.
+   * entirely and is left for the diff stream alone. There is no frame or rail: the body takes the
+   * whole width `render` leaves inside its gutters.
    */
   function sectionsBody(
     kit: Kit,
@@ -673,7 +674,22 @@ export function createDocView(
     })
   }
 
-  function render(kit: Kit): RenderElement {
+  /**
+   * The pane inset by `DOC_GUTTER` cells each side and `DOC_TOP` rows on top: the content draws in a
+   * kit whose `columns` is the inset width, so every width it measures (the title path, tables,
+   * notes, rules) fits inside the gutters.
+   */
+  function render(outer: Kit): RenderElement {
+    const { Box } = outer.ui
+    const kit = { ...outer, columns: Math.max(1, outer.columns - 2 * DOC_GUTTER) }
+    return (
+      <Box flexDirection="column" paddingX={DOC_GUTTER} paddingTop={DOC_TOP}>
+        {content(kit)}
+      </Box>
+    )
+  }
+
+  function content(kit: Kit): RenderElement {
     const { Box, Select } = kit.ui
     isClient = kit.capabilities.canClient
     const shown = history.find(each => each.key === current)

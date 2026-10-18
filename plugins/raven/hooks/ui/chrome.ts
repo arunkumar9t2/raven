@@ -11,6 +11,12 @@ export const BOXED_CELLS = 4
 /** Columns the engine keeps at the `AbovePrompt` band's right edge (it draws its own marker there). */
 export const BAND_GUTTER = 3
 
+/** The Doc pane's inset: blank cells on each side of its content, so the body never touches the pane's border. */
+export const DOC_GUTTER = 2
+
+/** The Doc pane's blank rows above its content. */
+export const DOC_TOP = 1
+
 /** The band's room beside its pills: the mark, the summary and the gap, before `chipsLayout` shrinks them. */
 export const BAND_LABEL_CELLS = 24
 
