@@ -145,7 +145,7 @@ describe('help and misc', () => {
     const io = fakeIo({})
     const code = await run(['--version'], io)
     expect(code).toBe(0)
-    expect(io.stdoutLines).toEqual(['0.3.0\n'])
+    expect(io.stdoutLines).toEqual(['0.4.0\n'])
   })
 
   test('unknown command exits 2 with usage on stderr', async () => {
